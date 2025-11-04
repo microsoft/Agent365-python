@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: System :: Monitoring",
 ]
-license = "MIT"
+license = {text = "MIT"}
 keywords = ["observability", "telemetry", "tracing", "opentelemetry", "semantic-kernel", "agents", "ai"]
 dependencies = [
     "microsoft-agents-a365-observability-core >= 2025.10.16",
