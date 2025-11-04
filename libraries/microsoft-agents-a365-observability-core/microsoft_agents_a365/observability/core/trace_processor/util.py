@@ -18,6 +18,7 @@ COMMON_ATTRIBUTES = [
     consts.GEN_AI_AGENT_UPN_KEY,  # gen_ai.agent.upn
     consts.GEN_AI_AGENT_BLUEPRINT_ID_KEY,  # gen_ai.agent.applicationid
     consts.GEN_AI_AGENT_AUID_KEY,
+    consts.GEN_AI_AGENT_TYPE_KEY,
 ]
 
 # Invoke Agent–specific attributes

@@ -1,10 +1,11 @@
-# Copyright (c) Microsoft. All rights reserved.
-
-# Execute tool scope for tracing tool execution.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 from .agent_details import AgentDetails
 from .constants import (
     EXECUTE_TOOL_OPERATION_NAME,
+    GEN_AI_EVENT_CONTENT,
+    GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
     GEN_AI_TOOL_DESCRIPTION_KEY,
     GEN_AI_TOOL_NAME_KEY,
@@ -26,7 +27,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
     ) -> "ExecuteToolScope":
-        """Create and start a new scope for tool execution tracing.
+        """Creates and starts a new scope for tool execution tracing.
 
         Args:
             details: The details of the tool call
@@ -54,18 +55,34 @@ class ExecuteToolScope(OpenTelemetryScope):
         super().__init__(
             kind="Internal",
             operation_name=EXECUTE_TOOL_OPERATION_NAME,
-            activity_name=f"execute_tool {details.tool_name}",
+            activity_name=f"{EXECUTE_TOOL_OPERATION_NAME} {details.tool_name}",
             agent_details=agent_details,
             tenant_details=tenant_details,
         )
 
-        self.set_tag_maybe(GEN_AI_TOOL_NAME_KEY, details.tool_name)
-        self.set_tag_maybe("gen_ai.tool.arguments", details.arguments)
-        self.set_tag_maybe(GEN_AI_TOOL_TYPE_KEY, details.tool_type)
-        self.set_tag_maybe(GEN_AI_TOOL_CALL_ID_KEY, details.tool_call_id)
-        self.set_tag_maybe(GEN_AI_TOOL_DESCRIPTION_KEY, details.description)
+        # Extract details using deconstruction-like approach
+        tool_name = details.tool_name
+        arguments = details.arguments
+        tool_call_id = details.tool_call_id
+        description = details.description
+        tool_type = details.tool_type
+        endpoint = details.endpoint
 
-        if details.endpoint:
-            self.set_tag_maybe(SERVER_ADDRESS_KEY, details.endpoint.hostname)
-            if details.endpoint.port and details.endpoint.port != 443:
-                self.set_tag_maybe(SERVER_PORT_KEY, details.endpoint.port)
+        self.set_tag_maybe(GEN_AI_TOOL_NAME_KEY, tool_name)
+        self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, arguments)
+        self.set_tag_maybe(GEN_AI_TOOL_TYPE_KEY, tool_type)
+        self.set_tag_maybe(GEN_AI_TOOL_CALL_ID_KEY, tool_call_id)
+        self.set_tag_maybe(GEN_AI_TOOL_DESCRIPTION_KEY, description)
+
+        if endpoint:
+            self.set_tag_maybe(SERVER_ADDRESS_KEY, endpoint.hostname)
+            if endpoint.port and endpoint.port != 443:
+                self.set_tag_maybe(SERVER_PORT_KEY, endpoint.port)
+
+    def record_response(self, response: str) -> None:
+        """Records response information for telemetry tracking.
+
+        Args:
+            response: The response to record
+        """
+        self.set_tag_maybe(GEN_AI_EVENT_CONTENT, response)

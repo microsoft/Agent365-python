@@ -149,6 +149,108 @@ class TestInferenceScope(unittest.TestCase):
             # Should not raise an exception
             self.assertIsInstance(scope, InferenceScope)
 
+    def test_record_input_messages(self):
+        """Test record_input_messages method."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.CHAT, model="gpt-4", providerName="openai"
+        )
+
+        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+
+        if scope is not None:
+            # Test recording input messages
+            messages = ["Hello", "How are you?"]
+            scope.record_input_messages(messages)
+            # Should not raise an exception
+            self.assertTrue(hasattr(scope, "record_input_messages"))
+
+    def test_record_output_messages(self):
+        """Test record_output_messages method."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.CHAT, model="gpt-4", providerName="openai"
+        )
+
+        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+
+        if scope is not None:
+            # Test recording output messages
+            messages = ["I'm doing well", "Thanks for asking!"]
+            scope.record_output_messages(messages)
+            # Should not raise an exception
+            self.assertTrue(hasattr(scope, "record_output_messages"))
+
+    def test_record_input_tokens(self):
+        """Test record_input_tokens method."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.CHAT, model="gpt-4", providerName="openai"
+        )
+
+        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+
+        if scope is not None:
+            # Test recording input tokens
+            scope.record_input_tokens(150)
+            # Should not raise an exception
+            self.assertTrue(hasattr(scope, "record_input_tokens"))
+
+    def test_record_output_tokens(self):
+        """Test record_output_tokens method."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.CHAT, model="gpt-4", providerName="openai"
+        )
+
+        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+
+        if scope is not None:
+            # Test recording output tokens
+            scope.record_output_tokens(75)
+            # Should not raise an exception
+            self.assertTrue(hasattr(scope, "record_output_tokens"))
+
+    def test_record_response_id(self):
+        """Test record_response_id method."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.CHAT, model="gpt-4", providerName="openai"
+        )
+
+        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+
+        if scope is not None:
+            # Test recording response ID
+            scope.record_response_id("resp-123456")
+            # Should not raise an exception
+            self.assertTrue(hasattr(scope, "record_response_id"))
+
+    def test_record_finish_reasons(self):
+        """Test record_finish_reasons method."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.CHAT, model="gpt-4", providerName="openai"
+        )
+
+        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+
+        if scope is not None:
+            # Test recording finish reasons
+            finish_reasons = ["stop", "length"]
+            scope.record_finish_reasons(finish_reasons)
+            # Should not raise an exception
+            self.assertTrue(hasattr(scope, "record_finish_reasons"))
+
+    def test_record_thought_process(self):
+        """Test record_thought_process method."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.CHAT, model="gpt-4", providerName="openai"
+        )
+
+        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+
+        if scope is not None:
+            # Test recording thought process
+            thought_process = "Analyzing user input and generating appropriate response"
+            scope.record_thought_process(thought_process)
+            # Should not raise an exception
+            self.assertTrue(hasattr(scope, "record_thought_process"))
+
 
 if __name__ == "__main__":
     # Run the tests
