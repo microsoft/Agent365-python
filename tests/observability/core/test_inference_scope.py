@@ -129,9 +129,6 @@ class TestInferenceScope(unittest.TestCase):
                 if hasattr(scope, "record_output_tokens"):
                     scope.record_output_tokens(60)
 
-                if hasattr(scope, "record_response_id"):
-                    scope.record_response_id("new-resp-456")
-
                 if hasattr(scope, "record_finish_reasons"):
                     scope.record_finish_reasons(["stop", "length"])
 
@@ -206,20 +203,6 @@ class TestInferenceScope(unittest.TestCase):
             scope.record_output_tokens(75)
             # Should not raise an exception
             self.assertTrue(hasattr(scope, "record_output_tokens"))
-
-    def test_record_response_id(self):
-        """Test record_response_id method."""
-        details = InferenceCallDetails(
-            operationName=InferenceOperationType.CHAT, model="gpt-4", providerName="openai"
-        )
-
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
-
-        if scope is not None:
-            # Test recording response ID
-            scope.record_response_id("resp-123456")
-            # Should not raise an exception
-            self.assertTrue(hasattr(scope, "record_response_id"))
 
     def test_record_finish_reasons(self):
         """Test record_finish_reasons method."""

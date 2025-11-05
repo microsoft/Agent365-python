@@ -121,15 +121,6 @@ class InferenceScope(OpenTelemetryScope):
         """
         self.set_tag_maybe(GEN_AI_USAGE_OUTPUT_TOKENS_KEY, str(output_tokens))
 
-    def record_response_id(self, response_id: str) -> None:
-        """Records the response id for telemetry tracking.
-
-        Args:
-            response_id: Response ID to record
-        """
-        if response_id:
-            self.set_tag_maybe(GEN_AI_RESPONSE_ID_KEY, response_id)
-
     def record_finish_reasons(self, finish_reasons: List[str]) -> None:
         """Records the finish reasons for telemetry tracking.
 
