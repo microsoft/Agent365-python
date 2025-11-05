@@ -12,7 +12,10 @@ try:
     from dotenv import load_dotenv
 
     # Look for .env file in tests directory
-    env_file = Path(__file__).parent.parent / ".env"
+    # Navigate from conftest.py location: integration -> openai -> extensions -> observability -> tests
+    current_file = Path(__file__)
+    tests_dir = current_file.parent.parent.parent.parent.parent  # Go up to tests/ directory
+    env_file = tests_dir / ".env"
     if env_file.exists():
         load_dotenv(env_file)
 except ImportError:
