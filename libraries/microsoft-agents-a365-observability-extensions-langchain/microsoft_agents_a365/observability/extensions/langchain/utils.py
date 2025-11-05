@@ -27,7 +27,7 @@ from microsoft_agents_a365.observability.core.constants import (
     SESSION_ID_KEY,
 )
 from microsoft_agents_a365.observability.core.inference_operation_type import InferenceOperationType
-from microsoft_agents_a365.observability.core.wrappers.utils import (
+from microsoft_agents_a365.observability.core.utils import (
     get_first_value,
     safe_json_dumps,
     stop_on_exception,

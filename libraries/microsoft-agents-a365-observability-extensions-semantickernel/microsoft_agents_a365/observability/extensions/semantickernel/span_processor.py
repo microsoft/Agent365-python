@@ -2,11 +2,10 @@
 
 # Custom Span Processor
 
-from opentelemetry.sdk.trace.export import SpanProcessor
-
 from microsoft_agents_a365.observability.core.constants import GEN_AI_OPERATION_NAME_KEY
 from microsoft_agents_a365.observability.core.inference_operation_type import InferenceOperationType
-from microsoft_agents_a365.observability.core.wrappers.utils import extract_model_name
+from microsoft_agents_a365.observability.core.utils import extract_model_name
+from opentelemetry.sdk.trace.export import SpanProcessor
 
 
 class SemanticKernelSpanProcessor(SpanProcessor):

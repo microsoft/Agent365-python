@@ -37,7 +37,7 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_USAGE_INPUT_TOKENS_KEY,
     GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
 )
-from microsoft_agents_a365.observability.core.wrappers.utils import safe_json_dumps
+from microsoft_agents_a365.observability.core.utils import safe_json_dumps
 from opentelemetry.trace import (
     Status,
     StatusCode,

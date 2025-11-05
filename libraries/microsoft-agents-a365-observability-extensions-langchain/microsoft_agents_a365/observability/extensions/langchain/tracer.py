@@ -14,6 +14,13 @@ from uuid import UUID
 
 from langchain_core.tracers import BaseTracer, LangChainTracer
 from langchain_core.tracers.schemas import Run
+from microsoft_agents_a365.observability.core.inference_operation_type import InferenceOperationType
+from microsoft_agents_a365.observability.core.utils import (
+    DictWithLock,
+    as_utc_nano,
+    flatten,
+    record_exception,
+)
 from opentelemetry import context as context_api
 from opentelemetry import trace as trace_api
 from opentelemetry.context import (
@@ -23,7 +30,6 @@ from opentelemetry.context import (
 from opentelemetry.trace import Span
 from opentelemetry.util.types import AttributeValue
 
-from microsoft_agents_a365.observability.core.inference_operation_type import InferenceOperationType
 from microsoft_agents_a365.observability.extensions.langchain.utils import (
     IGNORED_EXCEPTION_PATTERNS,
     add_operation_type,
@@ -37,12 +43,6 @@ from microsoft_agents_a365.observability.extensions.langchain.utils import (
     prompts,
     token_counts,
     tools,
-)
-from microsoft_agents_a365.observability.core.wrappers.utils import (
-    DictWithLock,
-    as_utc_nano,
-    flatten,
-    record_exception,
 )
 
 logger = logging.getLogger(__name__)

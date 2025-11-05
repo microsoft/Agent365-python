@@ -28,7 +28,7 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_SYSTEM_KEY,
     INVOKE_AGENT_OPERATION_NAME,
 )
-from microsoft_agents_a365.observability.core.wrappers.utils import as_utc_nano, safe_json_dumps
+from microsoft_agents_a365.observability.core.utils import as_utc_nano, safe_json_dumps
 from opentelemetry import trace as ot_trace
 from opentelemetry.context import attach, detach
 from opentelemetry.trace import Span as OtelSpan
