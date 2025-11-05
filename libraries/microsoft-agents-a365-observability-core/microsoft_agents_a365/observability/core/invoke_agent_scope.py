@@ -32,6 +32,7 @@ from .models.caller_details import CallerDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .tenant_details import TenantDetails
+from .utils import safe_json_dumps
 
 
 class InvokeAgentScope(OpenTelemetryScope):
@@ -154,7 +155,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         Args:
             messages: List of input messages to record
         """
-        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, ",".join(messages))
+        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps(messages))
 
     def record_output_messages(self, messages: list[str]) -> None:
         """Record the output messages for telemetry tracking.
@@ -162,4 +163,4 @@ class InvokeAgentScope(OpenTelemetryScope):
         Args:
             messages: List of output messages to record
         """
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, ",".join(messages))
+        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(messages))

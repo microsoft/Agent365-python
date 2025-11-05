@@ -120,18 +120,19 @@ jobs:
 
     - name: Run unit tests
       run: |
-        uv run --frozen python -m pytest tests/ -v --tb=short -m "not integration"
+        uv run --frozen pytest tests/ -v --tb=short -m "not integration"
 
     - name: Run integration tests
       # Only run integration tests if secrets are available
       if: ${{ vars.RUN_INTEGRATION_TESTS == 'true' }}
       run: |
-        uv run --frozen python -m pytest tests/integration/ -v --tb=short -m integration
+        uv run --frozen pytest -m integration -v --tb=short
       env:
         AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
         AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
         AZURE_OPENAI_DEPLOYMENT: ${{ vars.AZURE_OPENAI_DEPLOYMENT }}
         AZURE_OPENAI_API_VERSION: ${{ vars.AZURE_OPENAI_API_VERSION }}        
+        ENABLE_OBSERVABILITY: true
 
     # Copy package and samples to drop folder
     - name: Copy package and samples to drop folder

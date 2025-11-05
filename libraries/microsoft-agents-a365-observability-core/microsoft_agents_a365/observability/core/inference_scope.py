@@ -20,6 +20,7 @@ from .inference_call_details import InferenceCallDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .tenant_details import TenantDetails
+from .utils import safe_json_dumps
 
 
 class InferenceScope(OpenTelemetryScope):
@@ -85,7 +86,7 @@ class InferenceScope(OpenTelemetryScope):
         )
         self.set_tag_maybe(
             GEN_AI_RESPONSE_FINISH_REASONS_KEY,
-            ",".join(details.finishReasons) if details.finishReasons else None,
+            safe_json_dumps(details.finishReasons) if details.finishReasons else None,
         )
         self.set_tag_maybe(GEN_AI_RESPONSE_ID_KEY, details.responseId)
 
@@ -95,7 +96,7 @@ class InferenceScope(OpenTelemetryScope):
         Args:
             messages: List of input messages
         """
-        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, ",".join(messages))
+        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps(messages))
 
     def record_output_messages(self, messages: List[str]) -> None:
         """Records the output messages for telemetry tracking.
@@ -103,7 +104,7 @@ class InferenceScope(OpenTelemetryScope):
         Args:
             messages: List of output messages
         """
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, ",".join(messages))
+        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(messages))
 
     def record_input_tokens(self, input_tokens: int) -> None:
         """Records the number of input tokens for telemetry tracking.
@@ -128,7 +129,7 @@ class InferenceScope(OpenTelemetryScope):
             finish_reasons: List of finish reasons
         """
         if finish_reasons:
-            self.set_tag_maybe(GEN_AI_RESPONSE_FINISH_REASONS_KEY, ",".join(finish_reasons))
+            self.set_tag_maybe(GEN_AI_RESPONSE_FINISH_REASONS_KEY, safe_json_dumps(finish_reasons))
 
     def record_thought_process(self, thought_process: str) -> None:
         """Records the thought process.
