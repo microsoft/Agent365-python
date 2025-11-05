@@ -25,7 +25,7 @@ license = {text = "MIT"}
 dependencies = [
     "microsoft-agents-a365-tooling >= 0.1.0",
     "microsoft-agents-hosting-core >= 0.4.0, < 0.6.0",
-    "agent-framework-azure-ai >= 0.1.0",
+    "agent-framework-azure-ai >= 1.0.0b251001",
     "azure-identity >= 1.12.0",
     "typing-extensions >= 4.0.0",
 ]
