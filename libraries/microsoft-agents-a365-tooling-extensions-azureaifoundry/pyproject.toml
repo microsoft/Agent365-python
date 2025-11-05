@@ -21,11 +21,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-license = "MIT"
+license = {text = "MIT"}
 dependencies = [
     "microsoft-agents-a365-tooling >= 0.1.0",
     "azure-ai-projects >= 1.0.0",
-    "azure-ai-agents >= 1.1.0b4",
+    "azure-ai-agents >= 1.0.0b251001",
     "azure-identity >= 1.12.0",
 ]
 

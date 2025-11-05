@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: System :: Monitoring",
 ]
-license = "MIT"
+license = {text = "MIT"}
 keywords = ["observability", "telemetry", "tracing", "opentelemetry", "monitoring", "ai", "agents"]
 dependencies = [
     "opentelemetry-api >= 1.36.0",
@@ -30,7 +30,7 @@ dependencies = [
     "opentelemetry-exporter-otlp >= 1.36.0",
     "pydantic >= 2.0.0",
     "typing-extensions >= 4.0.0",
-    "microsoft-agents-a365-runtime >= 2025.10.16"
+    "microsoft-agents-a365-runtime >= 0.1.0"
 ]
 
 [project.urls]

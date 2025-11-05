@@ -9,7 +9,6 @@ from opentelemetry.trace import SpanKind, StatusCode
 
 from ..constants import (
     ENABLE_A365_OBSERVABILITY_EXPORTER,
-    ENABLE_KAIRO_EXPORTER,
     GEN_AI_AGENT_ID_KEY,
     TENANT_ID_KEY,
 )
@@ -69,6 +68,5 @@ def partition_by_identity(
 def is_agent365_exporter_enabled() -> bool:
     """Check if agent365 exporter is enabled."""
     # Check environment variable
-    env_value = os.getenv(ENABLE_KAIRO_EXPORTER, "").lower()
     enable_exporter = os.getenv(ENABLE_A365_OBSERVABILITY_EXPORTER, "").lower()
-    return (env_value or enable_exporter) in ("true", "1", "yes", "on")
+    return (enable_exporter) in ("true", "1", "yes", "on")

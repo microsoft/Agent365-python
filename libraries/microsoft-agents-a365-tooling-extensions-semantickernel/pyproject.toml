@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-license = "MIT"
+license = {text = "MIT"}
 dependencies = [
     "microsoft-agents-a365-tooling >= 0.1.0",
     "semantic-kernel >= 1.0.0",

@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Communications",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
-license = "MIT"
+license = {text = "MIT"}
 keywords = ["notifications", "messaging", "agents", "ai", "routing", "sdk"]
 dependencies = [
     "typing-extensions >= 4.0.0",

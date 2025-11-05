@@ -67,7 +67,7 @@ jobs:
     - id: check_python_sdk
       name: Check Python SDK changes
       run: |
-        if git diff --name-only "${{ steps.git_refs.outputs.base }}" "${{ steps.git_refs.outputs.head }}" -- 'python/**' | grep -q .; then
+        if git diff --name-only "${{ steps.git_refs.outputs.base }}" "${{ steps.git_refs.outputs.head }}" -- 'libraries/**' 'setup.py' 'pyproject.toml' 'versioning/**' | grep -q .; then
           echo "Python SDK changes detected"
           echo "changed=true" >> $GITHUB_OUTPUT
         else

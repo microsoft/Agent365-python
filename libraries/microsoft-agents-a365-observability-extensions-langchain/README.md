@@ -125,7 +125,7 @@ Check out these working examples:
 
 - **Python**: 3.11+
 - **Dependencies**:
-  - `microsoft-agents-a365-observability-core >= 2025.10.16`
+  - `microsoft-agents-a365-observability-core >= 0.1.0`
   - `langchain >= 0.1.0`
   - `langchain-core >= 0.1.0`
   - `opentelemetry-api >= 1.20.0`

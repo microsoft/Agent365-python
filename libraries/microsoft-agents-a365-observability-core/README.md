@@ -27,12 +27,6 @@ ENABLE_A365_OBSERVABILITY_EXPORTER=true    # Use Agent365 exporter (otherwise fa
 PYTHON_ENVIRONMENT=production              # Or development; influences target cluster/category resolution
 ```
 
-Alias (legacy) environment variables still honored for backward compatibility:
-
-```properties
-ENABLE_KAIRO_EXPORTER=true                 # Legacy name (deprecated)
-```
-
 Prefer the canonical `ENABLE_A365_OBSERVABILITY_EXPORTER`. If you omit `ENABLE_OBSERVABILITY` or set it to false, scopes become no‑ops and no spans are recorded.
 
 ## Configuration
