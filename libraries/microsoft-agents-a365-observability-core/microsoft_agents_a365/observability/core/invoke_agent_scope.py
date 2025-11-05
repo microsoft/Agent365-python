@@ -3,6 +3,8 @@
 
 # Invoke agent scope for tracing agent invocation.
 
+import json
+
 from .agent_details import AgentDetails
 from .constants import (
     GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY,
@@ -154,7 +156,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         Args:
             messages: List of input messages to record
         """
-        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, ",".join(messages))
+        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, json.dumps(messages))
 
     def record_output_messages(self, messages: list[str]) -> None:
         """Record the output messages for telemetry tracking.
@@ -162,4 +164,4 @@ class InvokeAgentScope(OpenTelemetryScope):
         Args:
             messages: List of output messages to record
         """
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, ",".join(messages))
+        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, json.dumps(messages))
