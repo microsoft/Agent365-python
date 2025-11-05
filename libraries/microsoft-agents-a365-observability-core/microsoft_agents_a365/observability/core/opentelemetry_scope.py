@@ -2,6 +2,7 @@
 
 # Base class for OpenTelemetry tracing scopes.
 
+import logging
 import os
 import time
 from threading import Lock
@@ -34,6 +35,9 @@ from .constants import (
 if TYPE_CHECKING:
     from .agent_details import AgentDetails
     from .tenant_details import TenantDetails
+
+# Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
+logger = logging.getLogger(__name__)
 
 
 class OpenTelemetryScope:
@@ -103,6 +107,13 @@ class OpenTelemetryScope:
             self._span = tracer.start_span(
                 activity_name, kind=activity_kind, context=current_context
             )
+
+            # Log span creation
+            if self._span:
+                span_id = f"{self._span.context.span_id:016x}" if self._span.context else "unknown"
+                logger.debug(f"Span started: '{activity_name}' ({span_id})")
+            else:
+                logger.error(f"Failed to create span: '{activity_name}' - tracer returned None")
 
             # Set common tags
             if self._span:
@@ -210,6 +221,9 @@ class OpenTelemetryScope:
         """End the span and record metrics."""
         if self._span and self._is_telemetry_enabled() and not self._has_ended:
             self._has_ended = True
+            span_id = f"{self._span.context.span_id:016x}" if self._span.context else "unknown"
+            logger.debug(f"Span ended: '{self._span.name}' ({span_id})")
+
             self._span.end()
 
     def __enter__(self):

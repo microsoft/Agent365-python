@@ -14,6 +14,8 @@ from .exporters.agent365_exporter import Agent365Exporter
 from .exporters.utils import is_agent365_exporter_enabled
 from .trace_processor.span_processor import SpanProcessor
 
+DEFAULT_LOGGER_NAME = __name__
+
 
 class TelemetryManager:
     """
@@ -46,7 +48,7 @@ class TelemetryManager:
         self,
         service_name: str,
         service_namespace: str,
-        logger_name: str = "agent365",
+        logger_name: str = DEFAULT_LOGGER_NAME,
         token_resolver: Callable[[str, str], str | None] | None = None,
         cluster_category: str = "prod",
         **kwargs: Any,
@@ -158,11 +160,11 @@ class TelemetryManager:
         to call `configure(...)` during application startup so the tracer
         returned is backed by the configured TracerProvider.
 
-        :param name: Optional tracer name. Defaults to 'agent365' when not provided.
+        :param name: Optional tracer name. Defaults to 'microsoft_agents_a365.observability.core' when not provided.
         :param version: Optional tracer version.
         :return: An OpenTelemetry Tracer instance.
         """
-        tracer_name = name or "agent365"
+        tracer_name = name or DEFAULT_LOGGER_NAME
         if self._tracer_provider is None:
             # Not configured — return whatever tracer OpenTelemetry provides (no-op)
             self._logger.warning(
@@ -192,7 +194,7 @@ _telemetry_manager = TelemetryManager()
 def configure(
     service_name: str,
     service_namespace: str,
-    logger_name: str = "agent365",
+    logger_name: str = DEFAULT_LOGGER_NAME,
     token_resolver: Callable[[str, str], str | None] | None = None,
     cluster_category: str = "prod",
     **kwargs: Any,
@@ -228,7 +230,7 @@ def get_tracer(name: str | None = None, version: str | None = None):
     """
     Return a tracer tied to the TracerProvider configured by the SDK.
 
-    :param name: Optional tracer name. If omitted, defaults to 'agent365'.
+    :param name: Optional tracer name. If omitted, defaults to 'microsoft_agents_a365.observability.core'.
     :param version: Optional tracer version.
     :return: An OpenTelemetry Tracer (may be a no-op tracer if SDK isn't configured).
     """

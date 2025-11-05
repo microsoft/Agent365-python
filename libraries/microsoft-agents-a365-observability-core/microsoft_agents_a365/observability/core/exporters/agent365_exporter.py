@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -29,6 +30,9 @@ from .utils import (
 # Hardcoded constants - not configurable
 DEFAULT_HTTP_TIMEOUT_SECONDS = 30.0
 DEFAULT_MAX_RETRIES = 3
+
+# Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
+logger = logging.getLogger(__name__)
 
 
 class Agent365Exporter(SpanExporter):
@@ -65,7 +69,14 @@ class Agent365Exporter(SpanExporter):
             groups = partition_by_identity(spans)
             if not groups:
                 # No spans with identity; treat as success
+                logger.debug("No spans with tenant/agent identity found; nothing exported.")
                 return SpanExportResult.SUCCESS
+
+            # Debug: Log number of groups and total span count
+            total_spans = sum(len(activities) for activities in groups.values())
+            logger.debug(
+                f"Found {len(groups)} identity groups with {total_spans} total spans to export"
+            )
 
             any_failure = False
             for (tenant_id, agent_id), activities in groups.items():
@@ -82,13 +93,25 @@ class Agent365Exporter(SpanExporter):
                 )
                 url = f"https://{endpoint}{endpoint_path}?api-version=1"
 
+                # Debug: Log endpoint being used
+                logger.debug(
+                    f"Exporting {len(activities)} spans to endpoint: {url} "
+                    f"(tenant: {tenant_id}, agent: {agent_id})"
+                )
+
                 headers = {"content-type": "application/json"}
                 try:
                     token = self._token_resolver(agent_id, tenant_id)
                     if token:
                         headers["authorization"] = f"Bearer {token}"
-                except Exception:
+                        logger.debug(f"Token resolved successfully for agent {agent_id}")
+                    else:
+                        logger.debug(f"No token returned for agent {agent_id}")
+                except Exception as e:
                     # If token resolution fails, treat as failure for this group
+                    logger.error(
+                        f"Token resolution failed for agent {agent_id}, tenant {tenant_id}: {e}"
+                    )
                     any_failure = True
                     continue
 
@@ -99,8 +122,9 @@ class Agent365Exporter(SpanExporter):
 
             return SpanExportResult.FAILURE if any_failure else SpanExportResult.SUCCESS
 
-        except Exception:
+        except Exception as e:
             # Exporters should not raise; signal failure.
+            logger.error(f"Export failed with exception: {e}")
             return SpanExportResult.FAILURE
 
     def shutdown(self) -> None:
@@ -127,20 +151,54 @@ class Agent365Exporter(SpanExporter):
                     headers=headers,
                     timeout=DEFAULT_HTTP_TIMEOUT_SECONDS,
                 )
+
+                # Extract correlation ID from response headers for logging
+                correlation_id = (
+                    resp.headers.get("x-ms-correlation-id")
+                    or resp.headers.get("request-id")
+                    or "N/A"
+                )
+
                 # 2xx => success
                 if 200 <= resp.status_code < 300:
+                    logger.debug(
+                        f"HTTP {resp.status_code} success on attempt {attempt + 1}. "
+                        f"Correlation ID: {correlation_id}. "
+                        f"Response: {resp.text[:200]}{'...' if len(resp.text) > 200 else ''}"
+                    )
                     return True
+
+                # Log non-success responses
+                response_text = resp.text[:500] + ("..." if len(resp.text) > 500 else "")
 
                 # Retry transient
                 if resp.status_code in (408, 429) or 500 <= resp.status_code < 600:
                     if attempt < DEFAULT_MAX_RETRIES:
                         time.sleep(0.2 * (attempt + 1))
                         continue
+                    # Final attempt failed
+                    logger.error(
+                        f"HTTP {resp.status_code} final failure after {DEFAULT_MAX_RETRIES + 1} attempts. "
+                        f"Correlation ID: {correlation_id}. "
+                        f"Response: {response_text}"
+                    )
+                else:
+                    # Non-retryable error
+                    logger.error(
+                        f"HTTP {resp.status_code} non-retryable error. "
+                        f"Correlation ID: {correlation_id}. "
+                        f"Response: {response_text}"
+                    )
                 return False
-            except requests.RequestException:
+
+            except requests.RequestException as e:
                 if attempt < DEFAULT_MAX_RETRIES:
                     time.sleep(0.2 * (attempt + 1))
                     continue
+                # Final attempt failed
+                logger.error(
+                    f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts with exception: {e}"
+                )
                 return False
         return False
 
