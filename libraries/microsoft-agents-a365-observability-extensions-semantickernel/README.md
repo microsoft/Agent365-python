@@ -86,7 +86,7 @@ instrumentor.instrument()
 ```properties
 # Core observability settings
 ENABLE_OBSERVABILITY=true
-ENABLE_KAIRO_EXPORTER=true
+ENABLE_A365_OBSERVABILITY_EXPORTER=true
 PYTHON_ENVIRONMENT=production
 
 # Semantic Kernel-specific settings
