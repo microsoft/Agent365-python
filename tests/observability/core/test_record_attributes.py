@@ -227,7 +227,6 @@ class TestRecordAttributes(unittest.TestCase):
             f"Should log error message containing: {expected_message}",
         )
 
-        print("✅ OpenTelemetryScope error logging test passed!")
 
 
 if __name__ == "__main__":
