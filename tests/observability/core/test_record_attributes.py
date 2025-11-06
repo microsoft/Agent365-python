@@ -92,7 +92,6 @@ class TestRecordAttributes(unittest.TestCase):
         self.assertEqual(span_attributes.get("custom.attribute.1"), "value1")
         self.assertEqual(span_attributes.get("custom.attribute.2"), 42)
         self.assertEqual(span_attributes.get("custom.attribute.3"), True)
-        print("✅ record_attributes with dict works correctly!")
 
     def test_record_attributes_multiple_calls(self):
         """Test that multiple calls to record_attributes accumulate attributes."""
@@ -119,7 +118,6 @@ class TestRecordAttributes(unittest.TestCase):
         self.assertEqual(span_attributes.get("batch1.key2"), "value2")
         self.assertEqual(span_attributes.get("batch2.key1"), "value3")
         self.assertEqual(span_attributes.get("batch2.key2"), "value4")
-        print("✅ Multiple calls to record_attributes accumulate correctly!")
 
     def test_record_attributes_with_telemetry_disabled(self):
         """Test that record_attributes is a no-op when telemetry is disabled."""
@@ -147,8 +145,6 @@ class TestRecordAttributes(unittest.TestCase):
             # Check if any span has our custom attribute (none should)
             has_custom_key = any("custom.key" in (s.attributes or {}) for s in spans)
             self.assertFalse(has_custom_key)
-
-            print("✅ record_attributes is no-op when telemetry disabled!")
         finally:
             # Restore telemetry state
             if old_value is not None:
@@ -196,8 +192,6 @@ class TestRecordAttributes(unittest.TestCase):
             span_ended_messages[0], r"Span ended: 'test_logging_activity' \([a-f0-9]{16}\)"
         )
 
-        print("✅ OpenTelemetryScope logging test passed!")
-
     @unittest.mock.patch("microsoft_agents_a365.observability.core.opentelemetry_scope.logger")
     def test_opentelemetry_scope_error_logging(self, mock_logger):
         """Test that OpenTelemetryScope logs errors when span creation fails."""
@@ -226,7 +220,6 @@ class TestRecordAttributes(unittest.TestCase):
             any(expected_message in msg for msg in error_messages),
             f"Should log error message containing: {expected_message}",
         )
-
 
 
 if __name__ == "__main__":
