@@ -3,14 +3,15 @@
 
 import os
 import unittest
+import unittest.mock
+from unittest.mock import Mock, patch
 
+from microsoft_agents_a365.observability.core import AgentDetails, TenantDetails
+from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-from microsoft_agents_a365.observability.core import AgentDetails, TenantDetails
-from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 
 
 class TestRecordAttributes(unittest.TestCase):
@@ -156,6 +157,77 @@ class TestRecordAttributes(unittest.TestCase):
                 os.environ.pop("ENABLE_OBSERVABILITY", None)
             # Re-enable for safety
             os.environ["ENABLE_OBSERVABILITY"] = "true"
+
+    @unittest.mock.patch("microsoft_agents_a365.observability.core.opentelemetry_scope.logger")
+    def test_opentelemetry_scope_logging(self, mock_logger):
+        """Test that OpenTelemetryScope logs span start and end messages."""
+        activity_name = "test_logging_activity"
+        agent_details = AgentDetails(agent_id="test-agent-logging")
+
+        with OpenTelemetryScope(
+            kind="Internal",
+            operation_name="test_logging_operation",
+            activity_name=activity_name,
+            agent_details=agent_details,
+        ):
+            pass
+
+        # Get all debug log messages
+        debug_messages = [str(call[0][0]) for call in mock_logger.debug.call_args_list]
+
+        # Check for span started and ended messages with span ID format
+        span_started_messages = [
+            msg for msg in debug_messages if f"Span started: '{activity_name}'" in msg
+        ]
+        span_ended_messages = [
+            msg for msg in debug_messages if f"Span ended: '{activity_name}'" in msg
+        ]
+
+        self.assertEqual(
+            len(span_started_messages), 1, "Should log exactly one span started message"
+        )
+        self.assertEqual(len(span_ended_messages), 1, "Should log exactly one span ended message")
+
+        # Verify span ID format in messages
+        self.assertRegex(
+            span_started_messages[0], r"Span started: 'test_logging_activity' \([a-f0-9]{16}\)"
+        )
+        self.assertRegex(
+            span_ended_messages[0], r"Span ended: 'test_logging_activity' \([a-f0-9]{16}\)"
+        )
+
+        print("✅ OpenTelemetryScope logging test passed!")
+
+    @unittest.mock.patch("microsoft_agents_a365.observability.core.opentelemetry_scope.logger")
+    def test_opentelemetry_scope_error_logging(self, mock_logger):
+        """Test that OpenTelemetryScope logs errors when span creation fails."""
+        activity_name = "test_error_activity"
+        agent_details = AgentDetails(agent_id="test-agent-error")
+
+        # Mock tracer to return None, simulating span creation failure
+        with patch.object(OpenTelemetryScope, "_get_tracer") as mock_get_tracer:
+            mock_tracer = Mock()
+            mock_tracer.start_span.return_value = None
+            mock_get_tracer.return_value = mock_tracer
+
+            with OpenTelemetryScope(
+                kind="Internal",
+                operation_name="test_error_operation",
+                activity_name=activity_name,
+                agent_details=agent_details,
+            ):
+                pass
+
+        # Verify the specific error message was logged
+        error_messages = [str(call[0][0]) for call in mock_logger.error.call_args_list]
+        expected_message = f"Failed to create span: '{activity_name}' - tracer returned None"
+
+        self.assertTrue(
+            any(expected_message in msg for msg in error_messages),
+            f"Should log error message containing: {expected_message}",
+        )
+
+        print("✅ OpenTelemetryScope error logging test passed!")
 
 
 if __name__ == "__main__":
