@@ -196,8 +196,6 @@ class TestRecordAttributes(unittest.TestCase):
             span_ended_messages[0], r"Span ended: 'test_logging_activity' \([a-f0-9]{16}\)"
         )
 
-        print("✅ OpenTelemetryScope logging test passed!")
-
     @unittest.mock.patch("microsoft_agents_a365.observability.core.opentelemetry_scope.logger")
     def test_opentelemetry_scope_error_logging(self, mock_logger):
         """Test that OpenTelemetryScope logs errors when span creation fails."""
