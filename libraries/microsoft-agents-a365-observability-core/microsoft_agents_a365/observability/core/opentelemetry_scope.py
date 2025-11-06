@@ -111,7 +111,7 @@ class OpenTelemetryScope:
             # Log span creation
             if self._span:
                 span_id = f"{self._span.context.span_id:016x}" if self._span.context else "unknown"
-                logger.debug(f"Span started: '{activity_name}' ({span_id})")
+                logger.info(f"Span started: '{activity_name}' ({span_id})")
             else:
                 logger.error(f"Failed to create span: '{activity_name}' - tracer returned None")
 
@@ -222,7 +222,7 @@ class OpenTelemetryScope:
         if self._span and self._is_telemetry_enabled() and not self._has_ended:
             self._has_ended = True
             span_id = f"{self._span.context.span_id:016x}" if self._span.context else "unknown"
-            logger.debug(f"Span ended: '{self._span.name}' ({span_id})")
+            logger.info(f"Span ended: '{self._span.name}' ({span_id})")
 
             self._span.end()
 

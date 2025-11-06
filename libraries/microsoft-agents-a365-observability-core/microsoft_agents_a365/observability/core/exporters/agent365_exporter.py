@@ -69,12 +69,12 @@ class Agent365Exporter(SpanExporter):
             groups = partition_by_identity(spans)
             if not groups:
                 # No spans with identity; treat as success
-                logger.debug("No spans with tenant/agent identity found; nothing exported.")
+                logger.info("No spans with tenant/agent identity found; nothing exported.")
                 return SpanExportResult.SUCCESS
 
             # Debug: Log number of groups and total span count
             total_spans = sum(len(activities) for activities in groups.values())
-            logger.debug(
+            logger.info(
                 f"Found {len(groups)} identity groups with {total_spans} total spans to export"
             )
 
@@ -94,7 +94,7 @@ class Agent365Exporter(SpanExporter):
                 url = f"https://{endpoint}{endpoint_path}?api-version=1"
 
                 # Debug: Log endpoint being used
-                logger.debug(
+                logger.info(
                     f"Exporting {len(activities)} spans to endpoint: {url} "
                     f"(tenant: {tenant_id}, agent: {agent_id})"
                 )
@@ -104,9 +104,9 @@ class Agent365Exporter(SpanExporter):
                     token = self._token_resolver(agent_id, tenant_id)
                     if token:
                         headers["authorization"] = f"Bearer {token}"
-                        logger.debug(f"Token resolved successfully for agent {agent_id}")
+                        logger.info(f"Token resolved successfully for agent {agent_id}")
                     else:
-                        logger.debug(f"No token returned for agent {agent_id}")
+                        logger.info(f"No token returned for agent {agent_id}")
                 except Exception as e:
                     # If token resolution fails, treat as failure for this group
                     logger.error(
@@ -168,7 +168,7 @@ class Agent365Exporter(SpanExporter):
 
                 # 2xx => success
                 if 200 <= resp.status_code < 300:
-                    logger.debug(
+                    logger.info(
                         f"HTTP {resp.status_code} success on attempt {attempt + 1}. "
                         f"Correlation ID: {correlation_id}. "
                         f"Response: {self._truncate_text(resp.text, 200)}"

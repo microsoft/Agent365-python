@@ -168,15 +168,15 @@ class TestRecordAttributes(unittest.TestCase):
         ):
             pass
 
-        # Get all debug log messages
-        debug_messages = [str(call[0][0]) for call in mock_logger.debug.call_args_list]
+        # Get all info log messages
+        info_messages = [str(call[0][0]) for call in mock_logger.info.call_args_list]
 
         # Check for span started and ended messages with span ID format
         span_started_messages = [
-            msg for msg in debug_messages if f"Span started: '{activity_name}'" in msg
+            msg for msg in info_messages if f"Span started: '{activity_name}'" in msg
         ]
         span_ended_messages = [
-            msg for msg in debug_messages if f"Span ended: '{activity_name}'" in msg
+            msg for msg in info_messages if f"Span ended: '{activity_name}'" in msg
         ]
 
         self.assertEqual(

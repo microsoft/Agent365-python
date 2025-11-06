@@ -335,23 +335,23 @@ class TestAgent365Exporter(unittest.TestCase):
             # Verify logging calls
             expected_log_calls = [
                 # Should log groups found
-                unittest.mock.call.debug("Found 1 identity groups with 2 total spans to export"),
+                unittest.mock.call.info("Found 1 identity groups with 2 total spans to export"),
                 # Should log endpoint being used
-                unittest.mock.call.debug(
+                unittest.mock.call.info(
                     "Exporting 2 spans to endpoint: https://test-endpoint.com/maven/agent365/agents/test-agent-456/traces?api-version=1 "
                     "(tenant: test-tenant-123, agent: test-agent-456)"
                 ),
                 # Should log token resolution success
-                unittest.mock.call.debug("Token resolved successfully for agent test-agent-456"),
+                unittest.mock.call.info("Token resolved successfully for agent test-agent-456"),
                 # Should log HTTP success
-                unittest.mock.call.debug(
+                unittest.mock.call.info(
                     "HTTP 200 success on attempt 1. Correlation ID: test-correlation-123. Response: success"
                 ),
             ]
 
-            # Check that all expected debug calls were made
+            # Check that all expected info calls were made
             for expected_call in expected_log_calls:
-                self.assertIn(expected_call, mock_logger.debug.call_args_list)
+                self.assertIn(expected_call, mock_logger.info.call_args_list)
 
     @patch("microsoft_agents_a365.observability.core.exporters.agent365_exporter.logger")
     def test_export_error_logging(self, mock_logger):
@@ -367,8 +367,8 @@ class TestAgent365Exporter(unittest.TestCase):
         # Verify export succeeded (no identity spans are treated as success)
         self.assertEqual(result, SpanExportResult.SUCCESS)
 
-        # Verify debug log for no identity
-        mock_logger.debug.assert_called_with(
+        # Verify info log for no identity
+        mock_logger.info.assert_called_with(
             "No spans with tenant/agent identity found; nothing exported."
         )
 
