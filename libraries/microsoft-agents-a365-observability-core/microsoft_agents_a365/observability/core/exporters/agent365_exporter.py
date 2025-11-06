@@ -142,6 +142,13 @@ class Agent365Exporter(SpanExporter):
 
     # ------------- HTTP helper ----------------------
 
+    @staticmethod
+    def _truncate_text(text: str, max_length: int) -> str:
+        """Truncate text to a maximum length, adding '...' if truncated."""
+        if len(text) > max_length:
+            return text[:max_length] + "..."
+        return text
+
     def _post_with_retries(self, url: str, body: str, headers: dict[str, str]) -> bool:
         for attempt in range(DEFAULT_MAX_RETRIES + 1):
             try:
@@ -164,12 +171,12 @@ class Agent365Exporter(SpanExporter):
                     logger.debug(
                         f"HTTP {resp.status_code} success on attempt {attempt + 1}. "
                         f"Correlation ID: {correlation_id}. "
-                        f"Response: {resp.text[:200]}{'...' if len(resp.text) > 200 else ''}"
+                        f"Response: {self._truncate_text(resp.text, 200)}"
                     )
                     return True
 
                 # Log non-success responses
-                response_text = resp.text[:500] + ("..." if len(resp.text) > 500 else "")
+                response_text = self._truncate_text(resp.text, 500)
 
                 # Retry transient
                 if resp.status_code in (408, 429) or 500 <= resp.status_code < 600:
