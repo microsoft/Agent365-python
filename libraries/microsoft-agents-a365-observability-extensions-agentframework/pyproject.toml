@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "tzdata"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "microsoft-agents-a365-observability-extensions-agent-framework"
+dynamic = ["version"]
+authors = [
+    { name = "Microsoft", email = "support@microsoft.com" },
+]
+description = "Agent Framework observability and tracing extensions for Microsoft Agents A365"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Monitoring",
+]
+license = "MIT"
+keywords = ["observability", "telemetry", "tracing", "opentelemetry", "agent-framework", "agents", "ai"]
+dependencies = [
+    "microsoft-agents-a365-observability-core >= 0.1.0",
+    "opentelemetry-api >= 1.36.0",
+    "opentelemetry-sdk >= 1.36.0",
+    "opentelemetry-instrumentation >= 0.47b0",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/Agent365"
+Repository = "https://github.com/microsoft/Agent365"
+Issues = "https://github.com/microsoft/Agent365/issues"
+Documentation = "https://github.com/microsoft/Agent365-python/tree/main/libraries/microsoft-agents-a365-observability-extensions-agentframework"
+
+[project.optional-dependencies]
+dev = [
+    "pytest >= 7.0.0",
+    "pytest-asyncio >= 0.21.0",
+    "ruff >= 0.1.0",
+    "black >= 23.0.0",
+    "mypy >= 1.0.0",
+]
+test = [
+    "pytest >= 7.0.0",
+    "pytest-asyncio >= 0.21.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools]
+license-files = ["../../LICENSE"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["../../LICENSE"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true

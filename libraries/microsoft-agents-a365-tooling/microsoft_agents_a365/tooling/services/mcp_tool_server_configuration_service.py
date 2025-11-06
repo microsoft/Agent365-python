@@ -90,9 +90,12 @@ class McpToolServerConfigurationService:
         # Validate input parameters
         self._validate_input_parameters(agentic_app_id, environment_id, auth_token)
 
-        self._logger.info(
-            f"Listing MCP tool servers for agent {agentic_app_id} in environment {environment_id}"
-        )
+        if get_use_environment_id():
+            self._logger.info(
+                f"Listing MCP tool servers for agent {agentic_app_id} in environment {environment_id}"
+            )
+        else:
+            self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
         # Determine configuration source based on environment
         if self._is_development_scenario():
@@ -460,7 +463,7 @@ class McpToolServerConfigurationService:
         """
         if not agentic_app_id:
             raise ValueError("agentic_app_id cannot be empty or None")
-        if not environment_id:
+        if get_use_environment_id() and not environment_id:
             raise ValueError("environment_id cannot be empty or None")
         if not auth_token:
             raise ValueError("auth_token cannot be empty or None")

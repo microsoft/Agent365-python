@@ -185,7 +185,7 @@ class McpToolRegistrationService:
             raise ValueError("kernel cannot be None")
         if not agentic_app_id or not agentic_app_id.strip():
             raise ValueError("agentic_app_id cannot be null or empty")
-        if not environment_id or not environment_id.strip():
+        if get_use_environment_id() and (not environment_id or not environment_id.strip()):
             raise ValueError("environment_id cannot be null or empty")
         if not auth_token or not auth_token.strip():
             raise ValueError("auth_token cannot be null or empty")

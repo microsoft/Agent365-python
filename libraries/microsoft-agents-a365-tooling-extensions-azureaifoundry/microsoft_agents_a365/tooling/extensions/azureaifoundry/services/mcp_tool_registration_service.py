@@ -152,9 +152,12 @@ class McpToolRegistrationService:
             return ([], None)
 
         if len(servers) == 0:
-            self._logger.info(
-                f"No MCP servers configured for AgenticAppId={agentic_app_id}, EnvironmentId={environment_id}"
-            )
+            if get_use_environment_id():
+                self._logger.info(
+                    f"No MCP servers configured for AgenticAppId={agentic_app_id}, EnvironmentId={environment_id}"
+                )
+            else:
+                self._logger.info(f"No MCP servers configured for AgenticAppId={agentic_app_id}")
             return ([], None)
 
         # Collections to build for the return value

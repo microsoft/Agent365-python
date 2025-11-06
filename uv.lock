@@ -11,6 +11,7 @@ resolution-markers = [
 members = [
     "microsoft-agents-a365-notifications",
     "microsoft-agents-a365-observability-core",
+    "microsoft-agents-a365-observability-extensions-agent-framework",
     "microsoft-agents-a365-observability-extensions-langchain",
     "microsoft-agents-a365-observability-extensions-openai",
     "microsoft-agents-a365-observability-extensions-semantic-kernel",
@@ -24,6 +25,7 @@ members = [
 
 [manifest.dependency-groups]
 dev = [
+    { name = "agent-framework-azure-ai", specifier = ">=0.1.0" },
     { name = "azure-identity", specifier = ">=1.12.0" },
     { name = "openai", specifier = ">=1.0.0" },
     { name = "openai-agents", specifier = ">=0.2.6" },
@@ -1612,6 +1614,45 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.0.0" },
 ]
 provides-extras = ["azure", "jaeger", "dev", "test"]
+
+[[package]]
+name = "microsoft-agents-a365-observability-extensions-agent-framework"
+source = { editable = "libraries/microsoft-agents-a365-observability-extensions-agentframework" }
+dependencies = [
+    { name = "microsoft-agents-a365-observability-core" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-sdk" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "black" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "opentelemetry-api", specifier = ">=1.36.0" },
+    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+]
+provides-extras = ["dev", "test"]
 
 [[package]]
 name = "microsoft-agents-a365-observability-extensions-langchain"

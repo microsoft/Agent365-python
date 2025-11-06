@@ -82,9 +82,13 @@ class McpToolRegistrationService:
         # Get MCP server configurations from the configuration service
         # mcp_server_configs = []
         # TODO: radevika: Update once the common project is merged.
-        self._logger.info(
-            f"Listing MCP tool servers for agent {agentic_app_id} in environment {environment_id}"
-        )
+
+        if get_use_environment_id():
+            self._logger.info(
+                f"Listing MCP tool servers for agent {agentic_app_id} in environment {environment_id}"
+            )
+        else:
+            self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
         mcp_server_configs = await self.config_service.list_tool_servers(
             agentic_app_id=agentic_app_id,
             environment_id=environment_id,

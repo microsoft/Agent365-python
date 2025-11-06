@@ -75,9 +75,12 @@ class McpToolRegistrationService:
                 authToken = await auth.exchange_token(turn_context, scopes, "AGENTIC")
                 auth_token = authToken.token
 
-            self._logger.info(
-                f"Listing MCP tool servers for agent {agentic_app_id} in environment {environment_id}"
-            )
+            if get_use_environment_id():
+                self._logger.info(
+                    f"Listing MCP tool servers for agent {agentic_app_id} in environment {environment_id}"
+                )
+            else:
+                self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
             # Get MCP server configurations
             server_configs = await self._mcp_server_configuration_service.list_tool_servers(

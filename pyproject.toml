@@ -9,6 +9,7 @@ members = [
     "libraries/microsoft-agents-a365-observability-extensions-langchain",
     "libraries/microsoft-agents-a365-observability-extensions-openai",
     "libraries/microsoft-agents-a365-observability-extensions-semantickernel", 
+    "libraries/microsoft-agents-a365-observability-extensions-agentframework",
     "libraries/microsoft-agents-a365-runtime",
     "libraries/microsoft-agents-a365-tooling",
     "libraries/microsoft-agents-a365-tooling-extensions-azureaifoundry",
@@ -37,6 +38,7 @@ dev-dependencies = [
     "ruff>=0.1.0",
     "python-dotenv>=1.0.0",
     "openai>=1.0.0",
+    "agent-framework-azure-ai >= 0.1.0",
     "azure-identity>=1.12.0",
     "openai-agents >= 0.2.6",
 ]

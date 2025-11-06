@@ -1,0 +1,15 @@
+# .github/ISSUE_TEMPLATE/config.yml
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/microsoft/Agent365-python/blob/main/README.md
+    about: Check the documentation for guides, API references, and examples
+  - name: 💬 Discussions
+    url: https://github.com/microsoft/Agent365-python/discussions
+    about: Ask questions, share ideas, and engage with the community
+  - name: ⚡ Quick Start Guide
+    url: https://github.com/microsoft/Agent365-python/blob/main/README.md#getting-started
+    about: Get started with the Agent365 Python SDK
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/microsoft/Agent365-python/security/advisories/new
+    about: Report security vulnerabilities privately (do not create public issues)
