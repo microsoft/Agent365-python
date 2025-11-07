@@ -22,6 +22,10 @@ Data Collection. The software may collect information about you and your use of 
 
 This project welcomes contributions and suggestions. This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
+### Asking Questions
+
+Have a question? Instead of opening an issue, please ask on [Stack Overflow](https://stackoverflow.com/questions/tagged/microsoft-agent365) using the tag `microsoft-agent365`.
+
 ## Security
 
 Please refer to [SECURITY.md](./SECURITY.md) for information on reporting security vulnerabilities.
