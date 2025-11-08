@@ -8,7 +8,7 @@ dynamic = ["version"]
 authors = [
     { name = "Microsoft", email = "support@microsoft.com" },
 ]
-description = "Agent Framework observability and tracing extensions for Microsoft Agents A365"
+description = "Agent Framework observability and tracing extensions for Microsoft Agent 365"
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [
