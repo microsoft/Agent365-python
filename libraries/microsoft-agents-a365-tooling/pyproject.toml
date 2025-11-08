@@ -8,7 +8,7 @@ dynamic = ["version"]
 authors = [
     { name = "Microsoft", email = "support@microsoft.com" },
 ]
-description = "Cross-framework utilities and shared components for Kairo AI agent tooling"
+description = "Agent 365 Tooling SDK, providing functionality to work with Agent 365 Tools."
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [
