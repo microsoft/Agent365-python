@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 """
-Microsoft Agents A365 Notifications
+Microsoft Agent 365 Notifications
 
 Notification and messaging extensions for AI agent applications.
 This module provides utilities for handling agent notifications and routing.
