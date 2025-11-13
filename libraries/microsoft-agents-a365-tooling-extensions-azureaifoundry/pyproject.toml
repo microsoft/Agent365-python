@@ -30,10 +30,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/microsoft/Agent365"
-Repository = "https://github.com/microsoft/Agent365"
-Issues = "https://github.com/microsoft/Agent365/issues"
-Documentation = "https://github.com/microsoft/Agent365/tree/main/python/microsoft_kairo/tooling/azurefoundry"
+Homepage = "https://github.com/microsoft/Agent365-python"
+Repository = "https://github.com/microsoft/Agent365-python"
+Issues = "https://github.com/microsoft/Agent365-python/issues"
+Documentation = "https://github.com/microsoft/Agent365-python/tree/main/libraries/microsoft-agents-a365-tooling-extensions-azureaifoundry"
 
 [project.optional-dependencies]
 dev = [

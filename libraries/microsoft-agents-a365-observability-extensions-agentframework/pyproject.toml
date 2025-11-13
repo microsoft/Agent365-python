@@ -32,9 +32,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/microsoft/Agent365"
-Repository = "https://github.com/microsoft/Agent365"
-Issues = "https://github.com/microsoft/Agent365/issues"
+Homepage = "https://github.com/microsoft/Agent365-python"
+Repository = "https://github.com/microsoft/Agent365-python"
+Issues = "https://github.com/microsoft/Agent365-python/issues"
 Documentation = "https://github.com/microsoft/Agent365-python/tree/main/libraries/microsoft-agents-a365-observability-extensions-agentframework"
 
 [project.optional-dependencies]
