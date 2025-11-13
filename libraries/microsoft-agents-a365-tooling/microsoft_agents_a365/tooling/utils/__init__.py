@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 """
 Utility modules for the Microsoft Agent 365 Tooling SDK.
