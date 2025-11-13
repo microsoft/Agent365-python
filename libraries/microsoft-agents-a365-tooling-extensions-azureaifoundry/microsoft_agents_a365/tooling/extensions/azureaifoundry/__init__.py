@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 """
-Kairo Tooling Azure Foundry
+Azure AI Foundry extension for Microsoft Agent 365 Tooling SDK
 
 Azure Foundry specific tools and services for AI agent development.
 Provides Azure Foundry-specific implementations and utilities for
