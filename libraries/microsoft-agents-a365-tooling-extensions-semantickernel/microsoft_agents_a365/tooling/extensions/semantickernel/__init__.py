@@ -1,12 +1,10 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 """
-Kairo SDK Tooling SemanticKernel
+Semantic Kernel extensions for Microsoft Agent 365 Tooling SDK
 
-Equivalent to Microsoft.Kairo.Sdk.Tooling.SemanticKernel
-
-Tooling and utilities specifically for SemanticKernel framework integration.
-Provides SemanticKernel-specific CLI tools and helper utilities.
+Tooling and utilities specifically for Semantic Kernel framework integration.
+Provides Semantic Kernel-specific helper utilities.
 """
 
 from .services import McpToolRegistrationService
