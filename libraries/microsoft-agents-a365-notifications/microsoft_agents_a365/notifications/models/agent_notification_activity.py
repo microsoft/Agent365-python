@@ -1,4 +1,5 @@
 from typing import Any, Optional, Type, TypeVar
+from microsoft_agents.activity.entity import Entity
 from microsoft_agents.activity import Activity
 from .notification_types import NotificationTypes
 from .email_reference import EmailReference
@@ -21,18 +22,17 @@ class AgentNotificationActivity:
         entities = self.activity.entities or []
         for ent in entities:
             etype = ent.type.lower()
-            payload = getattr(ent, "properties", ent)
 
             if etype == NotificationTypes.EMAIL_NOTIFICATION.lower() and self._email is None:
                 try:
-                    self._email = EmailReference.model_validate(payload)
+                    self._email = Entity.model_validate(ent)
                     self._notification_type = NotificationTypes.EMAIL_NOTIFICATION
                 except Exception:
                     self._email = None
 
             if etype == NotificationTypes.WPX_COMMENT.lower() and self._wpx_comment is None:
                 try:
-                    self._wpx_comment = WpxComment.model_validate(payload)
+                    self._wpx_comment = Entity.model_validate(ent)
                     self._notification_type = NotificationTypes.WPX_COMMENT
                 except Exception:
                     self._wpx_comment = None
