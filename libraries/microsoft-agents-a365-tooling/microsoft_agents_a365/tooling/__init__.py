@@ -4,7 +4,7 @@
 Microsoft Agent 365 Tooling SDK
 
 Core tooling functionality shared across different AI frameworks.
-Provides base utilities, CLI tools, and common helper functions.
+Provides base utilities and common helper functions.
 """
 
 from .models import MCPServerConfig
