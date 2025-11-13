@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 """
-Utility modules for the Kairo SDK Tooling Common components.
+Utility modules for the Microsoft Agent 365 Tooling SDK.
 """
 
 from .constants import Constants
