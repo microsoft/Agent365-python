@@ -1,9 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 """
-Kairo SDK Tooling Common
-
-Equivalent to Microsoft.Kairo.Sdk.Tooling.Common
+Microsoft Agent 365 Tooling SDK
 
 Core tooling functionality shared across different AI frameworks.
 Provides base utilities, CLI tools, and common helper functions.
