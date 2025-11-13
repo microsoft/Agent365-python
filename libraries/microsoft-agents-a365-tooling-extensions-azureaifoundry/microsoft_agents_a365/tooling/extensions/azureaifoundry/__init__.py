@@ -3,8 +3,8 @@
 """
 Azure AI Foundry extension for Microsoft Agent 365 Tooling SDK
 
-Azure Foundry specific tools and services for AI agent development.
-Provides Azure Foundry-specific implementations and utilities for
+Azure AI Foundry specific tools and services for AI agent development.
+Provides Azure AI Foundry-specific implementations and utilities for
 building agents with Azure AI Foundry capabilities.
 """
 
