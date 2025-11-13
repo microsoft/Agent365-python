@@ -201,7 +201,7 @@ class McpToolServerConfigurationService:
             else:
                 # Running as normal Python script
                 current_file_path = Path(__file__)
-                # Navigate from kairo/tooling/common/services/ to project root
+                # Navigate to project root
                 base_dir = current_file_path.parent.parent.parent.parent
 
             search_locations.extend(
