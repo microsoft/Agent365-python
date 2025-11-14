@@ -6,8 +6,8 @@ from microsoft_agents_a365.observability.core.trace_processor import SpanProcess
 
 
 def test_basic_functionality():
-    """Test basic Agent365 SDK functionality"""
-    print("Testing Agent365 SDK...")
+    """Test basic Microsoft Agent 365 SDK functionality"""
+    print("Testing Microsoft Agent 365 SDK...")
 
     # Test configure function
     try:
