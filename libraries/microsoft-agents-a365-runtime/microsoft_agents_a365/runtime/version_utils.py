@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-Version utilities for Agent365 SDK packages.
+Version utilities for Microsoft Agent 365 SDK packages.
 
 This module is deprecated. Versioning is now handled automatically by
 setuptools-git-versioning. See versioning/TARGET-VERSION and
