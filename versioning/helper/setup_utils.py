@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-Shared utilities for setup.py files across all Agent365 Python SDK packages.
+Shared utilities for setup.py files across all Microsoft Agent 365 Python SDK packages.
 
 This module provides helper functions to dynamically set internal package versions
 at build time, ensuring all packages in the monorepo use the exact same version.
@@ -233,3 +233,4 @@ def get_dynamic_dependencies(
             updated_dependencies.append(dep)
 
     return updated_dependencies
+
