@@ -48,7 +48,7 @@ class CustomLangChainInstrumentor(BaseInstrumentor):
         tracer_name: str | None = kwargs.get("tracer_name")
         tracer_version: str | None = kwargs.get("tracer_version")
 
-        # Prefer the Agent365 tracer; fall back to OpenTelemetry’s default if needed.
+        # Prefer the Agent 365 tracer; fall back to OpenTelemetry’s default if needed.
         try:
             tracer = get_tracer(tracer_name, tracer_version)
         except Exception:
