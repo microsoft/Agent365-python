@@ -19,7 +19,7 @@ class TestInvokeAgentScope(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test environment once for all tests."""
-        # Configure Agent365 for testing
+        # Configure Microsoft Agent 365 for testing
         configure(
             service_name="test-invoke-agent-service",
             service_namespace="test-namespace",
@@ -70,3 +70,4 @@ class TestInvokeAgentScope(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
