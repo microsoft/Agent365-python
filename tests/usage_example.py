@@ -8,7 +8,7 @@ from microsoft_agents_a365.observability.core.tenant_details import TenantDetail
 
 
 def main():
-    """Demonstrate the aligned Agent365 Python SDK functionality."""
+    """Demonstrate the aligned Microsoft Agent 365 Python SDK functionality."""
 
     # Enable telemetry (aligned with .NET SDK environment variable)
     os.environ["ENABLE_OBSERVABILITY"] = "true"
@@ -24,7 +24,7 @@ def main():
         configure,
     )
 
-    print("🚀 Agent365 Python SDK - Aligned with .NET SDK")
+    print("🚀 Microsoft Agent 365 Python SDK - Aligned with .NET SDK")
     print("=" * 50)
 
     # Configure telemetry (existing function still works)
