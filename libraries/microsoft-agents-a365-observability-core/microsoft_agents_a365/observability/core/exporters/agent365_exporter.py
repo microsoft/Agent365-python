@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 class Agent365Exporter(SpanExporter):
     """
-    Agent365 span exporter for Agent365:
+    Agent 365 span exporter for Agent 365:
       * Partitions spans by (tenantId, agentId)
       * Builds OTLP-like JSON: resourceSpans -> scopeSpans -> spans
       * POSTs per group to https://{endpoint}/maven/agent365/agents/{agentId}/traces?api-version=1
