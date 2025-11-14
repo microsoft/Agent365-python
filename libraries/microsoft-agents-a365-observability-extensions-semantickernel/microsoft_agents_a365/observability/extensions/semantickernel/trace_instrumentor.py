@@ -28,7 +28,7 @@ class SemanticKernelInstrumentor(BaseInstrumentor):
     def __init__(self):
         if not is_configured():
             raise RuntimeError(
-                "Agent365 (or your telemetry config) is not initialized. Configure it before instrumenting."
+                "Microsoft Agent 365 (or your telemetry config) is not initialized. Configure it before instrumenting."
             )
         super().__init__()
 
