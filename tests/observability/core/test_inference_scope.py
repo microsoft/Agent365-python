@@ -21,7 +21,7 @@ class TestInferenceScope(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test environment once for all tests."""
-        # Configure Agent365 for testing
+        # Configure Microsoft Agent 365 for testing
         configure(
             service_name="test-inference-service",
             service_namespace="test-namespace",
