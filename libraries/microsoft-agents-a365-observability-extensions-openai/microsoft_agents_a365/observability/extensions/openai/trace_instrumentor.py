@@ -22,21 +22,21 @@ _instruments = ("openai-agents >= 0.2.6",)
 
 class OpenAIAgentsTraceInstrumentor(BaseInstrumentor):
     """
-    Custom Trace Processor for OpenAI Agents SDK using Agent365.
-    Forwards OpenAI Agents SDK traces and spans to Agent365's tracing scopes.
+    Custom Trace Processor for OpenAI Agents SDK using Microsoft Agent 365.
+    Forwards OpenAI Agents SDK traces and spans to Microsoft Agent 365's tracing scopes.
 
     ```
     """
 
     def __init__(self):
         """Initialize the OpenAIAgentsTraceInstrumentor.
-        Raises: RuntimeError: If Agent365 is not configured.
+        Raises: RuntimeError: If Microsoft Agent 365 is not configured.
         """
         # Verify if Agent365 is configured
         Agent365_status = is_configured()
         if not Agent365_status:
             raise RuntimeError(
-                "Agent365 is not configured yet. Please configure Agent365 before initializing this instrumentor."
+                "Microsoft Agent 365 is not configured yet. Please configure Microsoft Agent 365 before initializing this instrumentor."
             )
         super().__init__()
 
@@ -44,18 +44,18 @@ class OpenAIAgentsTraceInstrumentor(BaseInstrumentor):
         return _instruments
 
     def _instrument(self, **kwargs: Any) -> None:
-        """Instruments the OpenAI Agents SDK with Agent365 tracing."""
+        """Instruments the OpenAI Agents SDK with Microsoft Agent 365 tracing."""
         tracer_name = kwargs["tracer_name"] if kwargs.get("tracer_name") else None
         tracer_version = kwargs["tracer_version"] if kwargs.get("tracer_version") else None
 
-        # Get the configured Agent365 Tracer
+        # Get the configured Microsoft Agent 365 Tracer
         try:
             tracer = get_tracer(tracer_name, tracer_version)
         except Exception:
             # fallback
             tracer = optel_trace.get_tracer(tracer_name, tracer_version)
 
-        # Get the configured Agent365 Tracer Provider instance
+        # Get the configured Microsoft Agent 365 Tracer Provider instance
         try:
             get_tracer_provider()
         except Exception:
