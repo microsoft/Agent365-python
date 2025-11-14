@@ -7,13 +7,9 @@ Utility logic for environment-related operations.
 import os
 
 # Authentication scopes for different environments
-TEST_OBSERVABILITY_SCOPE = "https://api.test.powerplatform.com/.default"
-PREPROD_OBSERVABILITY_SCOPE = "https://api.preprod.powerplatform.com/.default"
 PROD_OBSERVABILITY_SCOPE = "https://api.powerplatform.com/.default"
 
 # Cluster categories for different environments
-TEST_OBSERVABILITY_CLUSTER_CATEGORY = "test"
-PREPROD_OBSERVABILITY_CLUSTER_CATEGORY = "preprod"
 PROD_OBSERVABILITY_CLUSTER_CATEGORY = "prod"
 
 # Default environment names
@@ -28,43 +24,7 @@ def get_observability_authentication_scope() -> list[str]:
     Returns:
         list[str]: The authentication scope for the current environment.
     """
-    environment = _get_current_environment()
-
-    environment_lower = environment.lower()
-
-    if environment_lower == "development":
-        # For now, map "development" to preprod scope for local testing
-        return [PREPROD_OBSERVABILITY_SCOPE]
-    elif environment_lower == "test":
-        return [TEST_OBSERVABILITY_SCOPE]
-    elif environment_lower == "production":
-        return [PROD_OBSERVABILITY_SCOPE]
-    else:
-        # Default to production scope
-        return [PROD_OBSERVABILITY_SCOPE]
-
-
-def get_observability_cluster_category() -> str:
-    """
-    Returns the cluster category for the observability service based on the current environment.
-
-    Returns:
-        str: The cluster category for the current environment.
-    """
-    environment = _get_current_environment()
-
-    environment_lower = environment.lower()
-
-    if environment_lower == "development":
-        # For now, map "development" to preprod scope for local testing
-        return PREPROD_OBSERVABILITY_CLUSTER_CATEGORY
-    elif environment_lower == "test":
-        return TEST_OBSERVABILITY_CLUSTER_CATEGORY
-    elif environment_lower == "production":
-        return PROD_OBSERVABILITY_CLUSTER_CATEGORY
-    else:
-        # Default to production cluster category
-        return PROD_OBSERVABILITY_CLUSTER_CATEGORY
+    return [PROD_OBSERVABILITY_SCOPE]
 
 
 def is_development_environment() -> bool:
