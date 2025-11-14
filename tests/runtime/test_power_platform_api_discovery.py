@@ -9,9 +9,9 @@ class TestPowerPlatformApiDiscovery(unittest.TestCase):
     def test_host_suffix_and_audience(self):
         expected_host_suffixes = {
             "local": "api.powerplatform.localhost",
-            "dev": "api.dev.powerplatform.com",
-            "test": "api.test.powerplatform.com",
-            "preprod": "api.preprod.powerplatform.com",
+            "dev": "api.powerplatform.com",
+            "test": "api.powerplatform.com",
+            "preprod": "api.powerplatform.com",
             "firstrelease": "api.powerplatform.com",
             "prod": "api.powerplatform.com",
             "gov": "api.gov.powerplatform.microsoft.us",
@@ -46,7 +46,7 @@ class TestPowerPlatformApiDiscovery(unittest.TestCase):
     def test_tenant_endpoint_generation_dev(self):
         disc = PowerPlatformApiDiscovery("dev")
         tenant_id = "A1B2"  # normalized -> a1b2; suffix length 1 -> '2'
-        expected = "a1b.2.tenant.api.dev.powerplatform.com"
+        expected = "a1b.2.tenant.api.powerplatform.com"
         self.assertEqual(disc.get_tenant_endpoint(tenant_id), expected)
 
     def test_tenant_island_cluster_endpoint(self):
@@ -69,16 +69,16 @@ class TestPowerPlatformApiDiscovery(unittest.TestCase):
     def test_normalization_of_tenant_id(self):
         disc = PowerPlatformApiDiscovery("dev")
         tenant_id = "Ab-Cd-Ef"  # normalized -> abcdef; suffix 1 -> 'f', prefix 'abcde'
-        expected = "abcde.f.tenant.api.dev.powerplatform.com"
+        expected = "abcde.f.tenant.api.powerplatform.com"
         self.assertEqual(disc.get_tenant_endpoint(tenant_id), expected)
 
     def test_nodejs_tenant_examples(self):
         tenant_id = "e3064512-cc6d-4703-be71-a2ecaecaa98a"
         expected_map = {
             "local": "e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.powerplatform.localhost",
-            "dev": "e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.dev.powerplatform.com",
-            "test": "e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.test.powerplatform.com",
-            "preprod": "e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.preprod.powerplatform.com",
+            "dev": "e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.powerplatform.com",
+            "test": "e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.powerplatform.com",
+            "preprod": "e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.powerplatform.com",
             "firstrelease": "e3064512cc6d4703be71a2ecaecaa9.8a.tenant.api.powerplatform.com",
             "prod": "e3064512cc6d4703be71a2ecaecaa9.8a.tenant.api.powerplatform.com",
             "gov": "e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.gov.powerplatform.microsoft.us",
@@ -98,9 +98,9 @@ class TestPowerPlatformApiDiscovery(unittest.TestCase):
         tenant_id = "e3064512-cc6d-4703-be71-a2ecaecaa98a"
         expected_map = {
             "local": "il-e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.powerplatform.localhost",
-            "dev": "il-e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.dev.powerplatform.com",
-            "test": "il-e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.test.powerplatform.com",
-            "preprod": "il-e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.preprod.powerplatform.com",
+            "dev": "il-e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.powerplatform.com",
+            "test": "il-e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.powerplatform.com",
+            "preprod": "il-e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.powerplatform.com",
             "firstrelease": "il-e3064512cc6d4703be71a2ecaecaa9.8a.tenant.api.powerplatform.com",
             "prod": "il-e3064512cc6d4703be71a2ecaecaa9.8a.tenant.api.powerplatform.com",
             "gov": "il-e3064512cc6d4703be71a2ecaecaa98.a.tenant.api.gov.powerplatform.microsoft.us",

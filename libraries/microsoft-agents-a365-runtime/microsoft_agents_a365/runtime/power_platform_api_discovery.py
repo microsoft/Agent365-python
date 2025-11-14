@@ -70,9 +70,9 @@ class PowerPlatformApiDiscovery:
     def _get_environment_api_host_name_suffix(self) -> str:
         cluster_to_suffix = {
             "local": "api.powerplatform.localhost",
-            "dev": "api.powerplatform.com",
-            "test": "api.powerplatform.com",
-            "preprod": "api.powerplatform.com",
+            "dev": "api.powerplatform.com",  # defaulting to prod
+            "test": "api.powerplatform.com",  # defaulting to prod
+            "preprod": "api.powerplatform.com",  # defaulting to prod
             "firstrelease": "api.powerplatform.com",
             "prod": "api.powerplatform.com",
             "gov": "api.gov.powerplatform.microsoft.us",
