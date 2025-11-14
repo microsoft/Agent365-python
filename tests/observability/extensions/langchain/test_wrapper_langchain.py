@@ -39,15 +39,15 @@ class TestInstrumentorLangChain(unittest.TestCase):
             pass
 
     def test_instrumentor_initialization_and_Agent365_integration(self):
-        """Test 1: Verify InstrumentorForLangChain initializes and integrates with Agent365."""
+        """Test 1: Verify InstrumentorForLangChain initializes and integrates with Microsoft Agent 365."""
         from microsoft_agents_a365.observability.core.config import get_tracer, is_configured
 
-        # Verify Agent365 is configured
-        self.assertTrue(is_configured(), "Agent365 should be configured")
+        # Verify Microsoft Agent 365 is configured
+        self.assertTrue(is_configured(), "Microsoft Agent 365 should be configured")
 
         # Get tracer to ensure it works
         tracer = get_tracer()
-        self.assertIsNotNone(tracer, "Agent365 tracer should be available")
+        self.assertIsNotNone(tracer, "Microsoft Agent 365 tracer should be available")
 
         # Create instrumentor
         self._test_instrumentor = CustomLangChainInstrumentor()
@@ -67,7 +67,7 @@ class TestInstrumentorLangChain(unittest.TestCase):
             self._test_instrumentor._tracer, "Tracer should be created after initialization"
         )
 
-        print("✅ Test 1: InstrumentorForLangChain initialization and Agent365 integration works")
+        print("✅ Test 1: InstrumentorForLangChain initialization and Microsoft Agent 365 integration works")
 
     def test_instrumentor_get_span_functionality(self):
         """Test 2: Verify get_span method works correctly with mock data."""
@@ -122,7 +122,7 @@ class TestInstrumentorLangChain(unittest.TestCase):
 
 def run_langchain_tests():
     """Run all LangChain wrapper tests with detailed output."""
-    print("🧪 Running Agent365 LangChain Instrumentor tests...")
+    print("🧪 Running Microsoft Agent 365 LangChain Instrumentor tests...")
     print("=" * 80)
 
     # Create test suite
@@ -154,3 +154,4 @@ def run_langchain_tests():
 if __name__ == "__main__":
     success = run_langchain_tests()
     exit(0 if success else 1)
+
