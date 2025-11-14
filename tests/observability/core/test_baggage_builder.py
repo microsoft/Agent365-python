@@ -108,7 +108,7 @@ class TestBaggageBuilder(unittest.TestCase):
         processor = SimpleSpanProcessor(exporter)
         provider.add_span_processor(processor)
 
-        # Also add the Agent365 span processor directly
+        # Also add the Microsoft Agent 365 span processor directly
         from microsoft_agents_a365.observability.core.trace_processor.span_processor import (
             SpanProcessor as Agent365SpanProcessor,
         )
