@@ -49,7 +49,7 @@ def azure_openai_config() -> dict[str, Any]:
 
 @pytest.fixture(scope="session")
 def agent365_config() -> dict[str, Any]:
-    """Agent365 configuration for integration tests."""
+    """Microsoft Agent 365 configuration for integration tests."""
     tenant_id = os.getenv("AGENT365_TEST_TENANT_ID", "4d44f041-f91e-4d00-b107-61e47b26f5a8")
     agent_id = os.getenv("AGENT365_TEST_AGENT_ID", "3bccd52b-daaa-4b11-af40-47443852137c")
 
