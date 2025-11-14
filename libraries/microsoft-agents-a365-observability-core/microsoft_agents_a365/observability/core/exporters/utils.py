@@ -66,7 +66,7 @@ def partition_by_identity(
 
 
 def is_agent365_exporter_enabled() -> bool:
-    """Check if agent365 exporter is enabled."""
+    """Check if Agent 365 exporter is enabled."""
     # Check environment variable
     enable_exporter = os.getenv(ENABLE_A365_OBSERVABILITY_EXPORTER, "").lower()
     return (enable_exporter) in ("true", "1", "yes", "on")
