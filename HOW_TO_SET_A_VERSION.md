@@ -1,6 +1,6 @@
 # How to Set a Version
 
-This document describes how to manage versioning for the Agent365 Python SDK, whether you're creating development builds or official releases.
+This document describes how to manage versioning for the Microsoft Agent 365 Python SDK, whether you're creating development builds or official releases.
 
 ## Branch Strategy
 
@@ -381,3 +381,4 @@ If you encounter issues with versioning:
 2. Verify your Git setup with `git log` and `git describe`
 3. Check CI logs for version calculation errors
 4. Open an issue with version output and Git status
+
