@@ -32,7 +32,7 @@ class OpenAIAgentsTraceInstrumentor(BaseInstrumentor):
         """Initialize the OpenAIAgentsTraceInstrumentor.
         Raises: RuntimeError: If Microsoft Agent 365 is not configured.
         """
-        # Verify if Agent365 is configured
+        # Verify if Microsoft Agent 365 is configured
         Agent365_status = is_configured()
         if not Agent365_status:
             raise RuntimeError(
