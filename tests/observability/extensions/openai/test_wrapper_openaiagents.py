@@ -13,7 +13,7 @@ class TestOpenAIAgentsTraceInstrumentor(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test environment once for all tests."""
-        # Configure Agent365 for testing
+        # Configure Microsoft Agent 365 for testing
         configure(
             service_name="test-service-openaiAgents",
             service_namespace="test-namespace-openaiAgents",
@@ -60,20 +60,20 @@ class TestOpenAIAgentsTraceInstrumentor(unittest.TestCase):
 
 
 class TestAgent365InstrumentorIntegration(unittest.TestCase):
-    """Integration tests for the instrumentor with the broader Agent365 system."""
+    """Integration tests for the instrumentor with the broader Microsoft Agent 365 system."""
 
     def setUp(self):
-        """Set up each test with a fresh Agent365 configuration."""
+        """Set up each test with a fresh Microsoft Agent 365 configuration."""
         configure(
             service_name="integration-test-service",
             service_namespace="integration-test-namespace",
         )
 
     def test_instrumentor_with_Agent365_configured(self):
-        """Test instrumentor behavior when Agent365 is properly configured."""
+        """Test instrumentor behavior when Microsoft Agent 365 is properly configured."""
         from microsoft_agents_a365.observability.core import get_tracer, is_configured
 
-        # Verify Agent365 is configured
+        # Verify Microsoft Agent 365 is configured
         self.assertTrue(is_configured())
 
         # Get tracer to ensure it works
@@ -84,12 +84,12 @@ class TestAgent365InstrumentorIntegration(unittest.TestCase):
         instrumentor = OpenAIAgentsTraceInstrumentor()
         self.assertIsNotNone(instrumentor)
 
-        print("✅ Integration test passed: Instrumentor works with configured Agent365")
+        print("✅ Integration test passed: Instrumentor works with configured Microsoft Agent 365")
 
 
 def run_comprehensive_tests():
     """Run all tests with detailed output."""
-    print("🧪 Running comprehensive Agent365 OpenAI Agents Instrumentor tests...")
+    print("🧪 Running comprehensive Microsoft Agent 365 OpenAI Agents Instrumentor tests...")
     print("=" * 80)
 
     # Create test suite
