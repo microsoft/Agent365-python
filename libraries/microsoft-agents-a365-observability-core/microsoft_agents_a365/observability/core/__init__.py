@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-# Agent365 Python SDK for OpenTelemetry tracing.
+# Microsoft Agent 365 Python SDK for OpenTelemetry tracing.
 
 from .agent_details import AgentDetails
 from .config import (
