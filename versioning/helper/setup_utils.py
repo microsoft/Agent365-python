@@ -233,4 +233,3 @@ def get_dynamic_dependencies(
             updated_dependencies.append(dep)
 
     return updated_dependencies
-

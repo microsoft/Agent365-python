@@ -16,4 +16,3 @@ __all__ = [
     "get_base_version",
     "get_next_major_version",
 ]
-

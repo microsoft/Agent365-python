@@ -57,4 +57,3 @@ def agent365_config() -> dict[str, Any]:
         pytest.skip("Integration tests require AGENT365_TEST_TENANT_ID")
 
     return {"tenant_id": tenant_id, "agent_id": agent_id}
-

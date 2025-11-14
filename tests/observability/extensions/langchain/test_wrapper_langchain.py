@@ -67,7 +67,9 @@ class TestInstrumentorLangChain(unittest.TestCase):
             self._test_instrumentor._tracer, "Tracer should be created after initialization"
         )
 
-        print("✅ Test 1: InstrumentorForLangChain initialization and Microsoft Agent 365 integration works")
+        print(
+            "✅ Test 1: InstrumentorForLangChain initialization and Microsoft Agent 365 integration works"
+        )
 
     def test_instrumentor_get_span_functionality(self):
         """Test 2: Verify get_span method works correctly with mock data."""
@@ -154,4 +156,3 @@ def run_langchain_tests():
 if __name__ == "__main__":
     success = run_langchain_tests()
     exit(0 if success else 1)
-
