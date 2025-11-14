@@ -18,7 +18,7 @@ class TestExecuteToolScope(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test environment once for all tests."""
-        # Configure Agent365 for testing
+        # Configure Microsoft Agent 365 for testing
         configure(
             service_name="test-execute-tool-service",
             service_namespace="test-namespace",
@@ -50,3 +50,4 @@ class TestExecuteToolScope(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
