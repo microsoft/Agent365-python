@@ -52,6 +52,7 @@ class McpToolRegistrationService:
         agent: Agent,
         agentic_app_id: str,
         auth: Authorization,
+        auth_handler_name: str,
         context: TurnContext,
         auth_token: Optional[str] = None,
     ):
@@ -65,7 +66,10 @@ class McpToolRegistrationService:
         Args:
             agent: The existing agent to add servers to
             agentic_app_id: Agentic App ID for the agent
-            auth_token: Authentication token to access the MCP servers
+            auth: Authorization handler for token exchange.
+            auth_handler_name: Name of the authorization handler.
+            context: Turn context for the current operation.
+            auth_token: Authentication token to access the MCP servers.
 
         Returns:
             New Agent instance with all MCP servers, or original agent if no new servers
@@ -73,7 +77,7 @@ class McpToolRegistrationService:
 
         if not auth_token:
             scopes = get_mcp_platform_authentication_scope()
-            authToken = await auth.exchange_token(context, scopes, "AGENTIC")
+            authToken = await auth.exchange_token(context, scopes, auth_handler_name)
             auth_token = authToken.token
 
         # Get MCP server configurations from the configuration service

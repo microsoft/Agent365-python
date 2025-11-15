@@ -47,6 +47,7 @@ class McpToolRegistrationService:
         initial_tools: List[Any],
         agentic_app_id: str,
         auth: Authorization,
+        auth_handler_name: str,
         turn_context: TurnContext,
         auth_token: Optional[str] = None,
     ) -> Optional[ChatAgent]:
@@ -59,6 +60,7 @@ class McpToolRegistrationService:
             initial_tools: List of initial tools to add to the agent
             agentic_app_id: Agentic app identifier for the agent
             auth: Authorization context for token exchange
+            auth_handler_name: Name of the authorization handler.
             turn_context: Turn context for the operation
             auth_token: Optional bearer token for authentication
 
@@ -69,7 +71,7 @@ class McpToolRegistrationService:
             # Exchange token if not provided
             if not auth_token:
                 scopes = get_mcp_platform_authentication_scope()
-                authToken = await auth.exchange_token(turn_context, scopes, "AGENTIC")
+                authToken = await auth.exchange_token(turn_context, scopes, auth_handler_name)
                 auth_token = authToken.token
 
             self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
