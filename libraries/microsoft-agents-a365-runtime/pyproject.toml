@@ -25,6 +25,7 @@ classifiers = [
 license = {text = "MIT"}
 keywords = ["observability", "telemetry", "tracing", "opentelemetry", "monitoring", "ai", "agents"]
 dependencies = [
+    "PyJWT >= 2.8.0",
 ]
 
 [project.urls]
