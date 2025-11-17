@@ -24,6 +24,11 @@ from .models import (
     AgentLifecycleEvent,
 )
 
+# Import extensions
+from .extensions import (
+    ActivityExtensions,
+)
+
 __all__ = [
     # Main notification handler
     "AgentNotification",
@@ -36,4 +41,6 @@ __all__ = [
     "NotificationTypes",
     "AgentSubChannel",
     "AgentLifecycleEvent",
+    # Extensions
+    "ActivityExtensions",
 ]
