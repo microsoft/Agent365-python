@@ -163,11 +163,8 @@ def _iter_source_metadata_pairs(activity: Any) -> Iterator[tuple[str, Any]]:
 
 
 def _iter_conversation_pairs(activity: Any) -> Iterator[tuple[str, Any]]:
-    conversation_id = None
-
-    if not conversation_id:
-        conv = _safe_get(activity, "conversation")
-        conversation_id = _safe_get(conv, "id")
+    conv = _safe_get(activity, "conversation")
+    conversation_id = _safe_get(conv, "id")
 
     item_link = _safe_get(activity, "service_url")
 
