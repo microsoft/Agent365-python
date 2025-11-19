@@ -11,8 +11,12 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_UPN_KEY,
     GEN_AI_CALLER_ID_KEY,
+    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     HIRING_MANAGER_ID_KEY,
     OPERATION_SOURCE_KEY,
+    SESSION_DESCRIPTION_KEY,
+    SESSION_ID_KEY,
     TENANT_ID_KEY,
 )
 from microsoft_agents_a365.observability.core.middleware.baggage_builder import BaggageBuilder
@@ -47,6 +51,9 @@ class TestBaggageBuilder(unittest.TestCase):
 
         # Clear any existing context/baggage before each test
         context.detach(context.attach({}))
+
+        # Create a fresh BaggageBuilder for each test
+        self.builder = BaggageBuilder()
 
     def tearDown(self):
         """Clean up after each test."""
@@ -279,6 +286,79 @@ class TestBaggageBuilder(unittest.TestCase):
         finally:
             # Restore original
             tempBaggageBuilder.from_turn_context = original_fn
+
+    def test_source_metadata_name_method(self):
+        """Test deprecated source_metadata_name method - should delegate to channel_name."""
+        # Should exist and be callable
+        self.assertTrue(hasattr(self.builder, "source_metadata_name"))
+        self.assertTrue(callable(self.builder.source_metadata_name))
+
+        # Should set channel name baggage through delegation
+        with self.builder.source_metadata_name("test-channel").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(GEN_AI_EXECUTION_SOURCE_NAME_KEY), "test-channel")
+
+    def test_source_metadata_description_method(self):
+        """Test deprecated source_metadata_description method - should delegate to channel_links."""
+        # Should exist and be callable
+        self.assertTrue(hasattr(self.builder, "source_metadata_description"))
+        self.assertTrue(callable(self.builder.source_metadata_description))
+
+        # Should set channel description baggage through delegation
+        with self.builder.source_metadata_description("test-description").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(
+                current_baggage.get(GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY), "test-description"
+            )
+
+    def test_session_id_method(self):
+        """Test session_id method sets session ID baggage."""
+        # Should exist and be callable
+        self.assertTrue(hasattr(self.builder, "session_id"))
+        self.assertTrue(callable(self.builder.session_id))
+
+        # Should set session ID baggage
+        with self.builder.session_id("test-session-123").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(SESSION_ID_KEY), "test-session-123")
+
+    def test_session_description_method(self):
+        """Test session_description method sets session description baggage."""
+        # Should exist and be callable
+        self.assertTrue(hasattr(self.builder, "session_description"))
+        self.assertTrue(callable(self.builder.session_description))
+
+        # Should set session description baggage
+        with self.builder.session_description("test session description").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(
+                current_baggage.get(SESSION_DESCRIPTION_KEY), "test session description"
+            )
+
+    def test_channel_name_method(self):
+        """Test channel_name method sets channel name baggage."""
+        # Should exist and be callable
+        self.assertTrue(hasattr(self.builder, "channel_name"))
+        self.assertTrue(callable(self.builder.channel_name))
+
+        # Should set channel name baggage
+        with self.builder.channel_name("Teams Channel").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(GEN_AI_EXECUTION_SOURCE_NAME_KEY), "Teams Channel")
+
+    def test_channel_links_method(self):
+        """Test channel_links method sets channel description baggage."""
+        # Should exist and be callable
+        self.assertTrue(hasattr(self.builder, "channel_links"))
+        self.assertTrue(callable(self.builder.channel_links))
+
+        # Should set channel description baggage
+        with self.builder.channel_links("https://teams.microsoft.com/channel/123").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(
+                current_baggage.get(GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY),
+                "https://teams.microsoft.com/channel/123",
+            )
 
 
 if __name__ == "__main__":

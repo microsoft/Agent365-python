@@ -4,9 +4,11 @@
 import unittest
 from unittest.mock import MagicMock
 
-from opentelemetry import context
-
+from microsoft_agents_a365.observability.core.constants import OPERATION_SOURCE_KEY
+from microsoft_agents_a365.observability.core.middleware.baggage_builder import BaggageBuilder
+from microsoft_agents_a365.observability.core.models.operation_source import OperationSource
 from microsoft_agents_a365.observability.core.trace_processor.span_processor import SpanProcessor
+from opentelemetry import context
 
 
 class TestSpanProcessor(unittest.TestCase):
@@ -18,17 +20,37 @@ class TestSpanProcessor(unittest.TestCase):
         self.mock_span = MagicMock()
         self.mock_context = None  # Root span
 
-    def test_on_start_with_no_baggage(self):
-        # Call on_start with no baggage, should not set agent_id since there's none
+    def test_operation_source_defaults_to_sdk(self):
+        """Test that operation source is set to SDK by default when not in baggage."""
+        # Mock span with no existing attributes
+        self.mock_span.attributes = {}
+
+        # Call on_start with no baggage
         self.processor.on_start(self.mock_span, self.mock_context)
-        # Should not call set_attribute since there's no agent_id in baggage or config
-        self.mock_span.set_attribute.assert_not_called()
-        print("✅ Span on_start(Span, Parent) with no baggage testing passed!")
+
+        # Verify SDK was set as default operation source
+        self.mock_span.set_attribute.assert_called_with(
+            OPERATION_SOURCE_KEY, OperationSource.SDK.value
+        )
+
+    def test_operation_source_honors_baggage_value(self):
+        """Test that operation source from baggage is used when available."""
+        # Mock span with no existing attributes
+        self.mock_span.attributes = {}
+
+        # Set operation source in baggage using BaggageBuilder
+        with BaggageBuilder().operation_source(OperationSource.GATEWAY).build():
+            # Call on_start - should use baggage value
+            self.processor.on_start(self.mock_span, context.get_current())
+
+        # Verify GATEWAY was used from baggage
+        self.mock_span.set_attribute.assert_called_with(
+            OPERATION_SOURCE_KEY, OperationSource.GATEWAY.value
+        )
 
     def test_on_end_calls_super(self):
         try:
             self.processor.on_end(self.mock_span)
-            print("✅ Span on_end(ReadableSpan) testing passed!")
         except Exception as e:
             self.fail(f"on_end raised an exception: {e}")
 
