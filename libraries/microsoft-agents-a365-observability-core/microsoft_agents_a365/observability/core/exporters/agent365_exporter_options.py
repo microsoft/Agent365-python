@@ -26,8 +26,8 @@ class Agent365ExporterOptions:
             token_resolver: Async callable that resolves the auth token (REQUIRED).
             use_s2s_endpoint: Use the S2S endpoint instead of standard endpoint.
             max_queue_size: Maximum queue size for the batch processor. Default is 2048.
-            scheduled_delay_milliseconds: Delay between export batches (ms). Default is 5000.
-            exporter_timeout_milliseconds: Timeout for the export operation (ms). Default is 30000.
+            scheduled_delay_ms: Delay between export batches (ms). Default is 5000.
+            exporter_timeout_ms: Timeout for the export operation (ms). Default is 30000.
             max_export_batch_size: Maximum batch size for export operations. Default is 512.
         """
         self.cluster_category = cluster_category
