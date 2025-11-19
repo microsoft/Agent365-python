@@ -214,7 +214,7 @@ class BaggageBuilder:
         return self
 
     def session_description(self, value: str | None) -> "BaggageBuilder":
-        """Set the session ID baggage value."""
+        """Set the session description baggage value."""
         self._set(SESSION_DESCRIPTION_KEY, value)
         return self
 
