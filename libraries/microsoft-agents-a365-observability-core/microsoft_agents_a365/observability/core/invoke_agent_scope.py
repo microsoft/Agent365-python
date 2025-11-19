@@ -17,7 +17,6 @@ from .constants import (
     GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CALLER_USER_ID_KEY,
     GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_ID_KEY,
     GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
@@ -111,7 +110,6 @@ class InvokeAgentScope(OpenTelemetryScope):
         # Set request metadata if provided
         if request:
             if request.source_metadata:
-                self.set_tag_maybe(GEN_AI_EXECUTION_SOURCE_ID_KEY, request.source_metadata.id)
                 self.set_tag_maybe(GEN_AI_EXECUTION_SOURCE_NAME_KEY, request.source_metadata.name)
                 self.set_tag_maybe(
                     GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, request.source_metadata.description
@@ -121,6 +119,7 @@ class InvokeAgentScope(OpenTelemetryScope):
                 GEN_AI_EXECUTION_TYPE_KEY,
                 request.execution_type.value if request.execution_type else None,
             )
+            self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps(request.content))
 
         # Set caller details tags
         if caller_details:

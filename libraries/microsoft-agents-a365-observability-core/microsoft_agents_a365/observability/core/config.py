@@ -11,6 +11,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
 from .exporters.agent365_exporter import Agent365Exporter
+from .exporters.agent365_exporter_options import Agent365ExporterOptions
 from .exporters.utils import is_agent365_exporter_enabled
 from .trace_processor.span_processor import SpanProcessor
 
@@ -51,6 +52,7 @@ class TelemetryManager:
         logger_name: str = DEFAULT_LOGGER_NAME,
         token_resolver: Callable[[str, str], str | None] | None = None,
         cluster_category: str = "prod",
+        exporter_options: Optional[Agent365ExporterOptions] = None,
         **kwargs: Any,
     ) -> bool:
         """
@@ -59,8 +61,12 @@ class TelemetryManager:
         :param service_name: The name of the service.
         :param service_namespace: The namespace of the service.
         :param logger_name: The name of the logger to collect telemetry from.
-        :param token_resolver: Callable that returns an auth token for a given agent + tenant.
-        :param cluster_category: Environment / cluster category (e.g., "preprod", "prod").
+        :param token_resolver: (Deprecated) Callable that returns an auth token for a given agent + tenant.
+            Use exporter_options instead.
+        :param cluster_category: (Deprecated) Environment / cluster category (e.g. "prod").
+            Use exporter_options instead.
+        :param exporter_options: Agent365ExporterOptions instance for configuring the exporter.
+            If provided, token_resolver and cluster_category parameters are ignored.
         :return: True if configuration succeeded, False otherwise.
         """
         try:
@@ -71,6 +77,7 @@ class TelemetryManager:
                     logger_name,
                     token_resolver,
                     cluster_category,
+                    exporter_options,
                     **kwargs,
                 )
         except Exception as e:
@@ -84,6 +91,7 @@ class TelemetryManager:
         logger_name: str,
         token_resolver: Callable[[str, str], str | None] | None = None,
         cluster_category: str = "prod",
+        exporter_options: Optional[Agent365ExporterOptions] = None,
         **kwargs: Any,
     ) -> bool:
         """Internal configuration method - not thread-safe, must be called with lock."""
@@ -115,11 +123,26 @@ class TelemetryManager:
         trace.set_tracer_provider(tracer_provider)
         self._tracer_provider = tracer_provider
 
-        if is_agent365_exporter_enabled() and token_resolver is not None:
-            exporter = Agent365Exporter(
-                token_resolver=token_resolver,
+        # Use exporter_options if provided, otherwise create default options with legacy parameters
+        if exporter_options is None:
+            exporter_options = Agent365ExporterOptions(
                 cluster_category=cluster_category,
-                **kwargs,
+                token_resolver=token_resolver,
+            )
+
+        # Extract configuration for BatchSpanProcessor
+        batch_processor_kwargs = {
+            "max_queue_size": exporter_options.max_queue_size,
+            "schedule_delay_millis": exporter_options.scheduled_delay_ms,
+            "export_timeout_millis": exporter_options.exporter_timeout_ms,
+            "max_export_batch_size": exporter_options.max_export_batch_size,
+        }
+
+        if is_agent365_exporter_enabled() and exporter_options.token_resolver is not None:
+            exporter = Agent365Exporter(
+                token_resolver=exporter_options.token_resolver,
+                cluster_category=exporter_options.cluster_category,
+                use_s2s_endpoint=exporter_options.use_s2s_endpoint,
             )
         else:
             exporter = ConsoleSpanExporter()
@@ -130,7 +153,7 @@ class TelemetryManager:
         # Add span processors
 
         # Create BatchSpanProcessor with optimized settings
-        batch_processor = BatchSpanProcessor(exporter)
+        batch_processor = BatchSpanProcessor(exporter, **batch_processor_kwargs)
         agent_processor = SpanProcessor()
 
         tracer_provider.add_span_processor(batch_processor)
@@ -197,6 +220,7 @@ def configure(
     logger_name: str = DEFAULT_LOGGER_NAME,
     token_resolver: Callable[[str, str], str | None] | None = None,
     cluster_category: str = "prod",
+    exporter_options: Optional[Agent365ExporterOptions] = None,
     **kwargs: Any,
 ) -> bool:
     """
@@ -205,6 +229,12 @@ def configure(
     :param service_name: The name of the service.
     :param service_namespace: The namespace of the service.
     :param logger_name: The name of the logger to collect telemetry from.
+    :param token_resolver: (Deprecated) Callable that returns an auth token for a given agent + tenant.
+        Use exporter_options instead.
+    :param cluster_category: (Deprecated) Environment / cluster category (e.g. "prod").
+        Use exporter_options instead.
+    :param exporter_options: Agent365ExporterOptions instance for configuring the exporter.
+        If provided, token_resolver and cluster_category parameters are ignored.
     :return: True if configuration succeeded, False otherwise.
     """
     return _telemetry_manager.configure(
@@ -213,6 +243,7 @@ def configure(
         logger_name,
         token_resolver,
         cluster_category,
+        exporter_options,
         **kwargs,
     )
 

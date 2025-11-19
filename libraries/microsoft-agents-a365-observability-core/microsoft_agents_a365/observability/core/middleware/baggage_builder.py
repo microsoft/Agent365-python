@@ -20,12 +20,15 @@ from ..constants import (
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
     GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_ID_KEY,
     GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     HIRING_MANAGER_ID_KEY,
     OPERATION_SOURCE_KEY,
+    SESSION_DESCRIPTION_KEY,
+    SESSION_ID_KEY,
     TENANT_ID_KEY,
 )
+from ..models.operation_source import OperationSource
+from ..utils import deprecated
 from .turn_context_baggage import from_turn_context
 
 
@@ -50,16 +53,18 @@ class BaggageBuilder:
         """Initialize the baggage builder."""
         self._pairs: dict[str, str] = {}
 
-    def operation_source(self, value: str | None) -> "BaggageBuilder":
+    def operation_source(self, value: OperationSource | None) -> "BaggageBuilder":
         """Set the operation source baggage value.
 
         Args:
-            value: The operation source value
+            value: The operation source enum value
 
         Returns:
             Self for method chaining
         """
-        self._set(OPERATION_SOURCE_KEY, value)
+        # Convert enum to string value for baggage storage
+        str_value = value.value if value is not None else None
+        self._set(OPERATION_SOURCE_KEY, str_value)
         return self
 
     def tenant_id(self, value: str | None) -> "BaggageBuilder":
@@ -188,18 +193,38 @@ class BaggageBuilder:
         self._set(GEN_AI_CONVERSATION_ITEM_LINK_KEY, value)
         return self
 
+    @deprecated("This is a no-op. Use channel_name() or channel_links instead")
     def source_metadata_id(self, value: str | None) -> "BaggageBuilder":
         """Set the execution source metadata ID (e.g., channel ID)."""
-        self._set(GEN_AI_EXECUTION_SOURCE_ID_KEY, value)
         return self
 
+    @deprecated("Use channel_name() instead")
     def source_metadata_name(self, value: str | None) -> "BaggageBuilder":
         """Set the execution source metadata name (e.g., channel name)."""
+        return self.channel_name(value)
+
+    @deprecated("Use channel_links() instead")
+    def source_metadata_description(self, value: str | None) -> "BaggageBuilder":
+        """Set the execution source metadata description (e.g., channel description)."""
+        return self.channel_links(value)
+
+    def session_id(self, value: str | None) -> "BaggageBuilder":
+        """Set the session ID baggage value."""
+        self._set(SESSION_ID_KEY, value)
+        return self
+
+    def session_description(self, value: str | None) -> "BaggageBuilder":
+        """Set the session ID baggage value."""
+        self._set(SESSION_DESCRIPTION_KEY, value)
+        return self
+
+    def channel_name(self, value: str | None) -> "BaggageBuilder":
+        """Sets the channel name baggage value. (e.g., channel name)."""
         self._set(GEN_AI_EXECUTION_SOURCE_NAME_KEY, value)
         return self
 
-    def source_metadata_description(self, value: str | None) -> "BaggageBuilder":
-        """Set the execution source metadata description (e.g., channel description)."""
+    def channel_links(self, value: str | None) -> "BaggageBuilder":
+        """Sets the channel link baggage value. (e.g., channel links or description)."""
         self._set(GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, value)
         return self
 

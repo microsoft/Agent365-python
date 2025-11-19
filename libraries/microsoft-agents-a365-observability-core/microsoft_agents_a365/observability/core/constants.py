@@ -92,13 +92,13 @@ GEN_AI_AGENT_UPN_KEY = "gen_ai.agent.upn"
 GEN_AI_AGENT_BLUEPRINT_ID_KEY = "gen_ai.agent.applicationid"
 CORRELATION_ID_KEY = "correlation.id"
 HIRING_MANAGER_ID_KEY = "hiring.manager.id"
+SESSION_DESCRIPTION_KEY = "session.description"
 
 # Execution context dimensions
 GEN_AI_EXECUTION_TYPE_KEY = "gen_ai.execution.type"
 GEN_AI_EXECUTION_PAYLOAD_KEY = "gen_ai.execution.payload"
 
 # Source metadata dimensions
-GEN_AI_EXECUTION_SOURCE_ID_KEY = "gen_ai.execution.sourceMetadata.id"
 GEN_AI_EXECUTION_SOURCE_NAME_KEY = "gen_ai.channel.name"
 GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY = "gen_ai.channel.link"
 

@@ -16,4 +16,3 @@ class Request:
     execution_type: ExecutionType
     session_id: str | None = None
     source_metadata: SourceMetadata | None = None
-    payload: str | None = None

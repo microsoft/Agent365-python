@@ -16,7 +16,8 @@ For every new span:
 from opentelemetry import baggage, context
 from opentelemetry.sdk.trace import SpanProcessor as BaseSpanProcessor
 
-from ..constants import GEN_AI_OPERATION_NAME_KEY, INVOKE_AGENT_OPERATION_NAME
+from ..constants import GEN_AI_OPERATION_NAME_KEY, INVOKE_AGENT_OPERATION_NAME, OPERATION_SOURCE_KEY
+from ..models.operation_source import OperationSource
 from .util import COMMON_ATTRIBUTES, INVOKE_AGENT_ATTRIBUTES
 
 
@@ -40,6 +41,14 @@ class SpanProcessor(BaseSpanProcessor):
             baggage_map = baggage.get_all(ctx) or {}
         except Exception:
             baggage_map = {}
+
+        # Set operation source - coalesce baggage value with SDK default
+        if OPERATION_SOURCE_KEY not in existing:
+            operation_source = baggage_map.get(OPERATION_SOURCE_KEY) or OperationSource.SDK.value
+            try:
+                span.set_attribute(OPERATION_SOURCE_KEY, operation_source)
+            except Exception:
+                pass
 
         operation_name = existing.get(GEN_AI_OPERATION_NAME_KEY)
         is_invoke_agent = False

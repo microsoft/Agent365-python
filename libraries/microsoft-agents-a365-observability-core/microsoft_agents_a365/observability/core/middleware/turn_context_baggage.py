@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Iterable, Iterator, Mapping
+from typing import Any, Iterator, Mapping
 
 from ..constants import (
     GEN_AI_AGENT_AUID_KEY,
@@ -17,7 +17,6 @@ from ..constants import (
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
     GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_ID_KEY,
     GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     TENANT_ID_KEY,
@@ -26,9 +25,6 @@ from ..execution_type import ExecutionType
 
 AGENT_ROLE = "agenticUser"
 CHANNEL_ID_AGENTS = "agents"
-ENTITY_TYPE_WPX_COMMENT = "wpxcomment"
-ENTITY_TYPE_EMAIL_NOTIFICATION = "emailNotification"
-WPX_CONVERSATION_ID_FORMAT = "{document_id}_{parent_comment_id}"
 
 
 def _safe_get(obj: Any, *names: str) -> Any:
@@ -135,37 +131,43 @@ def _iter_tenant_id_pair(activity: Any) -> Iterator[tuple[str, Any]]:
 
 
 def _iter_source_metadata_pairs(activity: Any) -> Iterator[tuple[str, Any]]:
+    """
+    Generate source metadata pairs from activity, handling both string and ChannelId object cases.
+
+    :param activity: The activity object (Activity instance or dict)
+    :return: Iterator of (key, value) tuples for source metadata
+    """
+    # Handle channel_id (can be string or ChannelId object)
     channel_id = _safe_get(activity, "channel_id")
-    yield GEN_AI_EXECUTION_SOURCE_ID_KEY, channel_id
-    yield GEN_AI_EXECUTION_SOURCE_NAME_KEY, channel_id
-    yield GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, _safe_get(activity, "type", "Type")
+
+    # Extract channel name from either string or ChannelId object
+    channel_name = None
+    sub_channel = None
+
+    if channel_id is not None:
+        if isinstance(channel_id, str):
+            # Direct string value
+            channel_name = channel_id
+        elif hasattr(channel_id, "channel"):
+            # ChannelId object
+            channel_name = channel_id.channel
+            sub_channel = getattr(channel_id, "sub_channel", None)
+        elif isinstance(channel_id, dict):
+            # Serialized ChannelId as dict
+            channel_name = channel_id.get("channel")
+            sub_channel = channel_id.get("sub_channel")
+
+    # Yield channel name as source name
+    yield GEN_AI_EXECUTION_SOURCE_NAME_KEY, channel_name
+    yield GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, sub_channel
 
 
 def _iter_conversation_pairs(activity: Any) -> Iterator[tuple[str, Any]]:
-    channel_id = _safe_get(activity, "channel_id")
-    entities = _safe_get(activity, "entities") or []
     conversation_id = None
 
-    if channel_id == CHANNEL_ID_AGENTS and isinstance(entities, Iterable):
-        # search entities for wpxcomment or emailNotification
-        for e in entities:
-            etype = _safe_get(e, "type", "Type")
-            if etype == ENTITY_TYPE_WPX_COMMENT:
-                document_id = _safe_get(e, "documentId", "document_id")
-                parent_comment_id = _safe_get(e, "parentCommentId", "parent_comment_id")
-                if document_id and parent_comment_id:
-                    conversation_id = WPX_CONVERSATION_ID_FORMAT.format(
-                        document_id=document_id,
-                        parent_comment_id=parent_comment_id,
-                    )
-                    break
-            elif etype == ENTITY_TYPE_EMAIL_NOTIFICATION:
-                conversation_id = _safe_get(e, "conversationId", "conversation_id")
-                if conversation_id:
-                    break
     if not conversation_id:
         conv = _safe_get(activity, "conversation")
-        conversation_id = _safe_get(conv, "id", "Id")
+        conversation_id = _safe_get(conv, "id")
 
     item_link = _safe_get(activity, "service_url")
 
