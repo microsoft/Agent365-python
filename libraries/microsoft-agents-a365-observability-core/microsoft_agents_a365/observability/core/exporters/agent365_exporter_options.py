@@ -22,7 +22,7 @@ class Agent365ExporterOptions:
     ):
         """
         Args:
-            cluster_category: Cluster region argument. Defaults to 'production'.
+            cluster_category: Cluster region argument. Defaults to 'prod'.
             token_resolver: Async callable that resolves the auth token (REQUIRED).
             use_s2s_endpoint: Use the S2S endpoint instead of standard endpoint.
             max_queue_size: Maximum queue size for the batch processor. Default is 2048.
