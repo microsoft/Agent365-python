@@ -119,7 +119,7 @@ class InvokeAgentScope(OpenTelemetryScope):
                 GEN_AI_EXECUTION_TYPE_KEY,
                 request.execution_type.value if request.execution_type else None,
             )
-            self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps(request.content))
+            self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps([request.content]))
 
         # Set caller details tags
         if caller_details:
