@@ -20,6 +20,7 @@ from microsoft_agents_a365.observability.core.constants import (
     TENANT_ID_KEY,
 )
 from microsoft_agents_a365.observability.core.middleware.baggage_builder import BaggageBuilder
+from microsoft_agents_a365.observability.core.models.operation_source import OperationSource
 from opentelemetry import baggage, context, trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -85,7 +86,7 @@ class TestBaggageBuilder(unittest.TestCase):
         """Test all baggage key setter methods."""
         with (
             BaggageBuilder()
-            .operation_source("sdk")
+            .operation_source(OperationSource.SDK)
             .tenant_id("tenant-1")
             .agent_id("agent-1")
             .agent_auid("auid-1")
@@ -97,7 +98,7 @@ class TestBaggageBuilder(unittest.TestCase):
             .build()
         ):
             current_baggage = baggage.get_all()
-            self.assertEqual(current_baggage.get(OPERATION_SOURCE_KEY), "sdk")
+            self.assertEqual(current_baggage.get(OPERATION_SOURCE_KEY), OperationSource.SDK.value)
             self.assertEqual(current_baggage.get(TENANT_ID_KEY), "tenant-1")
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_ID_KEY), "agent-1")
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_AUID_KEY), "auid-1")
@@ -159,7 +160,7 @@ class TestBaggageBuilder(unittest.TestCase):
         # Use BaggageBuilder to set all possible values
         with (
             BaggageBuilder()
-            .operation_source("test_sdk")
+            .operation_source(OperationSource.SDK)
             .tenant_id("test-tenant")
             .agent_id("test-agent")
             .agent_auid("test-auid")
@@ -172,7 +173,7 @@ class TestBaggageBuilder(unittest.TestCase):
         ):
             # Inside scope - verify all baggage values are set
             scoped_baggage = baggage.get_all()
-            self.assertEqual(scoped_baggage.get(OPERATION_SOURCE_KEY), "test_sdk")
+            self.assertEqual(scoped_baggage.get(OPERATION_SOURCE_KEY), OperationSource.SDK.value)
             self.assertEqual(scoped_baggage.get(TENANT_ID_KEY), "test-tenant")
             self.assertEqual(scoped_baggage.get(GEN_AI_AGENT_ID_KEY), "test-agent")
             self.assertEqual(scoped_baggage.get(GEN_AI_AGENT_AUID_KEY), "test-auid")
@@ -217,7 +218,7 @@ class TestBaggageBuilder(unittest.TestCase):
 
         # Also verify that None / whitespace values are ignored
         dict_pairs_with_ignored = {
-            OPERATION_SOURCE_KEY: "sdk",
+            OPERATION_SOURCE_KEY: OperationSource.SDK.value,
             GEN_AI_CALLER_ID_KEY: None,  # ignored
         }
         iter_pairs_with_ignored = [
@@ -238,7 +239,7 @@ class TestBaggageBuilder(unittest.TestCase):
             self.assertEqual(baggage_contents.get(CORRELATION_ID_KEY), "corr-x")
             self.assertEqual(baggage_contents.get(GEN_AI_AGENT_AUID_KEY), "auid-x")
             self.assertEqual(baggage_contents.get(GEN_AI_AGENT_UPN_KEY), "upn-x")
-            self.assertEqual(baggage_contents.get(OPERATION_SOURCE_KEY), "sdk")
+            self.assertEqual(baggage_contents.get(OPERATION_SOURCE_KEY), OperationSource.SDK.value)
             # Ignored values should not be present
             self.assertIsNone(baggage_contents.get(GEN_AI_CALLER_ID_KEY))
             self.assertIsNone(baggage_contents.get(HIRING_MANAGER_ID_KEY))
@@ -260,7 +261,7 @@ class TestBaggageBuilder(unittest.TestCase):
                 GEN_AI_AGENT_ID_KEY: "agent-ctx",
                 CORRELATION_ID_KEY: "  ",  # will be ignored
                 GEN_AI_AGENT_UPN_KEY: None,  # will be ignored
-                OPERATION_SOURCE_KEY: "sdk-ctx",
+                OPERATION_SOURCE_KEY: OperationSource.SDK.value,
             }
 
         try:
@@ -277,7 +278,9 @@ class TestBaggageBuilder(unittest.TestCase):
                 # Values from turn_context
                 self.assertEqual(baggage_contents.get(TENANT_ID_KEY), "tenant-ctx")
                 self.assertEqual(baggage_contents.get(GEN_AI_AGENT_ID_KEY), "agent-ctx")
-                self.assertEqual(baggage_contents.get(OPERATION_SOURCE_KEY), "sdk-ctx")
+                self.assertEqual(
+                    baggage_contents.get(OPERATION_SOURCE_KEY), OperationSource.SDK.value
+                )
                 # Pre-existing (non-overlapping) still present
                 self.assertEqual(baggage_contents.get(GEN_AI_AGENT_AUID_KEY), "auid-pre")
                 # Ignored values should not be present

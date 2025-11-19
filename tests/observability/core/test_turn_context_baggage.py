@@ -13,7 +13,6 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
     GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_ID_KEY,
     GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     TENANT_ID_KEY,
@@ -117,9 +116,8 @@ class TestTurnContextBaggage(unittest.TestCase):
             "type": "message",
         })
         pairs = dict(tcb._iter_source_metadata_pairs(activity))
-        self.assertEqual(pairs[GEN_AI_EXECUTION_SOURCE_ID_KEY], "msteams")
         self.assertEqual(pairs[GEN_AI_EXECUTION_SOURCE_NAME_KEY], "msteams")
-        self.assertEqual(pairs[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY], "message")
+        self.assertIsNone(pairs.get(GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY))
 
     def test_iter_conversation_pairs_wpxcomment(self):
         activity = FakeActivity(**{
@@ -134,8 +132,7 @@ class TestTurnContextBaggage(unittest.TestCase):
             "service_url": "https://service/link",
         })
         pairs = dict(tcb._iter_conversation_pairs(activity))
-        # Expect composed id doc-100_parent-200
-        self.assertEqual(pairs[GEN_AI_CONVERSATION_ID_KEY], "doc-100_parent-200")
+        self.assertIsNone(pairs.get(GEN_AI_CONVERSATION_ID_KEY))
         self.assertEqual(pairs[GEN_AI_CONVERSATION_ITEM_LINK_KEY], "https://service/link")
 
     def test_iter_conversation_pairs_email_notification(self):
@@ -150,7 +147,7 @@ class TestTurnContextBaggage(unittest.TestCase):
             "service_url": "http://service/url",
         })
         pairs = dict(tcb._iter_conversation_pairs(activity))
-        self.assertEqual(pairs[GEN_AI_CONVERSATION_ID_KEY], "email-conv-123")
+        self.assertIsNone(pairs.get(GEN_AI_CONVERSATION_ID_KEY))
         self.assertEqual(pairs[GEN_AI_CONVERSATION_ITEM_LINK_KEY], "http://service/url")
 
     def test_iter_conversation_pairs_fallback_conversation(self):
@@ -198,12 +195,11 @@ class TestTurnContextBaggage(unittest.TestCase):
         # Execution type (agent-to-agent)
         self.assertEqual(result[GEN_AI_EXECUTION_TYPE_KEY], ExecutionType.HUMAN_TO_AGENT.value)
         # Conversation
-        self.assertEqual(result[GEN_AI_CONVERSATION_ID_KEY], "email-conv-123")
+        self.assertIsNone(result.get(GEN_AI_CONVERSATION_ID_KEY))
         self.assertEqual(result[GEN_AI_CONVERSATION_ITEM_LINK_KEY], "svc-url")
         # Source metadata
-        self.assertEqual(result[GEN_AI_EXECUTION_SOURCE_ID_KEY], "agents")
         self.assertEqual(result[GEN_AI_EXECUTION_SOURCE_NAME_KEY], "agents")
-        self.assertEqual(result[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY], "message")
+        self.assertIsNone(result.get(GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY))
 
     def test_from_turn_context_missing_activity(self):
         ctx = FakeTurnContext(activity=None)
