@@ -219,7 +219,7 @@ class BaggageBuilder:
         return self
 
     def channel_name(self, value: str | None) -> "BaggageBuilder":
-        """Sets the channel name baggage value. (e.g., channel name)."""
+        """Sets the channel name baggage value (e.g., 'Teams', 'msteams')."""
         self._set(GEN_AI_EXECUTION_SOURCE_NAME_KEY, value)
         return self
 
