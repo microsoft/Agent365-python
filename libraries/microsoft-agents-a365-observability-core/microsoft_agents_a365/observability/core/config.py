@@ -66,7 +66,7 @@ class TelemetryManager:
         :param cluster_category: (Deprecated) Environment / cluster category (e.g. "prod").
             Use exporter_options instead.
         :param exporter_options: Agent365ExporterOptions instance for configuring the exporter.
-            If provided, token_resolver and cluster_category parameters are ignored.
+            If provided, exporter_options takes precedence. If exporter_options is None, the token_resolver and cluster_category parameters are used as fallback/legacy support to construct a default Agent365ExporterOptions instance.
         :return: True if configuration succeeded, False otherwise.
         """
         try:
