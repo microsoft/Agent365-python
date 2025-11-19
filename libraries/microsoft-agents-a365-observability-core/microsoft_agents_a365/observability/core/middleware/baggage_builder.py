@@ -193,7 +193,7 @@ class BaggageBuilder:
         self._set(GEN_AI_CONVERSATION_ITEM_LINK_KEY, value)
         return self
 
-    @deprecated("This is a no-op. Use channel_name() or channel_links instead")
+    @deprecated("This is a no-op. Use channel_name() or channel_links() instead.")
     def source_metadata_id(self, value: str | None) -> "BaggageBuilder":
         """Set the execution source metadata ID (e.g., channel ID)."""
         return self
