@@ -1,5 +1,8 @@
 name: CI - Build, Test, and Publish SDKs
 
+permissions:
+  contents: read
+
 # This workflow builds, tests, and publishes Python SDK packages
 # - Builds and tests run on all branches (main, release/*)
 # - Publishing to package repository ONLY happens on release/* branches
