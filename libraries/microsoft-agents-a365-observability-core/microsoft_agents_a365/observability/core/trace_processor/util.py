@@ -24,8 +24,8 @@ COMMON_ATTRIBUTES = [
     consts.SESSION_DESCRIPTION_KEY,
     consts.HIRING_MANAGER_ID_KEY,
     # Execution context
-    consts.GEN_AI_EXECUTION_SOURCE_NAME_KEY,  # gen_ai.execution.sourceMetadata.name
-    consts.GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,  # gen_ai.execution.sourceMetadata.description
+    consts.GEN_AI_EXECUTION_SOURCE_NAME_KEY,  # gen_ai.channel.name
+    consts.GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,  # gen_ai.channel.link
 ]
 
 # Invoke Agent–specific attributes
