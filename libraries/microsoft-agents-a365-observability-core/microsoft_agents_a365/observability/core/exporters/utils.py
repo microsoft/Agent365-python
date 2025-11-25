@@ -1,5 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
+import json
+import logging
 import os
 from collections.abc import Sequence
 from typing import Any
@@ -12,6 +14,11 @@ from ..constants import (
     GEN_AI_AGENT_ID_KEY,
     TENANT_ID_KEY,
 )
+
+logger = logging.getLogger(__name__)
+
+# Maximum allowed span size in bytes (250KB)
+MAX_SPAN_SIZE_BYTES = 250 * 1024
 
 
 def hex_trace_id(value: int) -> str:
@@ -44,6 +51,77 @@ def status_name(code: StatusCode) -> str:
         return code.name
     except Exception:
         return str(code)
+
+
+def truncate_span_if_needed(span_dict: dict[str, Any]) -> dict[str, Any]:
+    """
+    Truncate span attributes if the serialized span exceeds MAX_SPAN_SIZE_BYTES.
+    This mirrors the .NET ExportFormatter behavior.
+
+    Args:
+        span_dict: The span dictionary to potentially truncate
+
+    Returns:
+        The potentially truncated span dictionary
+    """
+    try:
+        # Serialize the span to check its size
+        serialized = json.dumps(span_dict, separators=(",", ":"))
+        current_size = len(serialized.encode("utf-8"))
+
+        if current_size <= MAX_SPAN_SIZE_BYTES:
+            return span_dict
+
+        logger.warning(
+            f"Span size ({current_size} bytes) exceeds limit ({MAX_SPAN_SIZE_BYTES} bytes). "
+            "Truncating large payload attributes."
+        )
+
+        # Create a deep copy to modify (shallow copy would still reference original attributes)
+        truncated_span = span_dict.copy()
+        if "attributes" in truncated_span:
+            truncated_span["attributes"] = truncated_span["attributes"].copy()
+        attributes = truncated_span.get("attributes", {})
+
+        # Track what was truncated for logging
+        truncated_keys = []
+
+        # Sort attributes by size (largest first) and truncate until size is acceptable
+        if attributes:
+            # Calculate size of each attribute value when serialized
+            attr_sizes = []
+            for key, value in attributes.items():
+                try:
+                    value_size = len(json.dumps(value, separators=(",", ":")).encode("utf-8"))
+                    attr_sizes.append((key, value_size))
+                except Exception:
+                    # If we can't serialize the value, assume it's small
+                    attr_sizes.append((key, 0))
+
+            # Sort by size (descending - largest first)
+            attr_sizes.sort(key=lambda x: x[1], reverse=True)
+
+            # Truncate largest attributes first until size is acceptable
+            for key, _ in attr_sizes:
+                if key in attributes:
+                    attributes[key] = "TRUNCATED"
+                    truncated_keys.append(key)
+
+                    # Check size after truncation
+                    serialized = json.dumps(truncated_span, separators=(",", ":"))
+                    current_size = len(serialized.encode("utf-8"))
+
+                    if current_size <= MAX_SPAN_SIZE_BYTES:
+                        break
+
+        if truncated_keys:
+            logger.info(f"Truncated attributes: {', '.join(truncated_keys)}")
+
+        return truncated_span
+
+    except Exception as e:
+        logger.error(f"Error during span truncation: {e}")
+        return span_dict
 
 
 def partition_by_identity(

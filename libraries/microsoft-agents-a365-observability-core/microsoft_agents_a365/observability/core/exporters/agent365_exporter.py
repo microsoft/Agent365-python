@@ -23,6 +23,7 @@ from .utils import (
     kind_name,
     partition_by_identity,
     status_name,
+    truncate_span_if_needed,
 )
 
 # ---- Exporter ---------------------------------------------------------------
@@ -295,7 +296,7 @@ class Agent365Exporter(SpanExporter):
         start_ns = sp.start_time
         end_ns = sp.end_time
 
-        return {
+        span_dict = {
             "traceId": hex_trace_id(ctx.trace_id),
             "spanId": hex_span_id(ctx.span_id),
             "parentSpanId": parent_span_id,
@@ -308,3 +309,6 @@ class Agent365Exporter(SpanExporter):
             "links": links,
             "status": status,
         }
+
+        # Apply truncation if needed
+        return truncate_span_if_needed(span_dict)
