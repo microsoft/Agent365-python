@@ -23,7 +23,7 @@ from .utils import (
     kind_name,
     partition_by_identity,
     status_name,
-    truncate_span_if_needed,
+    truncate_span,
 )
 
 # ---- Exporter ---------------------------------------------------------------
@@ -311,4 +311,4 @@ class Agent365Exporter(SpanExporter):
         }
 
         # Apply truncation if needed
-        return truncate_span_if_needed(span_dict)
+        return truncate_span(span_dict)

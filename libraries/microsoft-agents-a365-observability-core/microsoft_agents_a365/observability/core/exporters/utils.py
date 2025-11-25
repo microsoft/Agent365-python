@@ -53,10 +53,9 @@ def status_name(code: StatusCode) -> str:
         return str(code)
 
 
-def truncate_span_if_needed(span_dict: dict[str, Any]) -> dict[str, Any]:
+def truncate_span(span_dict: dict[str, Any]) -> dict[str, Any]:
     """
     Truncate span attributes if the serialized span exceeds MAX_SPAN_SIZE_BYTES.
-    This mirrors the .NET ExportFormatter behavior.
 
     Args:
         span_dict: The span dictionary to potentially truncate

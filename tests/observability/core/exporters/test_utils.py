@@ -4,7 +4,7 @@
 import unittest
 
 from microsoft_agents_a365.observability.core.exporters.utils import (
-    truncate_span_if_needed,
+    truncate_span,
 )
 
 
@@ -20,7 +20,7 @@ class TestUtils(unittest.TestCase):
             "name": "small_span",
             "attributes": {"key1": "value1", "key2": "value2"},
         }
-        result = truncate_span_if_needed(small_span)
+        result = truncate_span(small_span)
         self.assertIsNotNone(result)
         self.assertEqual(result["name"], "small_span")
         self.assertEqual(result["attributes"]["key1"], "value1")
@@ -40,7 +40,7 @@ class TestUtils(unittest.TestCase):
                 "small_attr": "small_value",
             },
         }
-        result = truncate_span_if_needed(large_span)
+        result = truncate_span(large_span)
         self.assertIsNotNone(result)
         # The largest attributes should be truncated first
         self.assertEqual(result["attributes"]["gen_ai.input.messages"], "TRUNCATED")
@@ -57,7 +57,7 @@ class TestUtils(unittest.TestCase):
                 {"name": f"event_{i}", "attributes": {"data": "y" * 10000}} for i in range(50)
             ],
         }
-        result = truncate_span_if_needed(extreme_span)
+        result = truncate_span(extreme_span)
         self.assertIsNotNone(result)  # Should always return a span, even if still large
         # All attributes should be truncated due to size
         for key in result["attributes"]:
