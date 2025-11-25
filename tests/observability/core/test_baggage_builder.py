@@ -10,6 +10,7 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_UPN_KEY,
+    GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CALLER_ID_KEY,
     GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
     GEN_AI_EXECUTION_SOURCE_NAME_KEY,
@@ -94,6 +95,7 @@ class TestBaggageBuilder(unittest.TestCase):
             .agent_blueprint_id("blueprint-1")
             .correlation_id("corr-1")
             .caller_id("caller-1")
+            .caller_client_ip("192.168.1.100")
             .hiring_manager_id("manager-1")
             .build()
         ):
@@ -106,6 +108,7 @@ class TestBaggageBuilder(unittest.TestCase):
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_BLUEPRINT_ID_KEY), "blueprint-1")
             self.assertEqual(current_baggage.get(CORRELATION_ID_KEY), "corr-1")
             self.assertEqual(current_baggage.get(GEN_AI_CALLER_ID_KEY), "caller-1")
+            self.assertEqual(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY), "192.168.1.100")
             self.assertEqual(current_baggage.get(HIRING_MANAGER_ID_KEY), "manager-1")
         print("✅ All baggage keys work correctly!")
 
@@ -362,6 +365,33 @@ class TestBaggageBuilder(unittest.TestCase):
                 current_baggage.get(GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY),
                 "https://teams.microsoft.com/channel/123",
             )
+
+    def test_caller_client_ip_method(self):
+        """Test caller_client_ip method sets client IP baggage with validation."""
+        # Should exist and be callable
+        self.assertTrue(hasattr(self.builder, "caller_client_ip"))
+        self.assertTrue(callable(self.builder.caller_client_ip))
+
+        # Test valid IPv4 address
+        with BaggageBuilder().caller_client_ip("192.168.1.100").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY), "192.168.1.100")
+
+        # Test valid IPv6 address
+        with BaggageBuilder().caller_client_ip("2001:db8::1").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY), "2001:db8::1")
+
+        # Test None value (should not set baggage)
+        with BaggageBuilder().caller_client_ip(None).build():
+            current_baggage = baggage.get_all()
+            self.assertIsNone(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY))
+
+        # Test invalid IP address (should be handled gracefully now)
+        with BaggageBuilder().caller_client_ip("not.an.ip.address").build():
+            current_baggage = baggage.get_all()
+            # Should be None due to proper exception handling
+            self.assertIsNone(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY))
 
 
 if __name__ == "__main__":

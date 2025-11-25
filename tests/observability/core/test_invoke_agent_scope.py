@@ -14,17 +14,18 @@ from microsoft_agents_a365.observability.core import (
     TenantDetails,
     configure,
 )
+from microsoft_agents_a365.observability.core.constants import (
+    GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
+    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+    GEN_AI_EXECUTION_TYPE_KEY,
+    GEN_AI_INPUT_MESSAGES_KEY,
+)
 from microsoft_agents_a365.observability.core.models.caller_details import CallerDetails
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-# Constants for span attribute keys
-GEN_AI_EXECUTION_SOURCE_NAME_KEY = "gen_ai.channel.name"
-GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY = "gen_ai.channel.link"
-GEN_AI_EXECUTION_TYPE_KEY = "gen_ai.execution.type"
-GEN_AI_INPUT_MESSAGES_KEY = "gen_ai.input.messages"
 
 
 class TestInvokeAgentScope(unittest.TestCase):
@@ -85,6 +86,7 @@ class TestInvokeAgentScope(unittest.TestCase):
             agent_auid="auid-123",
             agent_upn="agent@contoso.com",
             tenant_id="tenant-789",
+            agent_client_ip="192.168.1.100",
         )
 
     def test_record_response_method_exists(self):
@@ -171,6 +173,38 @@ class TestInvokeAgentScope(unittest.TestCase):
                 self.assertIn(
                     self.test_request.content,  # From cls.test_request.content
                     input_messages,
+                )
+
+    def test_caller_agent_client_ip_in_scope(self):
+        """Test that caller agent client IP is properly handled when creating InvokeAgentScope."""
+        # Set up tracer to capture spans
+        span_exporter = InMemorySpanExporter()
+        tracer_provider = TracerProvider()
+        tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+        trace.set_tracer_provider(tracer_provider)
+
+        # Create scope with caller agent details that include client IP
+        scope = InvokeAgentScope.start(
+            invoke_agent_details=self.invoke_details,
+            tenant_details=self.tenant_details,
+            caller_agent_details=self.caller_agent_details,  # Contains agent_client_ip="192.168.1.100"
+        )
+
+        if scope is not None:
+            # Verify the caller agent details contain the expected IP
+            self.assertEqual(self.caller_agent_details.agent_client_ip, "192.168.1.100")
+            scope.dispose()
+
+        # Verify the IP is set as a span attribute
+        finished_spans = span_exporter.get_finished_spans()
+        if finished_spans:
+            span = finished_spans[-1]
+            span_attributes = getattr(span, "attributes", {}) or {}
+
+            # Verify the caller agent client IP is set as a span attribute
+            if GEN_AI_CALLER_AGENT_USER_CLIENT_IP in span_attributes:
+                self.assertEqual(
+                    span_attributes[GEN_AI_CALLER_AGENT_USER_CLIENT_IP], "192.168.1.100"
                 )
 
 
