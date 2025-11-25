@@ -26,6 +26,7 @@ COMMON_ATTRIBUTES = [
     # Execution context
     consts.GEN_AI_EXECUTION_SOURCE_NAME_KEY,  # gen_ai.execution.sourceMetadata.name
     consts.GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,  # gen_ai.execution.sourceMetadata.description
+    consts.GEN_AI_CALLER_CLIENT_IP_KEY,  # gen_ai.caller.client.ip
 ]
 
 # Invoke Agent–specific attributes

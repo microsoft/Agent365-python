@@ -9,6 +9,7 @@ import traceback
 import warnings
 from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping
 from enum import Enum
+from ipaddress import AddressValueError, ip_address
 from threading import RLock
 from typing import Any, Generic, TypeVar, cast
 
@@ -173,3 +174,27 @@ def deprecated(reason: str):
         return wrapper
 
     return decorator
+
+
+def validate_and_normalize_ip(ip_string: str | None) -> str | None:
+    """Validate and normalize an IP address string.
+    
+    Args:
+        ip_string: The IP address string to validate (IPv4 or IPv6)
+        
+    Returns:
+        The normalized IP address string if valid, None if invalid or None input
+        
+    Logs:
+        Error message if the IP address is invalid
+    """
+    if ip_string is None:
+        return None
+        
+    try:
+        # Validate and normalize IP address
+        ip_obj = ip_address(ip_string)
+        return str(ip_obj)
+    except (ValueError, AddressValueError):
+        logger.error(f"Invalid IP address: '{ip_string}'")
+        return None

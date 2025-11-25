@@ -3,6 +3,8 @@
 
 # Invoke agent scope for tracing agent invocation.
 
+import logging
+
 from .agent_details import AgentDetails
 from .constants import (
     GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY,
@@ -10,6 +12,7 @@ from .constants import (
     GEN_AI_CALLER_AGENT_NAME_KEY,
     GEN_AI_CALLER_AGENT_TENANT_ID_KEY,
     GEN_AI_CALLER_AGENT_UPN_KEY,
+    GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
     GEN_AI_CALLER_AGENT_USER_ID_KEY,
     GEN_AI_CALLER_ID_KEY,
     GEN_AI_CALLER_NAME_KEY,
@@ -31,7 +34,9 @@ from .models.caller_details import CallerDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .tenant_details import TenantDetails
-from .utils import safe_json_dumps
+from .utils import safe_json_dumps, validate_and_normalize_ip
+
+logger = logging.getLogger(__name__)
 
 
 class InvokeAgentScope(OpenTelemetryScope):
@@ -139,6 +144,11 @@ class InvokeAgentScope(OpenTelemetryScope):
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_USER_ID_KEY, caller_agent_details.agent_auid)
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_UPN_KEY, caller_agent_details.agent_upn)
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_TENANT_ID_KEY, caller_agent_details.tenant_id)
+            # Validate and set caller agent client IP
+            self.set_tag_maybe(
+                GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
+                validate_and_normalize_ip(caller_agent_details.agent_client_ip),
+            )
 
     def record_response(self, response: str) -> None:
         """Record response information for telemetry tracking.

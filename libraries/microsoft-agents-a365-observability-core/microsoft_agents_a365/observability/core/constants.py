@@ -68,6 +68,7 @@ GEN_AI_CALLER_TENANT_ID_KEY = "gen_ai.caller.tenantid"
 GEN_AI_CALLER_ID_KEY = "gen_ai.caller.id"
 GEN_AI_CALLER_NAME_KEY = "gen_ai.caller.name"
 GEN_AI_CALLER_UPN_KEY = "gen_ai.caller.upn"
+GEN_AI_CALLER_CLIENT_IP_KEY = "gen_ai.caller.client.ip"
 
 # Agent to Agent caller agent dimensions
 GEN_AI_CALLER_AGENT_USER_ID_KEY = "gen_ai.caller.agent.userid"
@@ -77,6 +78,7 @@ GEN_AI_CALLER_AGENT_NAME_KEY = "gen_ai.caller.agent.name"
 GEN_AI_CALLER_AGENT_ID_KEY = "gen_ai.caller.agent.id"
 GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY = "gen_ai.caller.agent.applicationid"
 GEN_AI_CALLER_AGENT_TYPE_KEY = "gen_ai.caller.agent.type"
+GEN_AI_CALLER_AGENT_USER_CLIENT_IP = "gen_ai.caller.agent.user.client.ip"
 
 # Agent-specific dimensions
 AGENT_ID_KEY = "gen_ai.agent.id"

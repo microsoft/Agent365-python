@@ -2,6 +2,7 @@
 
 # Per request baggage builder for OpenTelemetry context propagation.
 
+import logging
 from typing import Any
 
 from opentelemetry import baggage, context
@@ -14,6 +15,7 @@ from ..constants import (
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
     GEN_AI_AGENT_UPN_KEY,
+    GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CALLER_ID_KEY,
     GEN_AI_CALLER_NAME_KEY,
     GEN_AI_CALLER_UPN_KEY,
@@ -28,8 +30,10 @@ from ..constants import (
     TENANT_ID_KEY,
 )
 from ..models.operation_source import OperationSource
-from ..utils import deprecated
+from ..utils import deprecated, validate_and_normalize_ip
 from .turn_context_baggage import from_turn_context
+
+logger = logging.getLogger(__name__)
 
 
 class BaggageBuilder:
@@ -183,6 +187,11 @@ class BaggageBuilder:
         self._set(GEN_AI_CALLER_UPN_KEY, value)
         return self
 
+    def caller_client_ip(self, value: str | None) -> "BaggageBuilder":
+        """Set the caller client IP baggage value."""
+        self._set(GEN_AI_CALLER_CLIENT_IP_KEY, validate_and_normalize_ip(value))
+        return self
+
     def conversation_id(self, value: str | None) -> "BaggageBuilder":
         """Set the conversation ID baggage value."""
         self._set(GEN_AI_CONVERSATION_ID_KEY, value)
@@ -191,11 +200,6 @@ class BaggageBuilder:
     def conversation_item_link(self, value: str | None) -> "BaggageBuilder":
         """Set the conversation item link baggage value."""
         self._set(GEN_AI_CONVERSATION_ITEM_LINK_KEY, value)
-        return self
-
-    @deprecated("This is a no-op. Use channel_name() or channel_links() instead.")
-    def source_metadata_id(self, value: str | None) -> "BaggageBuilder":
-        """Set the execution source metadata ID (e.g., channel ID)."""
         return self
 
     @deprecated("Use channel_name() instead")

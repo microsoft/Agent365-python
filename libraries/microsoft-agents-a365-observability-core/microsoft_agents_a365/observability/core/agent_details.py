@@ -21,22 +21,25 @@ class AgentDetails:
     """A description of the AI agent's purpose or capabilities."""
 
     agent_auid: Optional[str] = None
-    """Optional Agent User ID for the agent."""
+    """Agentic User ID for the agent."""
 
     agent_upn: Optional[str] = None
-    """Optional User Principal Name (UPN) for the agent."""
+    """User Principal Name (UPN) for the agentic user."""
 
     agent_blueprint_id: Optional[str] = None
-    """Optional Blueprint/Application ID for the agent."""
+    """Blueprint/Application ID for the agent."""
 
     agent_type: Optional[AgentType] = None
     """The agent type."""
 
     tenant_id: Optional[str] = None
-    """Optional Tenant ID for the agent."""
+    """Tenant ID for the agent."""
 
     conversation_id: Optional[str] = None
     """Optional conversation ID for compatibility."""
 
     icon_uri: Optional[str] = None
     """Optional icon URI for the agent."""
+
+    agent_client_ip: Optional[str] = None
+    """Client IP address of the agent user."""
