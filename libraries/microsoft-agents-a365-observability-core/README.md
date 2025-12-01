@@ -20,7 +20,7 @@ For usage examples and detailed documentation, see the [Observability documentat
 For issues, questions, or feedback:
 
 - File issues in the [GitHub Issues](https://github.com/microsoft/Agent365-python/issues) section
-- See the [main documentation](https://github.com/microsoft/Agent365-python/blob/main/README.md) for more information
+- See the [main documentation](../../README.md) for more information
  
 ## Trademarks
  
@@ -30,5 +30,5 @@ For issues, questions, or feedback:
 
 Copyright (c) Microsoft Corporation. All rights reserved.
 
-Licensed under the MIT License - see the [LICENSE](https://github.com/microsoft/Agent365-python/blob/main/LICENSE.md) file for details.
+Licensed under the MIT License - see the [LICENSE](../../LICENSE.md) file for details.
 
