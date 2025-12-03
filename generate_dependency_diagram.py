@@ -156,9 +156,10 @@ def main():
         pkg_type = determine_package_type(member_path)
         package_configs.append((member_path, pkg_type))
     
-    # Collect all package names first
+    # Collect all package names first and cache pyproject data
     all_package_names = set()
     packages: List[PackageInfo] = []
+    pyproject_data_cache: Dict[str, Dict] = {}
     
     for path_str, pkg_type in package_configs:
         pyproject_path = repo_root / path_str / 'pyproject.toml'
@@ -174,12 +175,15 @@ def main():
         pkg_name = pyproject_data['project']['name']
         all_package_names.add(pkg_name)
         
+        # Cache the pyproject data to avoid reading the file again
+        pyproject_data_cache[pkg_name] = pyproject_data
+        
         pkg_info = PackageInfo(pkg_name, pkg_type, pyproject_path)
         packages.append(pkg_info)
     
-    # Extract dependencies for each package
+    # Extract dependencies for each package using cached data
     for pkg in packages:
-        pyproject_data = read_pyproject_toml(pkg.path)
+        pyproject_data = pyproject_data_cache[pkg.name]
         pkg.dependencies = extract_dependencies(pyproject_data, all_package_names)
     
     # Generate Mermaid diagram
