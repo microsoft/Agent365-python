@@ -6,6 +6,7 @@ Script to generate a dependency diagram for Agent 365 SDK packages.
 Reads pyproject.toml files and creates a Mermaid diagram showing internal package dependencies.
 """
 
+import re
 import tomllib
 from pathlib import Path
 from typing import Dict, List, Set
@@ -34,7 +35,8 @@ def extract_dependencies(pyproject_data: Dict, package_names: Set[str]) -> Set[s
     if 'project' in pyproject_data and 'dependencies' in pyproject_data['project']:
         for dep in pyproject_data['project']['dependencies']:
             # Extract package name (before any version specifier)
-            dep_name = dep.split('>=')[0].split('==')[0].split('<')[0].strip()
+            # Use regex to handle multiple version specifiers (e.g., "package>=1.0,<2.0")
+            dep_name = re.split(r'[><=!~]', dep)[0].strip()
             
             # Only include if it's one of our internal packages
             if dep_name in package_names:
