@@ -168,6 +168,9 @@ def main():
             continue
         
         pyproject_data = read_pyproject_toml(pyproject_path)
+        if 'project' not in pyproject_data or 'name' not in pyproject_data['project']:
+            print(f"Warning: {pyproject_path} is missing project.name field")
+            continue
         pkg_name = pyproject_data['project']['name']
         all_package_names.add(pkg_name)
         
