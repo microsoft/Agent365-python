@@ -56,18 +56,17 @@ def generate_mermaid_diagram(packages: List[PackageInfo]) -> str:
         'Tooling Extensions': {'fill': '#fff3e0', 'stroke': '#fb8c00', 'color': "#4d2600"},  # Light Orange
     }
     
-    lines = ['```mermaid', 'graph TD']
+    lines = ['```mermaid', 'graph LR']
     lines.append('    %% Package Nodes')
     
     # Create node definitions with shortened names for display
     node_map = {}
     for pkg in packages:
         # Create a short identifier for the node
-        node_id = pkg.name.replace('microsoft-agents-a365-', '').replace('-', '_')
+        node_id = pkg.name.replace('-', '_')
         node_map[pkg.name] = node_id
         
         # Create display name (remove microsoft-agents-a365- prefix for cleaner display)
-        #display_name = pkg.name.replace('microsoft-agents-a365-', '')
         display_name = pkg.name
         lines.append(f'    {node_id}["{display_name}"]')
     
@@ -204,10 +203,10 @@ def main():
     print(f"\nAnalyzed {len(packages)} packages:")
     for pkg in sorted(packages, key=lambda p: p.name):
         if pkg.dependencies:
-            deps = ', '.join(sorted(dep.replace('microsoft-agents-a365-', '') for dep in pkg.dependencies))
-            print(f"  {pkg.name.replace('microsoft-agents-a365-', '')} → {deps}")
+            deps = ', '.join(sorted(dep for dep in pkg.dependencies))
+            print(f"  {pkg.name} → {deps}")
         else:
-            print(f"  {pkg.name.replace('microsoft-agents-a365-', '')} (no internal dependencies)")
+            print(f"  {pkg.name} (no internal dependencies)")
 
 
 if __name__ == '__main__':

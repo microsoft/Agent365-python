@@ -3,45 +3,45 @@
 This diagram shows the internal dependencies between Agent 365 SDK Python packages.
 
 ```mermaid
-graph TD
+graph LR
     %% Package Nodes
-    notifications["microsoft-agents-a365-notifications"]
-    observability_core["microsoft-agents-a365-observability-core"]
-    observability_extensions_langchain["microsoft-agents-a365-observability-extensions-langchain"]
-    observability_extensions_openai["microsoft-agents-a365-observability-extensions-openai"]
-    observability_extensions_semantic_kernel["microsoft-agents-a365-observability-extensions-semantic-kernel"]
-    observability_extensions_agent_framework["microsoft-agents-a365-observability-extensions-agent-framework"]
-    runtime["microsoft-agents-a365-runtime"]
-    tooling["microsoft-agents-a365-tooling"]
-    tooling_extensions_azureaifoundry["microsoft-agents-a365-tooling-extensions-azureaifoundry"]
-    tooling_extensions_openai["microsoft-agents-a365-tooling-extensions-openai"]
-    tooling_extensions_semantickernel["microsoft-agents-a365-tooling-extensions-semantickernel"]
-    tooling_extensions_agentframework["microsoft-agents-a365-tooling-extensions-agentframework"]
+    microsoft_agents_a365_notifications["microsoft-agents-a365-notifications"]
+    microsoft_agents_a365_observability_core["microsoft-agents-a365-observability-core"]
+    microsoft_agents_a365_observability_extensions_langchain["microsoft-agents-a365-observability-extensions-langchain"]
+    microsoft_agents_a365_observability_extensions_openai["microsoft-agents-a365-observability-extensions-openai"]
+    microsoft_agents_a365_observability_extensions_semantic_kernel["microsoft-agents-a365-observability-extensions-semantic-kernel"]
+    microsoft_agents_a365_observability_extensions_agent_framework["microsoft-agents-a365-observability-extensions-agent-framework"]
+    microsoft_agents_a365_runtime["microsoft-agents-a365-runtime"]
+    microsoft_agents_a365_tooling["microsoft-agents-a365-tooling"]
+    microsoft_agents_a365_tooling_extensions_azureaifoundry["microsoft-agents-a365-tooling-extensions-azureaifoundry"]
+    microsoft_agents_a365_tooling_extensions_openai["microsoft-agents-a365-tooling-extensions-openai"]
+    microsoft_agents_a365_tooling_extensions_semantickernel["microsoft-agents-a365-tooling-extensions-semantickernel"]
+    microsoft_agents_a365_tooling_extensions_agentframework["microsoft-agents-a365-tooling-extensions-agentframework"]
 
     %% Dependencies
-    observability_core --> runtime
-    observability_extensions_langchain --> observability_core
-    observability_extensions_openai --> observability_core
-    observability_extensions_semantic_kernel --> observability_core
-    observability_extensions_agent_framework --> observability_core
-    tooling_extensions_azureaifoundry --> tooling
-    tooling_extensions_openai --> tooling
-    tooling_extensions_semantickernel --> tooling
-    tooling_extensions_agentframework --> tooling
+    microsoft_agents_a365_observability_core --> microsoft_agents_a365_runtime
+    microsoft_agents_a365_observability_extensions_langchain --> microsoft_agents_a365_observability_core
+    microsoft_agents_a365_observability_extensions_openai --> microsoft_agents_a365_observability_core
+    microsoft_agents_a365_observability_extensions_semantic_kernel --> microsoft_agents_a365_observability_core
+    microsoft_agents_a365_observability_extensions_agent_framework --> microsoft_agents_a365_observability_core
+    microsoft_agents_a365_tooling_extensions_azureaifoundry --> microsoft_agents_a365_tooling
+    microsoft_agents_a365_tooling_extensions_openai --> microsoft_agents_a365_tooling
+    microsoft_agents_a365_tooling_extensions_semantickernel --> microsoft_agents_a365_tooling
+    microsoft_agents_a365_tooling_extensions_agentframework --> microsoft_agents_a365_tooling
 
     %% Styling
     classDef notifications fill:#ffcdd2,stroke:#c62828,color:#280505,stroke-width:2px
-    class notifications notifications
+    class microsoft_agents_a365_notifications notifications
     classDef runtime fill:#bbdefb,stroke:#1565c0,color:#0d1a26,stroke-width:2px
-    class runtime runtime
+    class microsoft_agents_a365_runtime runtime
     classDef observability fill:#c8e6c9,stroke:#2e7d32,color:#142a14,stroke-width:2px
-    class observability_core observability
+    class microsoft_agents_a365_observability_core observability
     classDef observability_extensions fill:#e8f5e9,stroke:#66bb6a,color:#1f3d1f,stroke-width:2px
-    class observability_extensions_langchain,observability_extensions_openai,observability_extensions_semantic_kernel,observability_extensions_agent_framework observability_extensions
+    class microsoft_agents_a365_observability_extensions_langchain,microsoft_agents_a365_observability_extensions_openai,microsoft_agents_a365_observability_extensions_semantic_kernel,microsoft_agents_a365_observability_extensions_agent_framework observability_extensions
     classDef tooling fill:#ffe0b2,stroke:#e65100,color:#331a00,stroke-width:2px
-    class tooling tooling
+    class microsoft_agents_a365_tooling tooling
     classDef tooling_extensions fill:#fff3e0,stroke:#fb8c00,color:#4d2600,stroke-width:2px
-    class tooling_extensions_azureaifoundry,tooling_extensions_openai,tooling_extensions_semantickernel,tooling_extensions_agentframework tooling_extensions
+    class microsoft_agents_a365_tooling_extensions_azureaifoundry,microsoft_agents_a365_tooling_extensions_openai,microsoft_agents_a365_tooling_extensions_semantickernel,microsoft_agents_a365_tooling_extensions_agentframework tooling_extensions
 ```
 
 ## Package Types
