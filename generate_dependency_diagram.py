@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 """
-Script to generate a dependency diagram for Agent 365 SDK packages.
+Script to generate a dependency diagram for Microsoft Agent 365 SDK packages.
 Reads pyproject.toml files and creates a Mermaid diagram showing internal package dependencies.
 """
 
@@ -204,9 +204,9 @@ def main():
     # Write to markdown file
     output_path = repo_root / "DEPENDENCIES.md"
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write("# Agent 365 SDK Python Package Dependencies\n\n")
+        f.write("# Microsoft Agent 365 SDK Python Package Dependencies\n\n")
         f.write(
-            "This diagram shows the internal dependencies between Agent 365 SDK Python packages.\n\n"
+            "This diagram shows the internal dependencies between Microsoft Agent 365 SDK Python packages.\n\n"
         )
         f.write(diagram)
         f.write("\n\n")

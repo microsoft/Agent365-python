@@ -1,6 +1,6 @@
-# Agent 365 SDK Python Package Dependencies
+# Microsoft Agent 365 SDK Python Package Dependencies
 
-This diagram shows the internal dependencies between Agent 365 SDK Python packages.
+This diagram shows the internal dependencies between Microsoft Agent 365 SDK Python packages.
 
 ```mermaid
 graph LR
