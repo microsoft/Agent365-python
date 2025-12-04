@@ -5,14 +5,6 @@ Provides utility functions for the Tooling components.
 """
 
 import os
-from enum import Enum
-
-
-class ToolsMode(Enum):
-    """Enumeration for different tools modes."""
-
-    MOCK_MCP_SERVER = "MockMCPServer"
-    MCP_PLATFORM = "MCPPlatform"
 
 
 # Constants for base URLs
@@ -43,13 +35,6 @@ def get_mcp_base_url() -> str:
     Returns:
         str: The base URL for MCP servers.
     """
-    environment = _get_current_environment().lower()
-
-    if environment == "development":
-        tools_mode = get_tools_mode()
-        if tools_mode == ToolsMode.MOCK_MCP_SERVER:
-            return os.getenv("MOCK_MCP_SERVER_URL", "http://localhost:5309/mcp-mock/agents/servers")
-
     return f"{_get_mcp_platform_base_url()}/agents/servers"
 
 
@@ -91,30 +76,13 @@ def _get_mcp_platform_base_url() -> str:
     return MCP_PLATFORM_PROD_BASE_URL
 
 
-def get_tools_mode() -> ToolsMode:
-    """
-    Gets the tools mode for the application.
-
-    Returns:
-        ToolsMode: The tools mode enum value.
-    """
-    tools_mode = os.getenv("TOOLS_MODE", "MCPPlatform").lower()
-
-    if tools_mode == "mockmcpserver":
-        return ToolsMode.MOCK_MCP_SERVER
-    else:
-        return ToolsMode.MCP_PLATFORM
-
-
 def get_mcp_platform_authentication_scope():
     """
-    Gets the MCP platform authentication scope based on the current environment.
+    Gets the MCP platform authentication scope.
 
     Returns:
         list: A list containing the appropriate MCP platform authentication scope.
     """
-    environment = _get_current_environment().lower()
-
     envScope = os.getenv("MCP_PLATFORM_AUTHENTICATION_SCOPE", "")
 
     if envScope:

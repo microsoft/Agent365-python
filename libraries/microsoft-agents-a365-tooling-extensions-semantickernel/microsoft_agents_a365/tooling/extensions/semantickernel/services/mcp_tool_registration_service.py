@@ -23,7 +23,6 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
 from microsoft_agents_a365.tooling.models.mcp_server_config import MCPServerConfig
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
-    get_tools_mode,
     get_mcp_platform_authentication_scope,
 )
 
@@ -112,30 +111,17 @@ class McpToolRegistrationService:
         )
         self._logger.info(f"🔧 Adding MCP tools from {len(servers)} servers")
 
-        # Get tools mode
-        tools_mode = get_tools_mode()
-
         # Process each server (matching C# foreach pattern)
         for server in servers:
             try:
-                if tools_mode == "HardCodedTools":
-                    await self._add_hardcoded_tools_for_server(kernel, server)
-                    continue
-
-                headers = {}
-
-                if tools_mode == "MockMCPServer":
-                    if mock_auth_header := os.getenv("MOCK_MCP_AUTHORIZATION"):
-                        headers[Constants.Headers.AUTHORIZATION] = mock_auth_header
-                else:
-                    headers = {
-                        Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
-                    }
+                headers = {
+                    Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
+                }
 
                 plugin = MCPStreamableHttpPlugin(
                     name=server.mcp_server_name,
                     url=server.mcp_server_unique_name,
-                    headers=headers or None,
+                    headers=headers,
                 )
 
                 # Connect the plugin
@@ -151,7 +137,7 @@ class McpToolRegistrationService:
                 self._connected_plugins.append(plugin)
 
                 self._logger.info(
-                    f"✅ Connected and added MCP plugin ({tools_mode}) for: {server.mcp_server_name}"
+                    f"✅ Connected and added MCP plugin for: {server.mcp_server_name}"
                 )
 
             except Exception as e:
@@ -171,29 +157,6 @@ class McpToolRegistrationService:
             raise ValueError("agentic_app_id cannot be null or empty")
         if not auth_token or not auth_token.strip():
             raise ValueError("auth_token cannot be null or empty")
-
-    async def _add_hardcoded_tools_for_server(self, kernel: Any, server: MCPServerConfig) -> None:
-        """Add hardcoded tools for a specific server (equivalent to C# hardcoded tool logic)."""
-        server_name = server.mcp_server_name
-
-        if server_name.lower() == "mcp_mailtools":
-            # TODO: Implement hardcoded mail tools
-            # kernel.plugins.add(KernelPluginFactory.create_from_type(HardCodedMailTools, server.mcp_server_name, self._service_provider))
-            self._logger.info(f"Adding hardcoded mail tools for {server_name}")
-        elif server_name.lower() == "mcp_sharepointtools":
-            # TODO: Implement hardcoded SharePoint tools
-            # kernel.plugins.add(KernelPluginFactory.create_from_type(HardCodedSharePointTools, server.mcp_server_name, self._service_provider))
-            self._logger.info(f"Adding hardcoded SharePoint tools for {server_name}")
-        elif server_name.lower() == "onedrivemcpserver":
-            # TODO: Implement hardcoded OneDrive tools
-            # kernel.plugins.add(KernelPluginFactory.create_from_type(HardCodedOneDriveTools, server.mcp_server_name, self._service_provider))
-            self._logger.info(f"Adding hardcoded OneDrive tools for {server_name}")
-        elif server_name.lower() == "wordmcpserver":
-            # TODO: Implement hardcoded Word tools
-            # kernel.plugins.add(KernelPluginFactory.create_from_type(HardCodedWordTools, server.mcp_server_name, self._service_provider))
-            self._logger.info(f"Adding hardcoded Word tools for {server_name}")
-        else:
-            self._logger.warning(f"No hardcoded tools available for server: {server_name}")
 
     # ============================================================================
     # Private Methods - Kernel Function Creation
