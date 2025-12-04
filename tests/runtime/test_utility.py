@@ -127,6 +127,7 @@ def test_resolve_agent_identity_exception_handling(create_test_jwt, mock_context
     result = Utility.resolve_agent_identity(context, token)
     assert result == "token-app-id"
 
+
 def test_get_user_agent_header_default():
     """Test get_user_agent_header returns expected format with default orchestrator."""
     # Patch version to a known value
@@ -139,6 +140,7 @@ def test_get_user_agent_header_default():
     # Regex for Agent365SDK/version (OS; Python/version)
     pattern = rf"^Agent365SDK/.+ \({os_type}; Python/{py_version}\)$"
     assert re.match(pattern, result)
+
 
 def test_get_user_agent_header_with_orchestrator():
     """Test get_user_agent_header includes orchestrator when provided."""
