@@ -5,11 +5,11 @@
 
 import uuid
 from unittest.mock import Mock
+import platform
+import re
 
 import jwt
 import pytest
-import platform
-import re
 from microsoft_agents_a365.runtime.utility import Utility
 
 
@@ -130,8 +130,6 @@ def test_resolve_agent_identity_exception_handling(create_test_jwt, mock_context
 
 def test_get_user_agent_header_default():
     """Test get_user_agent_header returns expected format with default orchestrator."""
-    # Patch version to a known value
-    Utility._cached_version = "1.2.3"
     os_type = platform.system()
     py_version = platform.python_version()
 
@@ -144,7 +142,6 @@ def test_get_user_agent_header_default():
 
 def test_get_user_agent_header_with_orchestrator():
     """Test get_user_agent_header includes orchestrator when provided."""
-    Utility._cached_version = "2.0.0"
     orchestrator = "TestOrchestrator"
     os_type = platform.system()
     py_version = platform.python_version()
