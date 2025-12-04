@@ -8,7 +8,6 @@ from unittest.mock import Mock
 
 import jwt
 import pytest
-from pytest_mock import mocker
 from microsoft_agents_a365.runtime.utility import Utility
 
 import platform
