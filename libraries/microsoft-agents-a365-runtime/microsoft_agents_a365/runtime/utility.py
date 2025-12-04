@@ -8,7 +8,9 @@ and other common runtime operations.
 """
 
 from __future__ import annotations
+from importlib.metadata import version
 
+import platform
 import uuid
 from typing import Any, Optional
 
@@ -16,6 +18,8 @@ import jwt
 
 
 class Utility:
+    _cached_version = None
+
     """
     Utility class providing common runtime operations for Agent 365.
 
@@ -80,3 +84,19 @@ class Utility:
 
         # Fallback to extracting App ID from the auth token
         return Utility.get_app_id_from_token(auth_token)
+
+    @staticmethod
+    def get_user_agent_header(orchestrator: str = "") -> str:
+        if Utility._cached_version is None:
+            try:
+                Utility._cached_version = version("microsoft-agents-a365-runtime")
+                print("Successfully retrieved version")
+            except Exception:
+                Utility._cached_version = "unknown"
+
+        print(f"Utility._cached_version: {Utility._cached_version}")
+
+        orchestrator_part = f"; {orchestrator}" if orchestrator else ""
+        os_type = platform.system()
+        python_version = platform.python_version()
+        return f"Agent365SDK/{Utility._cached_version} ({os_type}; Python/{python_version}{orchestrator_part})"

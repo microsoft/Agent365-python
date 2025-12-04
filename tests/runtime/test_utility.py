@@ -8,8 +8,10 @@ from unittest.mock import Mock
 
 import jwt
 import pytest
+from pytest_mock import mocker
 from microsoft_agents_a365.runtime.utility import Utility
 
+import platform
 
 # Fixtures (Mocks and Helpers)
 @pytest.fixture
@@ -124,3 +126,21 @@ def test_resolve_agent_identity_exception_handling(create_test_jwt, mock_context
 
     result = Utility.resolve_agent_identity(context, token)
     assert result == "token-app-id"
+
+def test_get_user_agent_header_default():
+    """Test get_user_agent_header returns expected format with default orchestrator."""
+    # Patch version to a known value
+    Utility._cached_version = "1.2.3"
+    result = Utility.get_user_agent_header()
+    os_type = platform.system()
+    py_version = platform.python_version()
+    assert result.startswith(f"Agent365SDK/1.2.3 ({os_type}; Python/{py_version}")
+    assert ";" not in result.split("Python/")[1]  # No orchestrator
+
+def test_get_user_agent_header_with_orchestrator():
+    """Test get_user_agent_header includes orchestrator when provided."""
+    Utility._cached_version = "2.0.0"
+    orchestrator = "TestOrchestrator"
+    result = Utility.get_user_agent_header(orchestrator)
+    assert f"; {orchestrator}" in result
+    assert result.startswith("Agent365SDK/2.0.0 (")
