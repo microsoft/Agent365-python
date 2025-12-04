@@ -8,9 +8,10 @@ from unittest.mock import Mock
 
 import jwt
 import pytest
+import platform
+import re
 from microsoft_agents_a365.runtime.utility import Utility
 
-import platform
 
 # Fixtures (Mocks and Helpers)
 @pytest.fixture
@@ -130,16 +131,24 @@ def test_get_user_agent_header_default():
     """Test get_user_agent_header returns expected format with default orchestrator."""
     # Patch version to a known value
     Utility._cached_version = "1.2.3"
-    result = Utility.get_user_agent_header()
     os_type = platform.system()
     py_version = platform.python_version()
-    assert result.startswith(f"Agent365SDK/1.2.3 ({os_type}; Python/{py_version}")
-    assert ";" not in result.split("Python/")[1]  # No orchestrator
+
+    result = Utility.get_user_agent_header()
+
+    # Regex for Agent365SDK/version (OS; Python/version)
+    pattern = rf"^Agent365SDK/.+ \({os_type}; Python/{py_version}\)$"
+    assert re.match(pattern, result)
 
 def test_get_user_agent_header_with_orchestrator():
     """Test get_user_agent_header includes orchestrator when provided."""
     Utility._cached_version = "2.0.0"
     orchestrator = "TestOrchestrator"
+    os_type = platform.system()
+    py_version = platform.python_version()
+
     result = Utility.get_user_agent_header(orchestrator)
-    assert f"; {orchestrator}" in result
-    assert result.startswith("Agent365SDK/2.0.0 (")
+
+    # Regex for Agent365SDK/version (OS; Python/version; TestOrchestrator)
+    pattern = rf"^Agent365SDK/.+ \({os_type}; Python/{py_version}; {orchestrator}\)$"
+    assert re.match(pattern, result)

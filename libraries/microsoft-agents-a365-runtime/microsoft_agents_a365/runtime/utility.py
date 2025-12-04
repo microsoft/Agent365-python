@@ -87,14 +87,22 @@ class Utility:
 
     @staticmethod
     def get_user_agent_header(orchestrator: str = "") -> str:
+        """
+        Generates a User-Agent header string for SDK requests.
+
+        Args:
+            orchestrator: Optional orchestrator name to include in the User-Agent header.
+                         Defaults to empty string if not provided.
+
+        Returns:
+            str: A formatted User-Agent header string containing SDK version, OS type,
+                 Python version, and optional orchestrator information.
+        """
         if Utility._cached_version is None:
             try:
                 Utility._cached_version = version("microsoft-agents-a365-runtime")
-                print("Successfully retrieved version")
             except Exception:
                 Utility._cached_version = "unknown"
-
-        print(f"Utility._cached_version: {Utility._cached_version}")
 
         orchestrator_part = f"; {orchestrator}" if orchestrator else ""
         os_type = platform.system()
