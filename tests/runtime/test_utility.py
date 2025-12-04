@@ -138,7 +138,7 @@ def test_get_user_agent_header_default():
     result = Utility.get_user_agent_header()
 
     # Regex for Agent365SDK/version (OS; Python/version)
-    pattern = rf"^Agent365SDK/.+ \({os_type}; Python/{py_version}\)$"
+    pattern = rf"^Agent365SDK/.+ \({os_type}; Python {py_version}\)$"
     assert re.match(pattern, result)
 
 
@@ -152,5 +152,5 @@ def test_get_user_agent_header_with_orchestrator():
     result = Utility.get_user_agent_header(orchestrator)
 
     # Regex for Agent365SDK/version (OS; Python/version; TestOrchestrator)
-    pattern = rf"^Agent365SDK/.+ \({os_type}; Python/{py_version}; {orchestrator}\)$"
+    pattern = rf"^Agent365SDK/.+ \({os_type}; Python {py_version}; {orchestrator}\)$"
     assert re.match(pattern, result)

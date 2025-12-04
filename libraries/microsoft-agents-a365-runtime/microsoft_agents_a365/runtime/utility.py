@@ -107,4 +107,4 @@ class Utility:
         orchestrator_part = f"; {orchestrator}" if orchestrator else ""
         os_type = platform.system()
         python_version = platform.python_version()
-        return f"Agent365SDK/{Utility._cached_version} ({os_type}; Python/{python_version}{orchestrator_part})"
+        return f"Agent365SDK/{Utility._cached_version} ({os_type}; Python {python_version}{orchestrator_part})"
