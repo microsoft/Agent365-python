@@ -8,24 +8,24 @@ and other common runtime operations.
 """
 
 from __future__ import annotations
-from importlib.metadata import version
 
 import platform
 import uuid
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Optional
 
 import jwt
 
 
 class Utility:
-    _cached_version = None
-
     """
     Utility class providing common runtime operations for Agent 365.
 
     This class contains static methods for token processing, agent identity resolution,
     and other utility functions used across the Agent 365 runtime.
     """
+
+    _cached_version = None
 
     @staticmethod
     def get_app_id_from_token(token: Optional[str]) -> str:
@@ -101,7 +101,7 @@ class Utility:
         if Utility._cached_version is None:
             try:
                 Utility._cached_version = version("microsoft-agents-a365-runtime")
-            except Exception:
+            except PackageNotFoundError:
                 Utility._cached_version = "unknown"
 
         orchestrator_part = f"; {orchestrator}" if orchestrator else ""
