@@ -49,7 +49,7 @@ class BaggageBuilder:
                        .tenant_id("tenant-123")
                        .agent_id("agent-456")
                        .correlation_id("corr-789"))
-            
+
             with builder.build():
                 # Baggage is set in this context
                 pass
