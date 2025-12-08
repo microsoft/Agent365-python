@@ -43,14 +43,17 @@ class BaggageBuilder:
     propagated in the OpenTelemetry context.
 
     Example:
-        >>> with BaggageBuilder() \
-        ...     .tenant_id("tenant-123") \
-        ...     .agent_id("agent-456") \
-        ...     .correlation_id("corr-789") \
-        ...     .build():
-        ...     # Baggage is set in this context
-        ...     pass
-        >>> # Baggage is restored after exiting the context
+        .. code-block:: python
+
+            builder = (BaggageBuilder()
+                       .tenant_id("tenant-123")
+                       .agent_id("agent-456")
+                       .correlation_id("corr-789"))
+            
+            with builder.build():
+                # Baggage is set in this context
+                pass
+            # Baggage is restored after exiting the context
     """
 
     def __init__(self):
