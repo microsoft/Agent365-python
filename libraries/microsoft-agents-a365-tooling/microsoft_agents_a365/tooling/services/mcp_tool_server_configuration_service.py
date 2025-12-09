@@ -94,7 +94,9 @@ class McpToolServerConfigurationService:
         if self._is_development_scenario():
             return self._load_servers_from_manifest()
         else:
-            return await self._load_servers_from_gateway(agentic_app_id, auth_token, orchestrator_name)
+            return await self._load_servers_from_gateway(
+                agentic_app_id, auth_token, orchestrator_name
+            )
 
     # --------------------------------------------------------------------------
     # ENVIRONMENT DETECTION
@@ -326,7 +328,9 @@ class McpToolServerConfigurationService:
 
         return mcp_servers
 
-    def _prepare_gateway_headers(self, auth_token: str, orchestrator_name: Optional[str] = None) -> Dict[str, str]:
+    def _prepare_gateway_headers(
+        self, auth_token: str, orchestrator_name: Optional[str] = None
+    ) -> Dict[str, str]:
         """
         Prepares headers for tooling gateway requests.
 

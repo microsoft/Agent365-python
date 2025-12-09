@@ -38,6 +38,7 @@ class MCPServerInfo:
 
 class McpToolRegistrationService:
     """Service for managing MCP tools and servers for an agent"""
+
     _orchestrator_name: str = "OpenAI"
 
     def __init__(self, logger: Optional[logging.Logger] = None):
@@ -135,9 +136,13 @@ class McpToolRegistrationService:
                     # Prepare headers with authorization
                     headers = si.headers or {}
                     if auth_token:
-                        headers[Constants.Headers.AUTHORIZATION] = f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                        headers[Constants.Headers.AUTHORIZATION] = (
+                            f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                        )
 
-                    headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(self._orchestrator_name)
+                    headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
+                        self._orchestrator_name
+                    )
 
                     # Create MCPServerStreamableHttpParams with proper configuration
                     params = MCPServerStreamableHttpParams(url=si.url, headers=headers)

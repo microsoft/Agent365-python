@@ -44,6 +44,7 @@ class McpToolRegistrationService:
         >>> service = McpToolRegistrationService()
         >>> service.add_tool_servers_to_agent(project_client, agent_id, token)
     """
+
     _orchestrator_name: str = "AzureAIFoundry"
 
     def __init__(

@@ -35,6 +35,7 @@ class McpToolRegistrationService:
     This service handles registration and management of MCP (Model Context Protocol)
     tool servers with Semantic Kernel agents.
     """
+
     _orchestrator_name: str = "SemanticKernel"
 
     def __init__(

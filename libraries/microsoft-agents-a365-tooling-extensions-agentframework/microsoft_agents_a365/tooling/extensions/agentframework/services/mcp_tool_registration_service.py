@@ -27,6 +27,7 @@ class McpToolRegistrationService:
     This service handles registration and management of MCP (Model Context Protocol)
     tool servers with Agent Framework agents.
     """
+
     _orchestrator_name: str = "AgentFramework"
 
     def __init__(self, logger: Optional[logging.Logger] = None):
@@ -82,7 +83,7 @@ class McpToolRegistrationService:
             server_configs = await self._mcp_server_configuration_service.list_tool_servers(
                 agentic_app_id=agentic_app_id,
                 auth_token=auth_token,
-                orchestrator_name=self._orchestrator_name
+                orchestrator_name=self._orchestrator_name,
             )
 
             self._logger.info(f"Loaded {len(server_configs)} MCP server configurations")
