@@ -82,7 +82,7 @@ class McpToolRegistrationService:
             server_configs = await self._mcp_server_configuration_service.list_tool_servers(
                 agentic_app_id=agentic_app_id,
                 auth_token=auth_token,
-                orchestrator=self._orchestrator_name
+                orchestrator_name=self._orchestrator_name
             )
 
             self._logger.info(f"Loaded {len(server_configs)} MCP server configurations")
