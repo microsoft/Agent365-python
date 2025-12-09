@@ -132,7 +132,9 @@ class McpToolRegistrationService:
                         Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
                     }
 
-                headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header("SemanticKernel")
+                headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
+                    "SemanticKernel"
+                )
 
                 plugin = MCPStreamableHttpPlugin(
                     name=server.mcp_server_name,

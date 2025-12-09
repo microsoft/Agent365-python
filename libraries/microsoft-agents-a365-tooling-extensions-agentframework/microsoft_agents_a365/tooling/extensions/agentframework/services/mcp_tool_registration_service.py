@@ -105,7 +105,9 @@ class McpToolRegistrationService:
                             f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
                         )
 
-                    headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header("AgentFramework")
+                    headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
+                        "AgentFramework"
+                    )
 
                     server_name = getattr(config, "mcp_server_name", "Unknown")
 
