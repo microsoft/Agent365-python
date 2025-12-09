@@ -17,6 +17,7 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
     McpToolServerConfigurationService,
 )
 
+from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
 )
@@ -132,7 +133,9 @@ class McpToolRegistrationService:
                     # Prepare headers with authorization
                     headers = si.headers or {}
                     if auth_token:
-                        headers["Authorization"] = f"Bearer {auth_token}"
+                        headers[Constants.Headers.AUTHORIZATION] = f"Bearer {auth_token}"
+
+                    headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header("OpenAI")
 
                     # Create MCPServerStreamableHttpParams with proper configuration
                     params = MCPServerStreamableHttpParams(url=si.url, headers=headers)

@@ -189,6 +189,8 @@ class McpToolRegistrationService:
                 )
                 mcp_tool.update_headers(Constants.Headers.AUTHORIZATION, header_value)
 
+            mcp_tool.update_headers(Constants.Headers.USER_AGENT, Utility.get_user_agent_header("AzureAIFoundry"))
+
             # Add to collections
             tool_definitions.extend(mcp_tool.definitions)
             if mcp_tool.resources and mcp_tool.resources.mcp:

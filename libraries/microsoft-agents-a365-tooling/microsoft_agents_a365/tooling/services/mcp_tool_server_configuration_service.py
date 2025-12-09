@@ -32,6 +32,9 @@ from ..models import MCPServerConfig
 from ..utils import Constants
 from ..utils.utility import get_tooling_gateway_for_digital_worker, build_mcp_server_url
 
+# Runtime Imports
+from microsoft_agents_a365.runtime.utility import Utility as RuntimeUtility
+
 
 # ==============================================================================
 # MAIN SERVICE CLASS
@@ -335,6 +338,7 @@ class McpToolServerConfigurationService:
         """
         return {
             "Authorization": f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
+            "User-Agent": RuntimeUtility.get_user_agent_header(),
         }
 
     async def _parse_gateway_response(

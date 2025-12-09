@@ -20,3 +20,6 @@ class Constants:
 
         #: The prefix used for Bearer authentication tokens in HTTP headers.
         BEARER_PREFIX = "Bearer"
+
+        #: The header name for User-Agent information.
+        USER_AGENT = "User-Agent"
