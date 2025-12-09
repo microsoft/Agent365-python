@@ -69,7 +69,7 @@ class McpToolServerConfigurationService:
     # --------------------------------------------------------------------------
 
     async def list_tool_servers(
-        self, agentic_app_id: str, auth_token: str
+        self, agentic_app_id: str, auth_token: str, orchestrator_name: Optional[str] = None
     ) -> List[MCPServerConfig]:
         """
         Gets the list of MCP Servers that are configured for the agent.
@@ -94,7 +94,7 @@ class McpToolServerConfigurationService:
         if self._is_development_scenario():
             return self._load_servers_from_manifest()
         else:
-            return await self._load_servers_from_gateway(agentic_app_id, auth_token)
+            return await self._load_servers_from_gateway(agentic_app_id, auth_token, orchestrator_name)
 
     # --------------------------------------------------------------------------
     # ENVIRONMENT DETECTION
@@ -278,7 +278,7 @@ class McpToolServerConfigurationService:
     # --------------------------------------------------------------------------
 
     async def _load_servers_from_gateway(
-        self, agentic_app_id: str, auth_token: str
+        self, agentic_app_id: str, auth_token: str, orchestrator_name: Optional[str] = None
     ) -> List[MCPServerConfig]:
         """
         Reads MCP server configurations from tooling gateway endpoint for production scenario.
@@ -297,7 +297,7 @@ class McpToolServerConfigurationService:
 
         try:
             config_endpoint = get_tooling_gateway_for_digital_worker(agentic_app_id)
-            headers = self._prepare_gateway_headers(auth_token)
+            headers = self._prepare_gateway_headers(auth_token, orchestrator_name)
 
             self._logger.info(f"Calling tooling gateway endpoint: {config_endpoint}")
 
@@ -326,7 +326,7 @@ class McpToolServerConfigurationService:
 
         return mcp_servers
 
-    def _prepare_gateway_headers(self, auth_token: str) -> Dict[str, str]:
+    def _prepare_gateway_headers(self, auth_token: str, orchestrator_name: Optional[str] = None) -> Dict[str, str]:
         """
         Prepares headers for tooling gateway requests.
 
@@ -338,7 +338,7 @@ class McpToolServerConfigurationService:
         """
         return {
             "Authorization": f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
-            "User-Agent": RuntimeUtility.get_user_agent_header(),
+            "User-Agent": RuntimeUtility.get_user_agent_header(orchestrator_name),
         }
 
     async def _parse_gateway_response(

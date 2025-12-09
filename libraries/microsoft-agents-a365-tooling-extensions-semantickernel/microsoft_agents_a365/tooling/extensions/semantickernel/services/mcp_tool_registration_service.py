@@ -35,6 +35,7 @@ class McpToolRegistrationService:
     This service handles registration and management of MCP (Model Context Protocol)
     tool servers with Semantic Kernel agents.
     """
+    _orchestrator_name: str = "SemanticKernel"
 
     def __init__(
         self,
@@ -108,7 +109,7 @@ class McpToolRegistrationService:
 
         # Get and process servers
         servers = await self._mcp_server_configuration_service.list_tool_servers(
-            agentic_app_id, auth_token
+            agentic_app_id, auth_token, self._orchestrator_name
         )
         self._logger.info(f"🔧 Adding MCP tools from {len(servers)} servers")
 
@@ -133,7 +134,7 @@ class McpToolRegistrationService:
                     }
 
                 headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
-                    "SemanticKernel"
+                    self._orchestrator_name
                 )
 
                 plugin = MCPStreamableHttpPlugin(

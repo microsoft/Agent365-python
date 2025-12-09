@@ -44,6 +44,7 @@ class McpToolRegistrationService:
         >>> service = McpToolRegistrationService()
         >>> service.add_tool_servers_to_agent(project_client, agent_id, token)
     """
+    _orchestrator_name: str = "AzureAIFoundry"
 
     def __init__(
         self,
@@ -141,7 +142,7 @@ class McpToolRegistrationService:
         # Get MCP server configurations
         try:
             servers = await self._mcp_server_configuration_service.list_tool_servers(
-                agentic_app_id, auth_token
+                agentic_app_id, auth_token, self.orchestrator_name
             )
         except Exception as ex:
             self._logger.error(
@@ -190,7 +191,7 @@ class McpToolRegistrationService:
                 mcp_tool.update_headers(Constants.Headers.AUTHORIZATION, header_value)
 
             mcp_tool.update_headers(
-                Constants.Headers.USER_AGENT, Utility.get_user_agent_header("AzureAIFoundry")
+                Constants.Headers.USER_AGENT, Utility.get_user_agent_header(self._orchestrator_name)
             )
 
             # Add to collections

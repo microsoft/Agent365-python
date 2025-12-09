@@ -86,7 +86,7 @@ class Utility:
         return Utility.get_app_id_from_token(auth_token)
 
     @staticmethod
-    def get_user_agent_header(orchestrator: str = "") -> str:
+    def get_user_agent_header(orchestrator: Optional[str] = None) -> str:
         """
         Generates a User-Agent header string for SDK requests.
 
