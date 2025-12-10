@@ -1,12 +1,17 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+import os
+from pathlib import Path
+import sys
 import unittest
+import pytest
 
 from microsoft_agents_a365.observability.core import (
     AgentDetails,
     ExecutionType,
     ExecuteToolScope,
+    OpenTelemetryScope,
     Request,
     SourceMetadata,
     TenantDetails,
@@ -30,6 +35,14 @@ class TestExecuteToolScope(unittest.TestCase):
     def setUpClass(cls):
         """Set up test environment once for all tests."""
         # Configure Microsoft Agent 365 for testing
+        os.environ["ENABLE_A365_OBSERVABILITY"] = "true"
+
+        # Set up tracer to capture spans
+        cls.span_exporter = InMemorySpanExporter()
+        tracer_provider = TracerProvider()
+        tracer_provider.add_span_processor(SimpleSpanProcessor(cls.span_exporter))
+        trace.set_tracer_provider(tracer_provider)
+
         configure(
             service_name="test-execute-tool-service",
             service_namespace="test-namespace",
@@ -60,11 +73,6 @@ class TestExecuteToolScope(unittest.TestCase):
 
     def test_request_metadata_set_on_span(self):
         """Test that request source metadata is set on span attributes."""
-        span_exporter = InMemorySpanExporter()
-        tracer_provider = TracerProvider()
-        tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
-        trace.set_tracer_provider(tracer_provider)
-
         request = Request(
             content="Execute tool with request metadata",
             execution_type=ExecutionType.AGENT_TO_AGENT,
@@ -79,24 +87,33 @@ class TestExecuteToolScope(unittest.TestCase):
         if scope is not None:
             scope.dispose()
 
-        finished_spans = span_exporter.get_finished_spans()
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
 
-        if finished_spans:
-            span = finished_spans[-1]
-            span_attributes = getattr(span, "attributes", {}) or {}
+        span = finished_spans[-1]
+        span_attributes = getattr(span, "attributes", {}) or {}
 
-            if GEN_AI_EXECUTION_SOURCE_NAME_KEY in span_attributes:
-                self.assertEqual(
-                    span_attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY],
-                    request.source_metadata.name,
-                )
+        self.assertIn(
+            GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+            span_attributes,
+            "Expected source name to be set on span",
+        )
+        self.assertEqual(
+            span_attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY],
+            request.source_metadata.name,
+        )
 
-            if GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY in span_attributes:
-                self.assertEqual(
-                    span_attributes[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY],
-                    request.source_metadata.description,
-                )
+        self.assertIn(
+            GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+            span_attributes,
+            "Expected source description to be set on span",
+        )
+        self.assertEqual(
+            span_attributes[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY],
+            request.source_metadata.description,
+        )
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    # Run pytest only on the current file
+    sys.exit(pytest.main([str(Path(__file__))] + sys.argv[1:]))

@@ -42,7 +42,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         Returns:
             A new ExecuteToolScope instance
         """
-        return ExecuteToolScope(details, agent_details, tenant_details)
+        return ExecuteToolScope(details, agent_details, tenant_details, request)
 
     def __init__(
         self,
