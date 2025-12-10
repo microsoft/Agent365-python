@@ -344,8 +344,8 @@ class McpToolServerConfigurationService:
             Dictionary of HTTP headers.
         """
         return {
-            "Authorization": f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
-            "User-Agent": RuntimeUtility.get_user_agent_header(orchestrator_name),
+            Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
+            Constants.Headers.USER_AGENT: RuntimeUtility.get_user_agent_header(orchestrator_name),
         }
 
     async def _parse_gateway_response(
