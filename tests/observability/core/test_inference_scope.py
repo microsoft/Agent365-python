@@ -12,19 +12,17 @@ from microsoft_agents_a365.observability.core import (
     InferenceCallDetails,
     InferenceOperationType,
     InferenceScope,
-    OpenTelemetryScope,
     Request,
     SourceMetadata,
     TenantDetails,
     configure,
+    get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.agent_details import AgentDetails
 from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
     GEN_AI_EXECUTION_SOURCE_NAME_KEY,
 )
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
@@ -38,12 +36,6 @@ class TestInferenceScope(unittest.TestCase):
         # Configure Microsoft Agent 365 for testing
         os.environ["ENABLE_A365_OBSERVABILITY"] = "true"
 
-        # Set up tracer to capture spans
-        cls.span_exporter = InMemorySpanExporter()
-        tracer_provider = TracerProvider()
-        tracer_provider.add_span_processor(SimpleSpanProcessor(cls.span_exporter))
-        trace.set_tracer_provider(tracer_provider)
-
         configure(
             service_name="test-inference-service",
             service_namespace="test-namespace",
@@ -51,6 +43,20 @@ class TestInferenceScope(unittest.TestCase):
         # Create test agent and tenant details
         cls.agent_details = AgentDetails(agent_id="test-inference-agent")
         cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
+
+    def setUp(self):
+        super().setUp()
+
+        # Set up tracer to capture spans
+        self.span_exporter = InMemorySpanExporter()
+        tracer_provider = get_tracer_provider()
+        tracer_provider.add_span_processor(SimpleSpanProcessor(self.span_exporter))
+        # trace.set_tracer_provider(tracer_provider)
+
+    def tearDown(self):
+        super().tearDown()
+
+        self.span_exporter.clear()
 
     def test_inference_operation_type_enum(self):
         """Test InferenceOperationType enum values."""

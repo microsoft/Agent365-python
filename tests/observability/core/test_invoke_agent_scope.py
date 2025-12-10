@@ -17,6 +17,7 @@ from microsoft_agents_a365.observability.core import (
     SourceMetadata,
     TenantDetails,
     configure,
+    get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
@@ -26,8 +27,6 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_INPUT_MESSAGES_KEY,
 )
 from microsoft_agents_a365.observability.core.models.caller_details import CallerDetails
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
@@ -40,12 +39,6 @@ class TestInvokeAgentScope(unittest.TestCase):
         """Set up test environment once for all tests."""
         # Configure Microsoft Agent 365 for testing
         os.environ["ENABLE_A365_OBSERVABILITY"] = "true"
-
-        # Set up tracer to capture spans
-        cls.span_exporter = InMemorySpanExporter()
-        tracer_provider = TracerProvider()
-        tracer_provider.add_span_processor(SimpleSpanProcessor(cls.span_exporter))
-        trace.set_tracer_provider(tracer_provider)
 
         configure(
             service_name="test-invoke-agent-service",
@@ -100,6 +93,19 @@ class TestInvokeAgentScope(unittest.TestCase):
             tenant_id="tenant-789",
             agent_client_ip="192.168.1.100",
         )
+
+    def setUp(self):
+        super().setUp()
+
+        # Set up tracer to capture spans
+        self.span_exporter = InMemorySpanExporter()
+        tracer_provider = get_tracer_provider()
+        tracer_provider.add_span_processor(SimpleSpanProcessor(self.span_exporter))
+
+    def tearDown(self):
+        super().tearDown()
+
+        self.span_exporter.clear()
 
     def test_record_response_method_exists(self):
         """Test that record_response method exists on InvokeAgentScope."""
@@ -185,9 +191,8 @@ class TestInvokeAgentScope(unittest.TestCase):
         """Test that caller agent client IP is properly handled when creating InvokeAgentScope."""
         # Set up tracer to capture spans
         span_exporter = InMemorySpanExporter()
-        tracer_provider = TracerProvider()
+        tracer_provider = get_tracer_provider()
         tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
-        trace.set_tracer_provider(tracer_provider)
 
         # Create scope with caller agent details that include client IP
         scope = InvokeAgentScope.start(
