@@ -77,6 +77,7 @@ class McpToolServerConfigurationService:
         Args:
             agentic_app_id: Agentic App ID for the agent.
             auth_token: Authentication token to access the MCP servers.
+            orchestrator_name: Optional orchestrator name to include in User-Agent header.
 
         Returns:
             List[MCPServerConfig]: Returns the list of MCP Servers that are configured.
@@ -288,6 +289,7 @@ class McpToolServerConfigurationService:
         Args:
             agentic_app_id: Agentic App ID for the agent.
             auth_token: Authentication token to access the tooling gateway.
+            orchestrator_name: Optional orchestrator name to include in User-Agent header.
 
         Returns:
             List[MCPServerConfig]: List of MCP server configurations from tooling gateway.
@@ -336,6 +338,7 @@ class McpToolServerConfigurationService:
 
         Args:
             auth_token: Authentication token.
+            orchestrator_name: Optional orchestrator name to include in User-Agent header.
 
         Returns:
             Dictionary of HTTP headers.

@@ -143,7 +143,7 @@ class McpToolRegistrationService:
         # Get MCP server configurations
         try:
             servers = await self._mcp_server_configuration_service.list_tool_servers(
-                agentic_app_id, auth_token, self.orchestrator_name
+                agentic_app_id, auth_token, self._orchestrator_name
             )
         except Exception as ex:
             self._logger.error(
