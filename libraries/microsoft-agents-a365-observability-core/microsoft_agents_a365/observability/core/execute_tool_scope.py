@@ -5,6 +5,8 @@ from .agent_details import AgentDetails
 from .constants import (
     EXECUTE_TOOL_OPERATION_NAME,
     GEN_AI_EVENT_CONTENT,
+    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
     GEN_AI_TOOL_DESCRIPTION_KEY,
@@ -14,6 +16,7 @@ from .constants import (
     SERVER_PORT_KEY,
 )
 from .opentelemetry_scope import OpenTelemetryScope
+from .request import Request
 from .tenant_details import TenantDetails
 from .tool_call_details import ToolCallDetails
 
@@ -26,6 +29,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         details: ToolCallDetails,
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
+        request: Request | None = None,
     ) -> "ExecuteToolScope":
         """Creates and starts a new scope for tool execution tracing.
 
@@ -33,6 +37,7 @@ class ExecuteToolScope(OpenTelemetryScope):
             details: The details of the tool call
             agent_details: The details of the agent making the call
             tenant_details: The details of the tenant
+            request: Optional request details for additional context
 
         Returns:
             A new ExecuteToolScope instance
@@ -44,6 +49,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         details: ToolCallDetails,
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
+        request: Request | None = None,
     ):
         """Initialize the tool execution scope.
 
@@ -51,6 +57,7 @@ class ExecuteToolScope(OpenTelemetryScope):
             details: The details of the tool call
             agent_details: The details of the agent making the call
             tenant_details: The details of the tenant
+            request: Optional request details for additional context
         """
         super().__init__(
             kind="Internal",
@@ -78,6 +85,13 @@ class ExecuteToolScope(OpenTelemetryScope):
             self.set_tag_maybe(SERVER_ADDRESS_KEY, endpoint.hostname)
             if endpoint.port and endpoint.port != 443:
                 self.set_tag_maybe(SERVER_PORT_KEY, endpoint.port)
+
+        # Set request metadata if provided
+        if request and request.source_metadata:
+            self.set_tag_maybe(GEN_AI_EXECUTION_SOURCE_NAME_KEY, request.source_metadata.name)
+            self.set_tag_maybe(
+                GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, request.source_metadata.description
+            )
 
     def record_response(self, response: str) -> None:
         """Records response information for telemetry tracking.

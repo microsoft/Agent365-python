@@ -5,6 +5,8 @@ from typing import List
 
 from .agent_details import AgentDetails
 from .constants import (
+    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -89,6 +91,13 @@ class InferenceScope(OpenTelemetryScope):
             safe_json_dumps(details.finishReasons) if details.finishReasons else None,
         )
         self.set_tag_maybe(GEN_AI_RESPONSE_ID_KEY, details.responseId)
+
+        # Set request metadata if provided
+        if request and request.source_metadata:
+            self.set_tag_maybe(GEN_AI_EXECUTION_SOURCE_NAME_KEY, request.source_metadata.name)
+            self.set_tag_maybe(
+                GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, request.source_metadata.description
+            )
 
     def record_input_messages(self, messages: List[str]) -> None:
         """Records the input messages for telemetry tracking.

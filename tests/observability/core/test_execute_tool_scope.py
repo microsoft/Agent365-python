@@ -5,11 +5,22 @@ import unittest
 
 from microsoft_agents_a365.observability.core import (
     AgentDetails,
+    ExecutionType,
     ExecuteToolScope,
+    Request,
+    SourceMetadata,
     TenantDetails,
     ToolCallDetails,
     configure,
 )
+from microsoft_agents_a365.observability.core.constants import (
+    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+)
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 
 class TestExecuteToolScope(unittest.TestCase):
@@ -24,7 +35,9 @@ class TestExecuteToolScope(unittest.TestCase):
             service_namespace="test-namespace",
         )
         # Create test data
-        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
+        cls.tenant_details = TenantDetails(
+            tenant_id="12345678-1234-5678-1234-567812345678"
+        )
         cls.agent_details = AgentDetails(
             agent_id="test-agent-123",
             agent_name="Test Agent",
@@ -39,13 +52,56 @@ class TestExecuteToolScope(unittest.TestCase):
 
     def test_record_response_method_exists(self):
         """Test that record_response method exists on ExecuteToolScope."""
-        scope = ExecuteToolScope.start(self.tool_details, self.agent_details, self.tenant_details)
+        scope = ExecuteToolScope.start(
+            self.tool_details, self.agent_details, self.tenant_details
+        )
 
         if scope is not None:
             # Test that the method exists
             self.assertTrue(hasattr(scope, "record_response"))
             self.assertTrue(callable(scope.record_response))
             scope.dispose()
+
+    def test_request_metadata_set_on_span(self):
+        """Test that request source metadata is set on span attributes."""
+        span_exporter = InMemorySpanExporter()
+        tracer_provider = TracerProvider()
+        tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+        trace.set_tracer_provider(tracer_provider)
+
+        request = Request(
+            content="Execute tool with request metadata",
+            execution_type=ExecutionType.AGENT_TO_AGENT,
+            session_id="session-xyz",
+            source_metadata=SourceMetadata(
+                name="Channel 1", description="Link to channel"
+            ),
+        )
+
+        scope = ExecuteToolScope.start(
+            self.tool_details, self.agent_details, self.tenant_details, request
+        )
+
+        if scope is not None:
+            scope.dispose()
+
+        finished_spans = span_exporter.get_finished_spans()
+
+        if finished_spans:
+            span = finished_spans[-1]
+            span_attributes = getattr(span, "attributes", {}) or {}
+
+            if GEN_AI_EXECUTION_SOURCE_NAME_KEY in span_attributes:
+                self.assertEqual(
+                    span_attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY],
+                    request.source_metadata.name,
+                )
+
+            if GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY in span_attributes:
+                self.assertEqual(
+                    span_attributes[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY],
+                    request.source_metadata.description,
+                )
 
 
 if __name__ == "__main__":
