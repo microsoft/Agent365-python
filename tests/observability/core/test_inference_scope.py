@@ -37,9 +37,7 @@ class TestInferenceScope(unittest.TestCase):
         )
         # Create test agent and tenant details
         cls.agent_details = AgentDetails(agent_id="test-inference-agent")
-        cls.tenant_details = TenantDetails(
-            tenant_id="12345678-1234-5678-1234-567812345678"
-        )
+        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
 
     def test_inference_operation_type_enum(self):
         """Test InferenceOperationType enum values."""
@@ -116,9 +114,7 @@ class TestInferenceScope(unittest.TestCase):
             session_id="test-session-123",
         )
 
-        scope = InferenceScope.start(
-            details, self.agent_details, self.tenant_details, request
-        )
+        scope = InferenceScope.start(details, self.agent_details, self.tenant_details, request)
 
         # Test that scope can be created with request
         if scope is not None:
@@ -136,9 +132,7 @@ class TestInferenceScope(unittest.TestCase):
             content="Inference request with source metadata",
             execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-meta",
-            source_metadata=SourceMetadata(
-                name="Channel 1", description="Link to channel"
-            ),
+            source_metadata=SourceMetadata(name="Channel 1", description="Link to channel"),
         )
 
         span_exporter = InMemorySpanExporter()
@@ -146,9 +140,7 @@ class TestInferenceScope(unittest.TestCase):
         tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
         trace.set_tracer_provider(tracer_provider)
 
-        scope = InferenceScope.start(
-            details, self.agent_details, self.tenant_details, request
-        )
+        scope = InferenceScope.start(details, self.agent_details, self.tenant_details, request)
 
         if scope is not None:
             scope.dispose()

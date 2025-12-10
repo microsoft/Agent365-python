@@ -35,9 +35,7 @@ class TestExecuteToolScope(unittest.TestCase):
             service_namespace="test-namespace",
         )
         # Create test data
-        cls.tenant_details = TenantDetails(
-            tenant_id="12345678-1234-5678-1234-567812345678"
-        )
+        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
         cls.agent_details = AgentDetails(
             agent_id="test-agent-123",
             agent_name="Test Agent",
@@ -52,9 +50,7 @@ class TestExecuteToolScope(unittest.TestCase):
 
     def test_record_response_method_exists(self):
         """Test that record_response method exists on ExecuteToolScope."""
-        scope = ExecuteToolScope.start(
-            self.tool_details, self.agent_details, self.tenant_details
-        )
+        scope = ExecuteToolScope.start(self.tool_details, self.agent_details, self.tenant_details)
 
         if scope is not None:
             # Test that the method exists
@@ -73,9 +69,7 @@ class TestExecuteToolScope(unittest.TestCase):
             content="Execute tool with request metadata",
             execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-xyz",
-            source_metadata=SourceMetadata(
-                name="Channel 1", description="Link to channel"
-            ),
+            source_metadata=SourceMetadata(name="Channel 1", description="Link to channel"),
         )
 
         scope = ExecuteToolScope.start(
