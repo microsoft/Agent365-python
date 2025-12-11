@@ -19,6 +19,10 @@ The Microsoft Agent 365 SDK focuses on four core areas:
 - **Runtime**: Core utilities and extensions for agent runtime operations
 - **Tooling**: Developer tools and utilities for building sophisticated agent applications
 
+## Survey
+
+Please help improve the Microsoft Agent 365 SDK and CLI by taking our survey: [Agent365 SDK Integration Feedback Survey](https://forms.office.com/r/wj0edu361y)
+
 ## Current Project State
 
 This project is currently in active development. Packages are published to PyPI as they become available.
