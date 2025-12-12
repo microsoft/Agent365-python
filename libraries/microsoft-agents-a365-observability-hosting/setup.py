@@ -20,7 +20,8 @@ from setup_utils import get_dynamic_dependencies
 # - Internal packages get: >= current_base_version (e.g., >= 0.1.0)
 # - Automatically updates when you build new versions
 dynamic_install_requires = get_dynamic_dependencies(
-    Path(__file__).parent, version_strategy="minimum"
+    use_compatible_release=False,  # No upper bound
+    use_exact_match=False,  # Not exact match
 )
 
 setup(

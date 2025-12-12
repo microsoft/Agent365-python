@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from microsoft_agents.hosting.core.turn_context import TurnContext
+from microsoft_agents_a365.observability.core.middleware.baggage_builder import BaggageBuilder
 
 from .utils import (
     get_caller_pairs,
@@ -27,6 +28,15 @@ def _iter_all_pairs(turn_context: TurnContext) -> Iterator[tuple[str, Any]]:
     yield from get_conversation_pairs(activity)
 
 
-def from_turn_context(turn_context: TurnContext) -> dict:
-    """Populate builder with baggage values extracted from a turn context."""
-    return dict(_iter_all_pairs(turn_context))
+def populate(builder: BaggageBuilder, turn_context: TurnContext) -> BaggageBuilder:
+    """Populate BaggageBuilder with baggage values extracted from a turn context.
+
+    Args:
+        builder: The BaggageBuilder instance to populate
+        turn_context: The TurnContext containing activity information
+
+    Returns:
+        The updated BaggageBuilder instance (for method chaining)
+    """
+    builder.set_pairs(_iter_all_pairs(turn_context))
+    return builder

@@ -15,6 +15,7 @@ members = [
     "microsoft-agents-a365-observability-extensions-langchain",
     "microsoft-agents-a365-observability-extensions-openai",
     "microsoft-agents-a365-observability-extensions-semantic-kernel",
+    "microsoft-agents-a365-observability-hosting",
     "microsoft-agents-a365-runtime",
     "microsoft-agents-a365-tooling",
     "microsoft-agents-a365-tooling-extensions-agentframework",
@@ -1777,6 +1778,22 @@ requires-dist = [
     { name = "semantic-kernel", specifier = ">=1.0.0" },
 ]
 provides-extras = ["dev", "test"]
+
+[[package]]
+name = "microsoft-agents-a365-observability-hosting"
+source = { editable = "libraries/microsoft-agents-a365-observability-hosting" }
+dependencies = [
+    { name = "microsoft-agents-a365-observability-core" },
+    { name = "microsoft-agents-hosting-core" },
+    { name = "opentelemetry-api" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
+    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
+    { name = "opentelemetry-api", specifier = ">=1.36.0" },
+]
 
 [[package]]
 name = "microsoft-agents-a365-runtime"

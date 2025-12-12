@@ -31,7 +31,6 @@ from ..constants import (
 )
 from ..models.operation_source import OperationSource
 from ..utils import deprecated, validate_and_normalize_ip
-from .turn_context_baggage import from_turn_context
 
 logger = logging.getLogger(__name__)
 
@@ -231,14 +230,6 @@ class BaggageBuilder:
         """Sets the channel link baggage value. (e.g., channel links or description)."""
         self._set(GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, value)
         return self
-
-    def from_turn_context(self, turn_context: Any) -> "BaggageBuilder":
-        """
-        Populate baggage from a turn_context (duck-typed).
-        Delegates to baggage_turn_context.from_turn_context.
-        """
-
-        return self.set_pairs(from_turn_context(turn_context))
 
     def set_pairs(self, pairs: Any) -> "BaggageBuilder":
         """

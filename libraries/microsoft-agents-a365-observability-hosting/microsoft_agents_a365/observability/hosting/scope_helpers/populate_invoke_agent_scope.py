@@ -17,9 +17,7 @@ if TYPE_CHECKING:
     from microsoft_agents.hosting.core.turn_context import TurnContext
 
 
-def populate_invoke_agent_scope_from_turn_context(
-    scope: InvokeAgentScope, turn_context: TurnContext
-) -> InvokeAgentScope:
+def populate(scope: InvokeAgentScope, turn_context: TurnContext) -> InvokeAgentScope:
     """
     Populate all supported InvokeAgentScope tags from the provided TurnContext.
     :param scope: The InvokeAgentScope instance to populate.
