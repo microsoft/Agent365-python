@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 # Local imports
-from ..models import MCPServerConfig
+from ..models import MCPServerConfig, ToolOptions
 from ..utils import Constants
 from ..utils.utility import get_tooling_gateway_for_digital_worker, build_mcp_server_url
 
@@ -69,7 +69,7 @@ class McpToolServerConfigurationService:
     # --------------------------------------------------------------------------
 
     async def list_tool_servers(
-        self, agentic_app_id: str, auth_token: str, orchestrator_name: Optional[str] = None
+        self, agentic_app_id: str, auth_token: str, options: Optional[ToolOptions] = None
     ) -> List[MCPServerConfig]:
         """
         Gets the list of MCP Servers that are configured for the agent.
@@ -77,7 +77,7 @@ class McpToolServerConfigurationService:
         Args:
             agentic_app_id: Agentic App ID for the agent.
             auth_token: Authentication token to access the MCP servers.
-            orchestrator_name: Optional orchestrator name to include in User-Agent header.
+            options: Optional ToolOptions instance containing optional parameters.
 
         Returns:
             List[MCPServerConfig]: Returns the list of MCP Servers that are configured.
@@ -89,6 +89,10 @@ class McpToolServerConfigurationService:
         # Validate input parameters
         self._validate_input_parameters(agentic_app_id, auth_token)
 
+        # Use default options if none provided
+        if options is None:
+            options = ToolOptions(orchestrator_name=None)
+
         self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
         # Determine configuration source based on environment
@@ -96,7 +100,7 @@ class McpToolServerConfigurationService:
             return self._load_servers_from_manifest()
         else:
             return await self._load_servers_from_gateway(
-                agentic_app_id, auth_token, orchestrator_name
+                agentic_app_id, auth_token, options
             )
 
     # --------------------------------------------------------------------------
@@ -281,7 +285,7 @@ class McpToolServerConfigurationService:
     # --------------------------------------------------------------------------
 
     async def _load_servers_from_gateway(
-        self, agentic_app_id: str, auth_token: str, orchestrator_name: Optional[str] = None
+        self, agentic_app_id: str, auth_token: str, options: ToolOptions
     ) -> List[MCPServerConfig]:
         """
         Reads MCP server configurations from tooling gateway endpoint for production scenario.
@@ -301,7 +305,7 @@ class McpToolServerConfigurationService:
 
         try:
             config_endpoint = get_tooling_gateway_for_digital_worker(agentic_app_id)
-            headers = self._prepare_gateway_headers(auth_token, orchestrator_name)
+            headers = self._prepare_gateway_headers(auth_token, options)
 
             self._logger.info(f"Calling tooling gateway endpoint: {config_endpoint}")
 
@@ -331,7 +335,7 @@ class McpToolServerConfigurationService:
         return mcp_servers
 
     def _prepare_gateway_headers(
-        self, auth_token: str, orchestrator_name: Optional[str] = None
+        self, auth_token: str, options: ToolOptions
     ) -> Dict[str, str]:
         """
         Prepares headers for tooling gateway requests.
@@ -345,7 +349,7 @@ class McpToolServerConfigurationService:
         """
         return {
             Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
-            Constants.Headers.USER_AGENT: RuntimeUtility.get_user_agent_header(orchestrator_name),
+            Constants.Headers.USER_AGENT: RuntimeUtility.get_user_agent_header(options.orchestrator_name),
         }
 
     async def _parse_gateway_response(

@@ -21,6 +21,7 @@ from microsoft_agents_a365.runtime.utility import Utility
 from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_service import (
     McpToolServerConfigurationService,
 )
+from microsoft_agents_a365.tooling.Models import ToolOptions
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import get_mcp_platform_authentication_scope
 
@@ -141,9 +142,10 @@ class McpToolRegistrationService:
             return ([], None)
 
         # Get MCP server configurations
+        options = ToolOptions(orchestrator_name=self._orchestrator_name)
         try:
             servers = await self._mcp_server_configuration_service.list_tool_servers(
-                agentic_app_id, auth_token, self._orchestrator_name
+                agentic_app_id, auth_token, options
             )
         except Exception as ex:
             self._logger.error(
