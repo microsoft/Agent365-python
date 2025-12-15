@@ -3,6 +3,8 @@
 
 from unittest.mock import MagicMock
 
+from microsoft_agents.activity import Activity, ChannelAccount, ConversationAccount
+from microsoft_agents.hosting.core import TurnContext
 from microsoft_agents_a365.observability.core.constants import GEN_AI_CALLER_ID_KEY
 from microsoft_agents_a365.observability.core.middleware.baggage_builder import BaggageBuilder
 from microsoft_agents_a365.observability.hosting.scope_helpers.populate_baggage import populate
@@ -10,20 +12,22 @@ from microsoft_agents_a365.observability.hosting.scope_helpers.populate_baggage 
 
 def test_populate():
     """Test populate populates BaggageBuilder from turn context."""
-    # Create a mock turn context with activity
-    turn_context = MagicMock()
-    activity = MagicMock()
-    activity.from_property = MagicMock(
-        aad_object_id="caller-id",
-        name="Caller",
-        agentic_user_id="caller-upn",
-        tenant_id="tenant-id",
+    # Create a real activity and turn context
+    activity = Activity(
+        type="message",
+        from_property=ChannelAccount(
+            aad_object_id="caller-id",
+            name="Caller",
+            agentic_user_id="caller-upn",
+            tenant_id="tenant-id",
+        ),
+        recipient=ChannelAccount(tenant_id="tenant-id", role="user"),
+        conversation=ConversationAccount(id="conv-id"),
+        service_url="https://example.com",
+        channel_id="test-channel",
     )
-    activity.recipient = MagicMock(tenant_id="tenant-id", role="user")
-    activity.conversation = MagicMock(id="conv-id")
-    activity.service_url = "https://example.com"
-    activity.channel_id = "test-channel"
-    turn_context.activity = activity
+    adapter = MagicMock()
+    turn_context = TurnContext(adapter, activity)
 
     builder = BaggageBuilder()
 
