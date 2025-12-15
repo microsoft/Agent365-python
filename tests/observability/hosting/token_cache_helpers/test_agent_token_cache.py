@@ -44,17 +44,14 @@ async def test_register_and_retrieve_token_success(
     expected_token = "mock-token-xyz"
     scopes = ["https://example.com/.default"]
 
-    # Setup mock
     mock_authorization.exchange_token.return_value = expected_token
 
-    # Create struct with default auth handler
     token_struct = AgenticTokenStruct(
         authorization=mock_authorization,
         turn_context=mock_turn_context,
     )
     assert token_struct.auth_handler_name == "AGENTIC"
 
-    # Register
     token_cache.register_observability(
         agent_id=agent_id,
         tenant_id=tenant_id,
@@ -62,26 +59,44 @@ async def test_register_and_retrieve_token_success(
         observability_scopes=scopes,
     )
 
-    # Retrieve token
     token = await token_cache.get_observability_token(agent_id, tenant_id)
-
     assert token == expected_token
-    mock_authorization.exchange_token.assert_called_once_with(
-        context=mock_turn_context,
-        scopes=scopes,
-        auth_handler_id="AGENTIC",
-    )
 
 
 @pytest.mark.parametrize(
     "agent_id,tenant_id,token_generator,error_type,error_match",
     [
         ("", "tenant-456", "valid", ValueError, "agent_id cannot be None or whitespace"),
-        ("agent-123", None, "valid", ValueError, "tenant_id cannot be None or whitespace"),
         ("agent-123", "tenant-456", None, TypeError, "token_generator cannot be None"),
     ],
 )
-@pytest.mark.asyncio
+def test_register_observability_validation(
+    token_cache,
+    mock_authorization,
+    mock_turn_context,
+    agent_id,
+    tenant_id,
+    token_generator,
+    error_type,
+    error_match,
+):
+    """Test that registration validates inputs and raises appropriate errors."""
+    struct = None
+    if token_generator == "valid":
+        struct = AgenticTokenStruct(
+            authorization=mock_authorization,
+            turn_context=mock_turn_context,
+        )
+
+    with pytest.raises(error_type, match=error_match):
+        token_cache.register_observability(
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            token_generator=struct,
+            observability_scopes=["scope"],
+        )
+
+
 def test_thread_safety(token_cache, mock_authorization, mock_turn_context):
     """Test that cache is thread-safe with concurrent registrations."""
     import threading

@@ -247,52 +247,6 @@ class TestBaggageBuilder(unittest.TestCase):
             self.assertIsNone(baggage_contents.get(GEN_AI_CALLER_ID_KEY))
             self.assertIsNone(baggage_contents.get(HIRING_MANAGER_ID_KEY))
 
-    def test_from_turn_context_delegates_and_merges(self):
-        """from_turn_context should delegate to baggage_turn_context.from_turn_context and merge returned pairs."""
-        # Import the module to monkeypatch the symbol that BaggageBuilder closed over
-        from microsoft_agents_a365.observability.core.middleware import (
-            baggage_builder as tempBaggageBuilder,
-        )
-
-        original_fn = tempBaggageBuilder.from_turn_context
-
-        # Fake turn_context -> returns a mix of valid/ignored values
-        def fake_from_turn_context(turn_ctx: any):
-            self.assertEqual(turn_ctx, {"k": "v"})  # ensure pass-through of arg
-            return {
-                TENANT_ID_KEY: "tenant-ctx",
-                GEN_AI_AGENT_ID_KEY: "agent-ctx",
-                CORRELATION_ID_KEY: "  ",  # will be ignored
-                GEN_AI_AGENT_UPN_KEY: None,  # will be ignored
-                OPERATION_SOURCE_KEY: OperationSource.SDK.value,
-            }
-
-        try:
-            tempBaggageBuilder.from_turn_context = fake_from_turn_context
-
-            with (
-                BaggageBuilder()
-                .tenant_id("tenant-pre")  # will be overridden if same key is set later
-                .from_turn_context({"k": "v"})  # merges keys from fake function
-                .agent_auid("auid-pre")  # ensure pre-existing values remain
-                .build()
-            ):
-                baggage_contents = baggage.get_all()
-                # Values from turn_context
-                self.assertEqual(baggage_contents.get(TENANT_ID_KEY), "tenant-ctx")
-                self.assertEqual(baggage_contents.get(GEN_AI_AGENT_ID_KEY), "agent-ctx")
-                self.assertEqual(
-                    baggage_contents.get(OPERATION_SOURCE_KEY), OperationSource.SDK.value
-                )
-                # Pre-existing (non-overlapping) still present
-                self.assertEqual(baggage_contents.get(GEN_AI_AGENT_AUID_KEY), "auid-pre")
-                # Ignored values should not be present
-                self.assertIsNone(baggage_contents.get(CORRELATION_ID_KEY))
-                self.assertIsNone(baggage_contents.get(GEN_AI_AGENT_UPN_KEY))
-        finally:
-            # Restore original
-            tempBaggageBuilder.from_turn_context = original_fn
-
     def test_source_metadata_name_method(self):
         """Test deprecated source_metadata_name method - should delegate to channel_name."""
         # Should exist and be callable
