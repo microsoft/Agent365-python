@@ -99,7 +99,7 @@ class TelemetryManager:
         # Check if a365 observability is already configured
         if self._tracer_provider is not None:
             self._logger.warning(
-                "a365 observability already configured. Ignoring repeated configure() call. "
+                "a365 observability already configured. Ignoring repeated configure() call."
             )
             return True
 
