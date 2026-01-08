@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 import json
+import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -388,7 +389,6 @@ class TestAgent365Exporter(unittest.TestCase):
         """Test that domain override is used when A365_OBSERVABILITY_DOMAIN_OVERRIDE is set."""
         # Arrange
         override_domain = "override.example.com"
-        import os
 
         os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = override_domain
 
@@ -427,8 +427,6 @@ class TestAgent365Exporter(unittest.TestCase):
     def test_export_uses_default_domain_when_no_override(self):
         """Test that default domain resolution is used when no override is set."""
         # Arrange
-        import os
-
         # Ensure override is not set
         if "A365_OBSERVABILITY_DOMAIN_OVERRIDE" in os.environ:
             del os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"]
