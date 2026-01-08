@@ -24,10 +24,14 @@ def get_observability_authentication_scope() -> list[str]:
     The scope can be overridden via the A365_OBSERVABILITY_SCOPE_OVERRIDE environment variable
     to enable testing against pre-production environments.
 
+    Environment Variable:
+        A365_OBSERVABILITY_SCOPE_OVERRIDE: Full authentication scope URL including the /.default suffix
+                                          (e.g., "https://preprod.api.powerplatform.com/.default")
+
     Returns:
         list[str]: The authentication scope for the current environment.
     """
-    override_scope = os.getenv("A365_OBSERVABILITY_SCOPE_OVERRIDE")
+    override_scope = os.getenv("A365_OBSERVABILITY_SCOPE_OVERRIDE", "").strip()
     return [override_scope] if override_scope else [PROD_OBSERVABILITY_SCOPE]
 
 

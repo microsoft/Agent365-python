@@ -20,11 +20,25 @@ class TestAgent365Exporter(unittest.TestCase):
         """Set up test fixtures."""
         self.mock_token_resolver = Mock()
         self.mock_token_resolver.return_value = "test_token_123"
-
-        # Don't patch the class in setUp, do it per test
+        
+        # Store original environment variable values for cleanup
+        self._original_domain_override = os.environ.get("A365_OBSERVABILITY_DOMAIN_OVERRIDE")
+        
+        # Ensure no override is set by default for most tests
+        os.environ.pop("A365_OBSERVABILITY_DOMAIN_OVERRIDE", None)
+        
+        # Create default exporter for tests that don't need special setup
         self.exporter = _Agent365Exporter(
             token_resolver=self.mock_token_resolver, cluster_category="test"
         )
+
+    def tearDown(self):
+        """Clean up test environment."""
+        # Restore original environment variable value
+        if self._original_domain_override is None:
+            os.environ.pop("A365_OBSERVABILITY_DOMAIN_OVERRIDE", None)
+        else:
+            os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = self._original_domain_override
 
     def _create_mock_span(
         self,
@@ -389,48 +403,49 @@ class TestAgent365Exporter(unittest.TestCase):
         """Test that domain override is used when A365_OBSERVABILITY_DOMAIN_OVERRIDE is set."""
         # Arrange
         override_domain = "override.example.com"
-
         os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = override_domain
+        
+        # Create exporter after setting environment variable so it reads the override
+        exporter = _Agent365Exporter(
+            token_resolver=self.mock_token_resolver, cluster_category="test"
+        )
+        
+        spans = [self._create_mock_span("override_test_span")]
 
-        try:
-            spans = [self._create_mock_span("override_test_span")]
+        # Mock the PowerPlatformApiDiscovery class (should not be called when override is set)
+        with patch(
+            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
+        ) as mock_discovery_class:
+            # Mock the _post_with_retries method
+            with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+                # Act
+                result = exporter.export(spans)
 
-            # Mock the PowerPlatformApiDiscovery class (should not be called when override is set)
-            with patch(
-                "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
-            ) as mock_discovery_class:
-                # Mock the _post_with_retries method
-                with patch.object(
-                    self.exporter, "_post_with_retries", return_value=True
-                ) as mock_post:
-                    # Act
-                    result = self.exporter.export(spans)
+                # Assert
+                self.assertEqual(result, SpanExportResult.SUCCESS)
+                mock_post.assert_called_once()
 
-                    # Assert
-                    self.assertEqual(result, SpanExportResult.SUCCESS)
-                    mock_post.assert_called_once()
+                # Verify the call arguments - should use override domain with complete URL
+                args, kwargs = mock_post.call_args
+                url, body, headers = args
 
-                    # Verify the call arguments - should use override domain
-                    args, kwargs = mock_post.call_args
-                    url, body, headers = args
+                expected_url = f"https://{override_domain}/maven/agent365/agents/test-agent-456/traces?api-version=1"
+                self.assertEqual(url, expected_url)
 
-                    self.assertIn(override_domain, url)
-                    self.assertIn("/maven/agent365/agents/test-agent-456/traces", url)
-
-                    # Verify PowerPlatformApiDiscovery was not instantiated
-                    mock_discovery_class.assert_not_called()
-
-        finally:
-            # Cleanup
-            del os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"]
+                # Verify PowerPlatformApiDiscovery was not instantiated
+                mock_discovery_class.assert_not_called()
 
     def test_export_uses_default_domain_when_no_override(self):
         """Test that default domain resolution is used when no override is set."""
         # Arrange
         # Ensure override is not set
-        if "A365_OBSERVABILITY_DOMAIN_OVERRIDE" in os.environ:
-            del os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"]
-
+        os.environ.pop("A365_OBSERVABILITY_DOMAIN_OVERRIDE", None)
+        
+        # Create exporter after clearing environment variable
+        exporter = _Agent365Exporter(
+            token_resolver=self.mock_token_resolver, cluster_category="test"
+        )
+        
         spans = [self._create_mock_span("default_domain_span")]
 
         # Mock the PowerPlatformApiDiscovery class
@@ -442,9 +457,9 @@ class TestAgent365Exporter(unittest.TestCase):
             mock_discovery_class.return_value = mock_discovery
 
             # Mock the _post_with_retries method
-            with patch.object(self.exporter, "_post_with_retries", return_value=True) as mock_post:
+            with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
                 # Act
-                result = self.exporter.export(spans)
+                result = exporter.export(spans)
 
                 # Assert
                 self.assertEqual(result, SpanExportResult.SUCCESS)
@@ -462,6 +477,93 @@ class TestAgent365Exporter(unittest.TestCase):
                 mock_discovery.get_tenant_island_cluster_endpoint.assert_called_once_with(
                     "test-tenant-123"
                 )
+
+    def test_export_ignores_empty_domain_override(self):
+        """Test that empty or whitespace-only domain override is ignored."""
+        # Arrange
+        os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = "   "  # whitespace only
+        
+        # Create exporter after setting environment variable
+        exporter = _Agent365Exporter(
+            token_resolver=self.mock_token_resolver, cluster_category="test"
+        )
+        
+        spans = [self._create_mock_span("test_span")]
+
+        # Mock the PowerPlatformApiDiscovery class (should be called since override is invalid)
+        with patch(
+            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
+        ) as mock_discovery_class:
+            mock_discovery = Mock()
+            mock_discovery.get_tenant_island_cluster_endpoint.return_value = "default-endpoint.com"
+            mock_discovery_class.return_value = mock_discovery
+
+            with patch.object(exporter, "_post_with_retries", return_value=True):
+                # Act
+                result = exporter.export(spans)
+
+                # Assert
+                self.assertEqual(result, SpanExportResult.SUCCESS)
+                # Verify PowerPlatformApiDiscovery was called (override was ignored)
+                mock_discovery_class.assert_called_once_with("test")
+
+    def test_export_ignores_invalid_domain_with_protocol(self):
+        """Test that domain override containing protocol is ignored."""
+        # Arrange
+        os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = "https://invalid.example.com"
+        
+        # Create exporter after setting environment variable
+        exporter = _Agent365Exporter(
+            token_resolver=self.mock_token_resolver, cluster_category="test"
+        )
+        
+        spans = [self._create_mock_span("test_span")]
+
+        # Mock the PowerPlatformApiDiscovery class (should be called since override is invalid)
+        with patch(
+            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
+        ) as mock_discovery_class:
+            mock_discovery = Mock()
+            mock_discovery.get_tenant_island_cluster_endpoint.return_value = "default-endpoint.com"
+            mock_discovery_class.return_value = mock_discovery
+
+            with patch.object(exporter, "_post_with_retries", return_value=True):
+                # Act
+                result = exporter.export(spans)
+
+                # Assert
+                self.assertEqual(result, SpanExportResult.SUCCESS)
+                # Verify PowerPlatformApiDiscovery was called (override was ignored)
+                mock_discovery_class.assert_called_once_with("test")
+
+    def test_export_ignores_invalid_domain_with_path(self):
+        """Test that domain override containing path separator is ignored."""
+        # Arrange
+        os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = "invalid.example.com/path"
+        
+        # Create exporter after setting environment variable
+        exporter = _Agent365Exporter(
+            token_resolver=self.mock_token_resolver, cluster_category="test"
+        )
+        
+        spans = [self._create_mock_span("test_span")]
+
+        # Mock the PowerPlatformApiDiscovery class (should be called since override is invalid)
+        with patch(
+            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
+        ) as mock_discovery_class:
+            mock_discovery = Mock()
+            mock_discovery.get_tenant_island_cluster_endpoint.return_value = "default-endpoint.com"
+            mock_discovery_class.return_value = mock_discovery
+
+            with patch.object(exporter, "_post_with_retries", return_value=True):
+                # Act
+                result = exporter.export(spans)
+
+                # Assert
+                self.assertEqual(result, SpanExportResult.SUCCESS)
+                # Verify PowerPlatformApiDiscovery was called (override was ignored)
+                mock_discovery_class.assert_called_once_with("test")
 
 
 if __name__ == "__main__":

@@ -61,6 +61,8 @@ class _Agent365Exporter(SpanExporter):
         self._token_resolver = token_resolver
         self._cluster_category = cluster_category
         self._use_s2s_endpoint = use_s2s_endpoint
+        # Read domain override once at initialization
+        self._domain_override = self._get_validated_domain_override()
 
     # ------------- SpanExporter API -----------------
 
@@ -87,9 +89,8 @@ class _Agent365Exporter(SpanExporter):
                 body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
                 # Resolve endpoint + token
-                domain_override = os.getenv("A365_OBSERVABILITY_DOMAIN_OVERRIDE")
-                if domain_override:
-                    endpoint = domain_override
+                if self._domain_override:
+                    endpoint = self._domain_override
                 else:
                     discovery = PowerPlatformApiDiscovery(self._cluster_category)
                     endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
@@ -146,6 +147,30 @@ class _Agent365Exporter(SpanExporter):
 
     def force_flush(self, timeout_millis: int = 30000) -> bool:
         return True
+
+    # ------------- Helper methods -------------------
+
+    @staticmethod
+    def _get_validated_domain_override() -> str | None:
+        """
+        Get and validate the domain override from environment variable.
+        
+        Returns:
+            The validated domain override, or None if not set or invalid.
+        """
+        domain_override = os.getenv("A365_OBSERVABILITY_DOMAIN_OVERRIDE", "").strip()
+        if not domain_override:
+            return None
+        
+        # Basic validation: ensure domain doesn't contain protocol or path separators
+        if "://" in domain_override or "/" in domain_override:
+            logger.warning(
+                f"Invalid domain override '{domain_override}': "
+                "domain should not contain protocol (://) or path separators (/)"
+            )
+            return None
+        
+        return domain_override
 
     # ------------- HTTP helper ----------------------
 
