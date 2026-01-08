@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -86,8 +87,12 @@ class _Agent365Exporter(SpanExporter):
                 body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
                 # Resolve endpoint + token
-                discovery = PowerPlatformApiDiscovery(self._cluster_category)
-                endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
+                domain_override = os.getenv("A365_OBSERVABILITY_DOMAIN_OVERRIDE")
+                if domain_override:
+                    endpoint = domain_override
+                else:
+                    discovery = PowerPlatformApiDiscovery(self._cluster_category)
+                    endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
                 endpoint_path = (
                     f"/maven/agent365/service/agents/{agent_id}/traces"
                     if self._use_s2s_endpoint

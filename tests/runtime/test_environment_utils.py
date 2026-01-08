@@ -18,6 +18,23 @@ def test_get_observability_authentication_scope():
     assert result == [PROD_OBSERVABILITY_SCOPE]
 
 
+def test_get_observability_authentication_scope_with_override(monkeypatch):
+    """Test get_observability_authentication_scope returns override when env var is set."""
+    override_scope = "https://override.example.com/.default"
+    monkeypatch.setenv("A365_OBSERVABILITY_SCOPE_OVERRIDE", override_scope)
+
+    result = get_observability_authentication_scope()
+    assert result == [override_scope]
+
+
+def test_get_observability_authentication_scope_without_override(monkeypatch):
+    """Test get_observability_authentication_scope returns default when env var is not set."""
+    monkeypatch.delenv("A365_OBSERVABILITY_SCOPE_OVERRIDE", raising=False)
+
+    result = get_observability_authentication_scope()
+    assert result == [PROD_OBSERVABILITY_SCOPE]
+
+
 @pytest.mark.parametrize(
     "env_value,expected",
     [
