@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -19,6 +18,7 @@ from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
 
 from .utils import (
+    get_validated_domain_override,
     hex_span_id,
     hex_trace_id,
     kind_name,
@@ -62,7 +62,7 @@ class _Agent365Exporter(SpanExporter):
         self._cluster_category = cluster_category
         self._use_s2s_endpoint = use_s2s_endpoint
         # Read domain override once at initialization
-        self._domain_override = self._get_validated_domain_override()
+        self._domain_override = get_validated_domain_override()
 
     # ------------- SpanExporter API -----------------
 
@@ -149,28 +149,6 @@ class _Agent365Exporter(SpanExporter):
         return True
 
     # ------------- Helper methods -------------------
-
-    @staticmethod
-    def _get_validated_domain_override() -> str | None:
-        """
-        Get and validate the domain override from environment variable.
-        
-        Returns:
-            The validated domain override, or None if not set or invalid.
-        """
-        domain_override = os.getenv("A365_OBSERVABILITY_DOMAIN_OVERRIDE", "").strip()
-        if not domain_override:
-            return None
-        
-        # Basic validation: ensure domain doesn't contain protocol or path separators
-        if "://" in domain_override or "/" in domain_override:
-            logger.warning(
-                f"Invalid domain override '{domain_override}': "
-                "domain should not contain protocol (://) or path separators (/)"
-            )
-            return None
-        
-        return domain_override
 
     # ------------- HTTP helper ----------------------
 

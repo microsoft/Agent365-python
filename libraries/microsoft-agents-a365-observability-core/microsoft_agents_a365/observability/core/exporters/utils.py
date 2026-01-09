@@ -142,6 +142,28 @@ def partition_by_identity(
     return groups
 
 
+def get_validated_domain_override() -> str | None:
+    """
+    Get and validate the domain override from environment variable.
+
+    Returns:
+        The validated domain override, or None if not set or invalid.
+    """
+    domain_override = os.getenv("A365_OBSERVABILITY_DOMAIN_OVERRIDE", "").strip()
+    if not domain_override:
+        return None
+
+    # Basic validation: ensure domain doesn't contain protocol or path separators
+    if "://" in domain_override or "/" in domain_override:
+        logger.warning(
+            f"Invalid domain override '{domain_override}': "
+            "domain should not contain protocol (://) or path separators (/)"
+        )
+        return None
+
+    return domain_override
+
+
 def is_agent365_exporter_enabled() -> bool:
     """Check if Agent 365 exporter is enabled."""
     # Check environment variable
