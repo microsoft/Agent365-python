@@ -69,8 +69,9 @@ Custom Trace Processor for OpenAI Agents SDK
 class OpenAIAgentsTraceProcessor(TracingProcessor):
     _MAX_HANDOFFS_IN_FLIGHT = 1000
 
-    def __init__(self, tracer: Tracer) -> None:
+    def __init__(self, tracer: Tracer, suppress_invoke_agent_input: bool = False) -> None:
         self._tracer = tracer
+        self._suppress_invoke_agent_input = suppress_invoke_agent_input
         self._root_spans: dict[str, OtelSpan] = {}
         self._otel_spans: dict[str, OtelSpan] = {}
         self._tokens: dict[str, object] = {}
@@ -79,6 +80,8 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         # Use an OrderedDict and _MAX_HANDOFFS_IN_FLIGHT to cap the size of the dict
         # in case there are large numbers of orphaned handoffs
         self._reverse_handoffs_dict: OrderedDict[str, str] = OrderedDict()
+        # Track active agent spans per trace to determine if we're in an InvokeAgent scope
+        self._active_agent_spans: dict[str, set[str]] = {}
 
     # helper
     def _stamp_custom_parent(self, otel_span: OtelSpan, trace_id: str) -> None:
@@ -88,6 +91,11 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         sc = root.get_span_context()
         pid_hex = "0x" + ot_trace.format_span_id(sc.span_id)
         otel_span.set_attribute(CUSTOM_PARENT_SPAN_ID_KEY, pid_hex)
+
+    def _is_in_invoke_agent_scope(self, trace_id: str) -> bool:
+        """Check if we're currently inside an InvokeAgent scope for the given trace."""
+        agent_spans = self._active_agent_spans.get(trace_id, set())
+        return len(agent_spans) > 0
 
     def on_trace_start(self, trace: Trace) -> None:
         """Called when a trace is started.
@@ -134,6 +142,12 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         self._otel_spans[span.span_id] = otel_span
         self._tokens[span.span_id] = attach(set_span_in_context(otel_span))
 
+        # Track agent spans for InvokeAgent scope detection
+        if isinstance(span.span_data, AgentSpanData):
+            if span.trace_id not in self._active_agent_spans:
+                self._active_agent_spans[span.trace_id] = set()
+            self._active_agent_spans[span.trace_id].add(span.span_id)
+
     def on_span_end(self, span: Span[Any]) -> None:
         """Called when a span is finished. Should not block or raise exceptions.
 
@@ -154,7 +168,11 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 otel_span.set_attribute(GEN_AI_OUTPUT_MESSAGES_KEY, response.model_dump_json())
                 for k, v in get_attributes_from_response(response):
                     otel_span.set_attribute(k, v)
-            if hasattr(data, "input") and (input := data.input):
+            # Only record input messages if not suppressing or not in InvokeAgent scope
+            should_suppress = self._suppress_invoke_agent_input and self._is_in_invoke_agent_scope(
+                span.trace_id
+            )
+            if not should_suppress and hasattr(data, "input") and (input := data.input):
                 if isinstance(input, str):
                     otel_span.set_attribute(GEN_AI_INPUT_MESSAGES_KEY, input)
                 elif isinstance(input, list):
@@ -164,8 +182,18 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 elif TYPE_CHECKING:
                     assert_never(input)
         elif isinstance(data, GenerationSpanData):
-            for k, v in get_attributes_from_generation_span_data(data):
-                otel_span.set_attribute(k, v)
+            # Only record input messages if not suppressing or not in InvokeAgent scope
+            should_suppress = self._suppress_invoke_agent_input and self._is_in_invoke_agent_scope(
+                span.trace_id
+            )
+            if not should_suppress:
+                for k, v in get_attributes_from_generation_span_data(data):
+                    otel_span.set_attribute(k, v)
+            else:
+                # Still set attributes other than input messages
+                for k, v in get_attributes_from_generation_span_data(data):
+                    if k != GEN_AI_INPUT_MESSAGES_KEY:
+                        otel_span.set_attribute(k, v)
             self._stamp_custom_parent(otel_span, span.trace_id)
             otel_span.update_name(
                 f"{otel_span.attributes[GEN_AI_OPERATION_NAME_KEY]} {otel_span.attributes[GEN_AI_REQUEST_MODEL_KEY]}"
@@ -193,6 +221,12 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
             if parent_node := self._reverse_handoffs_dict.pop(key, None):
                 otel_span.set_attribute(GEN_AI_GRAPH_NODE_PARENT_ID, parent_node)
             otel_span.update_name(f"{INVOKE_AGENT_OPERATION_NAME} {get_span_name(span)}")
+
+            # Clean up agent span tracking
+            if span.trace_id in self._active_agent_spans:
+                self._active_agent_spans[span.trace_id].discard(span.span_id)
+                if not self._active_agent_spans[span.trace_id]:
+                    del self._active_agent_spans[span.trace_id]
 
         end_time: int | None = None
         if span.ended_at:

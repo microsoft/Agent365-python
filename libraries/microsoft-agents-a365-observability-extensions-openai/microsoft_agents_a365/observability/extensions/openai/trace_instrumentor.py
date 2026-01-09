@@ -47,6 +47,7 @@ class OpenAIAgentsTraceInstrumentor(BaseInstrumentor):
         """Instruments the OpenAI Agents SDK with Microsoft Agent 365 tracing."""
         tracer_name = kwargs["tracer_name"] if kwargs.get("tracer_name") else None
         tracer_version = kwargs["tracer_version"] if kwargs.get("tracer_version") else None
+        suppress_invoke_agent_input = kwargs.get("suppress_invoke_agent_input", False)
 
         # Get the configured Microsoft Agent 365 Tracer
         try:
@@ -64,7 +65,9 @@ class OpenAIAgentsTraceInstrumentor(BaseInstrumentor):
 
         agent365_tracer = cast(Tracer, tracer)
 
-        set_trace_processors([OpenAIAgentsTraceProcessor(agent365_tracer)])
+        set_trace_processors(
+            [OpenAIAgentsTraceProcessor(agent365_tracer, suppress_invoke_agent_input)]
+        )
 
     def _uninstrument(self, **kwargs: Any) -> None:
         pass
