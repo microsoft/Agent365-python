@@ -20,13 +20,13 @@ class TestAgent365Exporter(unittest.TestCase):
         """Set up test fixtures."""
         self.mock_token_resolver = Mock()
         self.mock_token_resolver.return_value = "test_token_123"
-        
+
         # Store original environment variable values for cleanup
         self._original_domain_override = os.environ.get("A365_OBSERVABILITY_DOMAIN_OVERRIDE")
-        
+
         # Ensure no override is set by default for most tests
         os.environ.pop("A365_OBSERVABILITY_DOMAIN_OVERRIDE", None)
-        
+
         # Create default exporter for tests that don't need special setup
         self.exporter = _Agent365Exporter(
             token_resolver=self.mock_token_resolver, cluster_category="test"
@@ -404,12 +404,12 @@ class TestAgent365Exporter(unittest.TestCase):
         # Arrange
         override_domain = "override.example.com"
         os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = override_domain
-        
+
         # Create exporter after setting environment variable so it reads the override
         exporter = _Agent365Exporter(
             token_resolver=self.mock_token_resolver, cluster_category="test"
         )
-        
+
         spans = [self._create_mock_span("override_test_span")]
 
         # Mock the PowerPlatformApiDiscovery class (should not be called when override is set)
@@ -440,12 +440,12 @@ class TestAgent365Exporter(unittest.TestCase):
         # Arrange
         # Ensure override is not set
         os.environ.pop("A365_OBSERVABILITY_DOMAIN_OVERRIDE", None)
-        
+
         # Create exporter after clearing environment variable
         exporter = _Agent365Exporter(
             token_resolver=self.mock_token_resolver, cluster_category="test"
         )
-        
+
         spans = [self._create_mock_span("default_domain_span")]
 
         # Mock the PowerPlatformApiDiscovery class
@@ -482,12 +482,12 @@ class TestAgent365Exporter(unittest.TestCase):
         """Test that empty or whitespace-only domain override is ignored."""
         # Arrange
         os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = "   "  # whitespace only
-        
+
         # Create exporter after setting environment variable
         exporter = _Agent365Exporter(
             token_resolver=self.mock_token_resolver, cluster_category="test"
         )
-        
+
         spans = [self._create_mock_span("test_span")]
 
         # Mock the PowerPlatformApiDiscovery class (should be called since override is invalid)
@@ -511,12 +511,12 @@ class TestAgent365Exporter(unittest.TestCase):
         """Test that domain override containing protocol is ignored."""
         # Arrange
         os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = "https://invalid.example.com"
-        
+
         # Create exporter after setting environment variable
         exporter = _Agent365Exporter(
             token_resolver=self.mock_token_resolver, cluster_category="test"
         )
-        
+
         spans = [self._create_mock_span("test_span")]
 
         # Mock the PowerPlatformApiDiscovery class (should be called since override is invalid)
@@ -540,12 +540,12 @@ class TestAgent365Exporter(unittest.TestCase):
         """Test that domain override containing path separator is ignored."""
         # Arrange
         os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = "invalid.example.com/path"
-        
+
         # Create exporter after setting environment variable
         exporter = _Agent365Exporter(
             token_resolver=self.mock_token_resolver, cluster_category="test"
         )
-        
+
         spans = [self._create_mock_span("test_span")]
 
         # Mock the PowerPlatformApiDiscovery class (should be called since override is invalid)
