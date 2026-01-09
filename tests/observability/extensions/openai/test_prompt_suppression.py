@@ -49,45 +49,18 @@ class TestPromptSuppressionConfiguration(unittest.TestCase):
             "suppress_invoke_agent_input should be False when explicitly set",
         )
 
-    def test_has_active_agent_spans_tracking(self):
-        """Test that the processor has the required tracking data structure."""
+    def test_has_should_suppress_input_method(self):
+        """Test that the processor has the helper method for suppression logic."""
         tracer = get_tracer()
         processor = OpenAIAgentsTraceProcessor(tracer, suppress_invoke_agent_input=True)
 
         self.assertTrue(
-            hasattr(processor, "_active_agent_spans"),
-            "Processor should have _active_agent_spans attribute",
-        )
-        self.assertIsInstance(
-            processor._active_agent_spans,
-            dict,
-            "_active_agent_spans should be a dictionary",
-        )
-
-    def test_has_is_in_invoke_agent_scope_method(self):
-        """Test that the processor has the helper method for scope detection."""
-        tracer = get_tracer()
-        processor = OpenAIAgentsTraceProcessor(tracer, suppress_invoke_agent_input=True)
-
-        self.assertTrue(
-            hasattr(processor, "_is_in_invoke_agent_scope"),
-            "Processor should have _is_in_invoke_agent_scope method",
+            hasattr(processor, "_should_suppress_input"),
+            "Processor should have _should_suppress_input method",
         )
         self.assertTrue(
-            callable(processor._is_in_invoke_agent_scope),
-            "_is_in_invoke_agent_scope should be callable",
-        )
-
-    def test_is_in_invoke_agent_scope_returns_false_for_empty_trace(self):
-        """Test that _is_in_invoke_agent_scope returns False for unknown trace."""
-        tracer = get_tracer()
-        processor = OpenAIAgentsTraceProcessor(tracer, suppress_invoke_agent_input=True)
-
-        result = processor._is_in_invoke_agent_scope("unknown-trace-id")
-
-        self.assertFalse(
-            result,
-            "_is_in_invoke_agent_scope should return False for traces with no active agent spans",
+            callable(processor._should_suppress_input),
+            "_should_suppress_input should be callable",
         )
 
 
