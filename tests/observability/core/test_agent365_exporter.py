@@ -577,6 +577,41 @@ class TestAgent365Exporter(unittest.TestCase):
                 # Verify PowerPlatformApiDiscovery was not called
                 mock_discovery_class.assert_not_called()
 
+    def test_export_uses_valid_domain_override_with_port(self):
+        """Test that domain override with port (no protocol) is accepted and https:// is prepended."""
+        # Arrange
+        os.environ["A365_OBSERVABILITY_DOMAIN_OVERRIDE"] = "example.com:8080"
+
+        # Create exporter after setting environment variable
+        exporter = _Agent365Exporter(
+            token_resolver=self.mock_token_resolver, cluster_category="test"
+        )
+
+        spans = [self._create_mock_span("test_span")]
+
+        # Mock the PowerPlatformApiDiscovery class (should NOT be called since override is valid)
+        with patch(
+            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
+        ) as mock_discovery_class:
+            # Mock the _post_with_retries method
+            with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+                # Act
+                result = exporter.export(spans)
+
+                # Assert
+                self.assertEqual(result, SpanExportResult.SUCCESS)
+                mock_post.assert_called_once()
+
+                # Verify the call arguments - should prepend https:// to domain with port
+                args, kwargs = mock_post.call_args
+                url, body, headers = args
+
+                expected_url = "https://example.com:8080/maven/agent365/agents/test-agent-456/traces?api-version=1"
+                self.assertEqual(url, expected_url)
+
+                # Verify PowerPlatformApiDiscovery was not called
+                mock_discovery_class.assert_not_called()
+
     def test_export_ignores_invalid_domain_with_protocol(self):
         """Test that domain override with invalid protocol is ignored."""
         # Arrange

@@ -102,14 +102,15 @@ class _Agent365Exporter(SpanExporter):
                     else f"/maven/agent365/agents/{agent_id}/traces"
                 )
                 
-                # Construct URL - if endpoint already has a scheme (http:// or https://), use it as-is
+                # Construct URL - if endpoint has a scheme (http:// or https://), use it as-is
                 # Otherwise, prepend https://
+                # Note: Check for "://" to distinguish between real protocols and domain:port format
                 parsed = urlparse(endpoint)
-                if parsed.scheme:
+                if parsed.scheme and "://" in endpoint:
                     # Endpoint is a full URL, append path
                     url = f"{endpoint}{endpoint_path}?api-version=1"
                 else:
-                    # Endpoint is just a domain, prepend https://
+                    # Endpoint is just a domain (possibly with port), prepend https://
                     url = f"https://{endpoint}{endpoint_path}?api-version=1"
 
                 # Debug: Log endpoint being used
