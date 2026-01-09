@@ -105,6 +105,7 @@ class _Agent365Exporter(SpanExporter):
                 # Construct URL - if endpoint has a scheme (http:// or https://), use it as-is
                 # Otherwise, prepend https://
                 # Note: Check for "://" to distinguish between real protocols and domain:port format
+                # (urlparse treats "example.com:8080" as having scheme="example.com")
                 parsed = urlparse(endpoint)
                 if parsed.scheme and "://" in endpoint:
                     # Endpoint is a full URL, append path

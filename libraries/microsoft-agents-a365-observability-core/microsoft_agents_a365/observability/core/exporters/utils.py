@@ -159,6 +159,8 @@ def get_validated_domain_override() -> str | None:
         parsed = urlparse(domain_override)
         
         # If scheme is present and looks like a protocol (contains //)
+        # Note: We check for "://" because urlparse treats "example.com:8080" as having
+        # scheme="example.com", but this is actually a domain with port, not a protocol.
         if parsed.scheme and "://" in domain_override:
             # Validate it's http or https
             if parsed.scheme not in ("http", "https"):
