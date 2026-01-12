@@ -157,7 +157,7 @@ def get_validated_domain_override() -> str | None:
     # Validate that it's a valid URL
     try:
         parsed = urlparse(domain_override)
-        
+
         # If scheme is present and looks like a protocol (contains //)
         # Note: We check for "://" because urlparse treats "example.com:8080" as having
         # scheme="example.com", but this is actually a domain with port, not a protocol.
@@ -171,14 +171,18 @@ def get_validated_domain_override() -> str | None:
                 return None
             # Must have a netloc (hostname) when scheme is present
             if not parsed.netloc:
-                logger.warning(
-                    f"Invalid domain override '{domain_override}': "
-                    "missing hostname"
-                )
+                logger.warning(f"Invalid domain override '{domain_override}': missing hostname")
                 return None
         else:
-            # If no scheme with ://, it should be just a domain (no path)
+            # If no scheme with ://, it should be a domain with optional port (no path)
             # Note: domain can contain : for port (e.g., example.com:8080)
+            # Reject malformed URLs like "http:8080" that look like protocols but aren't
+            if domain_override.startswith(("http:", "https:")) and "://" not in domain_override:
+                logger.warning(
+                    f"Invalid domain override '{domain_override}': "
+                    "malformed URL - protocol requires '://'"
+                )
+                return None
             if "/" in domain_override:
                 logger.warning(
                     f"Invalid domain override '{domain_override}': "

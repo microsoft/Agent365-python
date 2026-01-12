@@ -95,13 +95,13 @@ class _Agent365Exporter(SpanExporter):
                 else:
                     discovery = PowerPlatformApiDiscovery(self._cluster_category)
                     endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
-                
+
                 endpoint_path = (
                     f"/maven/agent365/service/agents/{agent_id}/traces"
                     if self._use_s2s_endpoint
                     else f"/maven/agent365/agents/{agent_id}/traces"
                 )
-                
+
                 # Construct URL - if endpoint has a scheme (http:// or https://), use it as-is
                 # Otherwise, prepend https://
                 # Note: Check for "://" to distinguish between real protocols and domain:port format
