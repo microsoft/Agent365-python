@@ -90,11 +90,12 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         pid_hex = "0x" + ot_trace.format_span_id(sc.span_id)
         otel_span.set_attribute(CUSTOM_PARENT_SPAN_ID_KEY, pid_hex)
 
-    def _should_suppress_input(self, span: Span[Any]) -> bool:
+    def _should_suppress_input(self, span: Span[Any], otel_span: OtelSpan) -> bool:
         """Check if input messages should be suppressed for the given span.
         
         Args:
-            span: The span to check.
+            span: The agents SDK span being processed.
+            otel_span: The corresponding OpenTelemetry span.
             
         Returns:
             True if suppression is enabled and the span has an InvokeAgent parent.
@@ -102,7 +103,7 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         if not self._suppress_invoke_agent_input:
             return False
         
-        # Check if the parent span is an InvokeAgent span by looking at its operation name
+        # Check if this span has a parent that is an InvokeAgent span
         if span.parent_id:
             parent_otel_span = self._otel_spans.get(span.parent_id)
             if parent_otel_span and hasattr(parent_otel_span, 'attributes'):
@@ -178,7 +179,7 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 for k, v in get_attributes_from_response(response):
                     otel_span.set_attribute(k, v)
             # Only record input messages if not suppressing or not in InvokeAgent scope
-            if not self._should_suppress_input(span) and hasattr(data, "input") and (input := data.input):
+            if not self._should_suppress_input(span, otel_span) and hasattr(data, "input") and (input := data.input):
                 if isinstance(input, str):
                     otel_span.set_attribute(GEN_AI_INPUT_MESSAGES_KEY, input)
                 elif isinstance(input, list):
@@ -189,7 +190,7 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                     assert_never(input)
         elif isinstance(data, GenerationSpanData):
             # Collect all attributes once and filter if suppression is enabled
-            should_suppress = self._should_suppress_input(span)
+            should_suppress = self._should_suppress_input(span, otel_span)
             for k, v in get_attributes_from_generation_span_data(data):
                 # Skip input messages if suppression is enabled and in InvokeAgent scope
                 if should_suppress and k == GEN_AI_INPUT_MESSAGES_KEY:
