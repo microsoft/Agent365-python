@@ -53,6 +53,7 @@ class TelemetryManager:
         token_resolver: Callable[[str, str], str | None] | None = None,
         cluster_category: str = "prod",
         exporter_options: Optional[Agent365ExporterOptions] = None,
+        suppress_invoke_agent_input: bool = False,
         **kwargs: Any,
     ) -> bool:
         """
@@ -67,6 +68,7 @@ class TelemetryManager:
             Use exporter_options instead.
         :param exporter_options: Agent365ExporterOptions instance for configuring the exporter.
             If provided, exporter_options takes precedence. If exporter_options is None, the token_resolver and cluster_category parameters are used as fallback/legacy support to construct a default Agent365ExporterOptions instance.
+        :param suppress_invoke_agent_input: If True, suppress input messages for spans that are children of InvokeAgent spans.
         :return: True if configuration succeeded, False otherwise.
         """
         try:
@@ -78,6 +80,7 @@ class TelemetryManager:
                     token_resolver,
                     cluster_category,
                     exporter_options,
+                    suppress_invoke_agent_input,
                     **kwargs,
                 )
         except Exception as e:
@@ -92,6 +95,7 @@ class TelemetryManager:
         token_resolver: Callable[[str, str], str | None] | None = None,
         cluster_category: str = "prod",
         exporter_options: Optional[Agent365ExporterOptions] = None,
+        suppress_invoke_agent_input: bool = False,
         **kwargs: Any,
     ) -> bool:
         """Internal configuration method - not thread-safe, must be called with lock."""
@@ -151,6 +155,7 @@ class TelemetryManager:
                 token_resolver=exporter_options.token_resolver,
                 cluster_category=exporter_options.cluster_category,
                 use_s2s_endpoint=exporter_options.use_s2s_endpoint,
+                suppress_invoke_agent_input=suppress_invoke_agent_input,
             )
         else:
             exporter = ConsoleSpanExporter()
@@ -162,7 +167,7 @@ class TelemetryManager:
 
         # Create BatchSpanProcessor with optimized settings
         batch_processor = BatchSpanProcessor(exporter, **batch_processor_kwargs)
-        agent_processor = SpanProcessor()
+        agent_processor = SpanProcessor(suppress_invoke_agent_input=suppress_invoke_agent_input)
 
         tracer_provider.add_span_processor(batch_processor)
         tracer_provider.add_span_processor(agent_processor)

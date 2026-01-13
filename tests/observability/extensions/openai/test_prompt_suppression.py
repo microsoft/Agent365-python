@@ -2,65 +2,58 @@
 
 import unittest
 
-from microsoft_agents_a365.observability.core import configure, get_tracer
-from microsoft_agents_a365.observability.extensions.openai.trace_processor import (
-    OpenAIAgentsTraceProcessor,
-)
+from microsoft_agents_a365.observability.core.exporters.agent365_exporter import _Agent365Exporter
+from microsoft_agents_a365.observability.core.trace_processor.span_processor import SpanProcessor
 
 
 class TestPromptSuppressionConfiguration(unittest.TestCase):
-    """Unit tests for prompt suppression configuration in OpenAIAgentsTraceProcessor."""
+    """Unit tests for prompt suppression configuration in the core SDK."""
 
-    @classmethod
-    def setUpClass(cls):
-        """Set up test environment once for all tests."""
-        configure(
-            service_name="test-service-prompt-suppression",
-            service_namespace="test-namespace-prompt-suppression",
-        )
-
-    def test_default_suppression_is_false(self):
-        """Test that the default value for suppress_invoke_agent_input is False."""
-        tracer = get_tracer()
-        processor = OpenAIAgentsTraceProcessor(tracer)
+    def test_span_processor_default_suppression_is_false(self):
+        """Test that the default value for suppress_invoke_agent_input is False in SpanProcessor."""
+        processor = SpanProcessor()
 
         self.assertFalse(
             processor._suppress_invoke_agent_input,
             "Default value for suppress_invoke_agent_input should be False",
         )
 
-    def test_can_enable_suppression(self):
-        """Test that suppression can be enabled via constructor."""
-        tracer = get_tracer()
-        processor = OpenAIAgentsTraceProcessor(tracer, suppress_invoke_agent_input=True)
+    def test_span_processor_can_enable_suppression(self):
+        """Test that suppression can be enabled via SpanProcessor constructor."""
+        processor = SpanProcessor(suppress_invoke_agent_input=True)
 
         self.assertTrue(
             processor._suppress_invoke_agent_input,
             "suppress_invoke_agent_input should be True when explicitly set",
         )
 
-    def test_can_disable_suppression(self):
-        """Test that suppression can be explicitly disabled via constructor."""
-        tracer = get_tracer()
-        processor = OpenAIAgentsTraceProcessor(tracer, suppress_invoke_agent_input=False)
+    def test_span_processor_can_disable_suppression(self):
+        """Test that suppression can be explicitly disabled via SpanProcessor constructor."""
+        processor = SpanProcessor(suppress_invoke_agent_input=False)
 
         self.assertFalse(
             processor._suppress_invoke_agent_input,
             "suppress_invoke_agent_input should be False when explicitly set",
         )
 
-    def test_has_should_suppress_input_method(self):
-        """Test that the processor has the helper method for suppression logic."""
-        tracer = get_tracer()
-        processor = OpenAIAgentsTraceProcessor(tracer, suppress_invoke_agent_input=True)
+    def test_exporter_default_suppression_is_false(self):
+        """Test that the default value for suppress_invoke_agent_input is False in exporter."""
+        exporter = _Agent365Exporter(token_resolver=lambda x, y: "test")
+
+        self.assertFalse(
+            exporter._suppress_invoke_agent_input,
+            "Default value for suppress_invoke_agent_input should be False",
+        )
+
+    def test_exporter_can_enable_suppression(self):
+        """Test that suppression can be enabled via exporter constructor."""
+        exporter = _Agent365Exporter(
+            token_resolver=lambda x, y: "test", suppress_invoke_agent_input=True
+        )
 
         self.assertTrue(
-            hasattr(processor, "_should_suppress_input"),
-            "Processor should have _should_suppress_input method",
-        )
-        self.assertTrue(
-            callable(processor._should_suppress_input),
-            "_should_suppress_input should be callable",
+            exporter._suppress_invoke_agent_input,
+            "suppress_invoke_agent_input should be True when explicitly set",
         )
 
 

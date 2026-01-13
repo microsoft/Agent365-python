@@ -24,8 +24,15 @@ from .util import COMMON_ATTRIBUTES, INVOKE_AGENT_ATTRIBUTES
 class SpanProcessor(BaseSpanProcessor):
     """Span processor that propagates every baggage key/value to span attributes."""
 
-    def __init__(self):
+    def __init__(self, suppress_invoke_agent_input: bool = False):
+        """Initialize the span processor.
+        
+        Args:
+            suppress_invoke_agent_input: If True, suppress input messages for spans 
+                that are children of InvokeAgent spans.
+        """
         super().__init__()
+        self._suppress_invoke_agent_input = suppress_invoke_agent_input
 
     def on_start(self, span, parent_context=None):
         ctx = parent_context or context.get_current()
@@ -81,4 +88,9 @@ class SpanProcessor(BaseSpanProcessor):
         return super().on_start(span, parent_context)
 
     def on_end(self, span):
+        """Called when a span ends.
+        
+        Note: Input suppression for InvokeAgent scopes is handled by the exporter,
+        not in this processor, because span attributes cannot be removed after they're set.
+        """
         super().on_end(span)

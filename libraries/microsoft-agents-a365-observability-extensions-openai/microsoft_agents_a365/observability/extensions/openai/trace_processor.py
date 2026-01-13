@@ -69,9 +69,8 @@ Custom Trace Processor for OpenAI Agents SDK
 class OpenAIAgentsTraceProcessor(TracingProcessor):
     _MAX_HANDOFFS_IN_FLIGHT = 1000
 
-    def __init__(self, tracer: Tracer, suppress_invoke_agent_input: bool = False) -> None:
+    def __init__(self, tracer: Tracer) -> None:
         self._tracer = tracer
-        self._suppress_invoke_agent_input = suppress_invoke_agent_input
         self._root_spans: dict[str, OtelSpan] = {}
         self._otel_spans: dict[str, OtelSpan] = {}
         self._tokens: dict[str, object] = {}
@@ -89,29 +88,6 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         sc = root.get_span_context()
         pid_hex = "0x" + ot_trace.format_span_id(sc.span_id)
         otel_span.set_attribute(CUSTOM_PARENT_SPAN_ID_KEY, pid_hex)
-
-    def _should_suppress_input(self, span: Span[Any], otel_span: OtelSpan) -> bool:
-        """Check if input messages should be suppressed for the given span.
-        
-        Args:
-            span: The agents SDK span being processed.
-            otel_span: The corresponding OpenTelemetry span.
-            
-        Returns:
-            True if suppression is enabled and the span has an InvokeAgent parent.
-        """
-        if not self._suppress_invoke_agent_input:
-            return False
-        
-        # Check if this span has a parent that is an InvokeAgent span
-        if span.parent_id:
-            parent_otel_span = self._otel_spans.get(span.parent_id)
-            if parent_otel_span and hasattr(parent_otel_span, 'attributes'):
-                operation_name = parent_otel_span.attributes.get(GEN_AI_OPERATION_NAME_KEY)
-                if operation_name == INVOKE_AGENT_OPERATION_NAME:
-                    return True
-        
-        return False
 
     def on_trace_start(self, trace: Trace) -> None:
         """Called when a trace is started.
@@ -178,8 +154,7 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 otel_span.set_attribute(GEN_AI_OUTPUT_MESSAGES_KEY, response.model_dump_json())
                 for k, v in get_attributes_from_response(response):
                     otel_span.set_attribute(k, v)
-            # Only record input messages if not suppressing or not in InvokeAgent scope
-            if not self._should_suppress_input(span, otel_span) and hasattr(data, "input") and (input := data.input):
+            if hasattr(data, "input") and (input := data.input):
                 if isinstance(input, str):
                     otel_span.set_attribute(GEN_AI_INPUT_MESSAGES_KEY, input)
                 elif isinstance(input, list):
@@ -189,12 +164,7 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 elif TYPE_CHECKING:
                     assert_never(input)
         elif isinstance(data, GenerationSpanData):
-            # Collect all attributes once and filter if suppression is enabled
-            should_suppress = self._should_suppress_input(span, otel_span)
             for k, v in get_attributes_from_generation_span_data(data):
-                # Skip input messages if suppression is enabled and in InvokeAgent scope
-                if should_suppress and k == GEN_AI_INPUT_MESSAGES_KEY:
-                    continue
                 otel_span.set_attribute(k, v)
             self._stamp_custom_parent(otel_span, span.trace_id)
             otel_span.update_name(
