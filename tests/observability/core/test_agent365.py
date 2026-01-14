@@ -119,6 +119,7 @@ class TestAgent365Configure(unittest.TestCase):
             token_resolver=self.mock_token_resolver,
             cluster_category="staging",
             use_s2s_endpoint=True,
+            suppress_invoke_agent_input=False,
         )
 
         # Verify BatchSpanProcessor was called with correct parameters from exporter_options
