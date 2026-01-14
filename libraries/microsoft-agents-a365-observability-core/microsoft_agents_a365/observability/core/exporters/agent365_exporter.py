@@ -17,7 +17,11 @@ from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
 
-from ..constants import GEN_AI_INPUT_MESSAGES_KEY, GEN_AI_OPERATION_NAME_KEY, INVOKE_AGENT_OPERATION_NAME
+from ..constants import (
+    GEN_AI_INPUT_MESSAGES_KEY,
+    GEN_AI_OPERATION_NAME_KEY,
+    INVOKE_AGENT_OPERATION_NAME,
+)
 from .utils import (
     get_validated_domain_override,
     hex_span_id,
@@ -269,7 +273,7 @@ class _Agent365Exporter(SpanExporter):
 
         # attributes
         attrs = dict(sp.attributes or {})
-        
+
         # Suppress input messages if configured and current span is an InvokeAgent span
         if self._suppress_invoke_agent_input:
             # Check if current span is an InvokeAgent span by:
@@ -282,7 +286,7 @@ class _Agent365Exporter(SpanExporter):
             ):
                 # Remove input messages attribute
                 attrs.pop(GEN_AI_INPUT_MESSAGES_KEY, None)
-        
+
         # events
         events = []
         for ev in sp.events:
