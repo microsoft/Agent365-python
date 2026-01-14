@@ -3,38 +3,10 @@
 import unittest
 
 from microsoft_agents_a365.observability.core.exporters.agent365_exporter import _Agent365Exporter
-from microsoft_agents_a365.observability.core.trace_processor.span_processor import SpanProcessor
 
 
 class TestPromptSuppressionConfiguration(unittest.TestCase):
     """Unit tests for prompt suppression configuration in the core SDK."""
-
-    def test_span_processor_default_suppression_is_false(self):
-        """Test that the default value for suppress_invoke_agent_input is False in SpanProcessor."""
-        processor = SpanProcessor()
-
-        self.assertFalse(
-            processor._suppress_invoke_agent_input,
-            "Default value for suppress_invoke_agent_input should be False",
-        )
-
-    def test_span_processor_can_enable_suppression(self):
-        """Test that suppression can be enabled via SpanProcessor constructor."""
-        processor = SpanProcessor(suppress_invoke_agent_input=True)
-
-        self.assertTrue(
-            processor._suppress_invoke_agent_input,
-            "suppress_invoke_agent_input should be True when explicitly set",
-        )
-
-    def test_span_processor_can_disable_suppression(self):
-        """Test that suppression can be explicitly disabled via SpanProcessor constructor."""
-        processor = SpanProcessor(suppress_invoke_agent_input=False)
-
-        self.assertFalse(
-            processor._suppress_invoke_agent_input,
-            "suppress_invoke_agent_input should be False when explicitly set",
-        )
 
     def test_exporter_default_suppression_is_false(self):
         """Test that the default value for suppress_invoke_agent_input is False in exporter."""

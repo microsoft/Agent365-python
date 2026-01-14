@@ -167,7 +167,7 @@ class TelemetryManager:
 
         # Create BatchSpanProcessor with optimized settings
         batch_processor = BatchSpanProcessor(exporter, **batch_processor_kwargs)
-        agent_processor = SpanProcessor(suppress_invoke_agent_input=suppress_invoke_agent_input)
+        agent_processor = SpanProcessor()
 
         tracer_provider.add_span_processor(batch_processor)
         tracer_provider.add_span_processor(agent_processor)

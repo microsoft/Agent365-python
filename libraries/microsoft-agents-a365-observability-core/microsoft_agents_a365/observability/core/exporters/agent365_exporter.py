@@ -225,22 +225,13 @@ class _Agent365Exporter(SpanExporter):
     # ------------- Payload mapping ------------------
 
     def _build_export_request(self, spans: Sequence[ReadableSpan]) -> dict[str, Any]:
-        # Build a map of span IDs to their operation names for parent lookups
-        span_operation_map = {}
-        if self._suppress_invoke_agent_input:
-            for sp in spans:
-                attrs = sp.attributes or {}
-                operation_name = attrs.get(GEN_AI_OPERATION_NAME_KEY)
-                if operation_name:
-                    span_operation_map[sp.context.span_id] = operation_name
-        
         # Group by instrumentation scope (name, version)
         scope_map: dict[tuple[str, str | None], list[dict[str, Any]]] = {}
 
         for sp in spans:
             scope = sp.instrumentation_scope
             scope_key = (scope.name, scope.version)
-            scope_map.setdefault(scope_key, []).append(self._map_span(sp, span_operation_map))
+            scope_map.setdefault(scope_key, []).append(self._map_span(sp))
 
         scope_spans: list[dict[str, Any]] = []
         for (name, version), mapped_spans in scope_map.items():
@@ -269,7 +260,7 @@ class _Agent365Exporter(SpanExporter):
             ]
         }
 
-    def _map_span(self, sp: ReadableSpan, span_operation_map: dict[int, str] = None) -> dict[str, Any]:
+    def _map_span(self, sp: ReadableSpan) -> dict[str, Any]:
         ctx = sp.context
 
         parent_span_id = None
@@ -279,14 +270,18 @@ class _Agent365Exporter(SpanExporter):
         # attributes
         attrs = dict(sp.attributes or {})
         
-        # Suppress input messages if configured and parent is an InvokeAgent span
-        if self._suppress_invoke_agent_input and span_operation_map:
-            # Check if parent span is an InvokeAgent span
-            if sp.parent is not None and sp.parent.span_id != 0:
-                parent_operation = span_operation_map.get(sp.parent.span_id)
-                if parent_operation == INVOKE_AGENT_OPERATION_NAME:
-                    # Remove input messages attribute
-                    attrs.pop(GEN_AI_INPUT_MESSAGES_KEY, None)
+        # Suppress input messages if configured and current span is an InvokeAgent span
+        if self._suppress_invoke_agent_input:
+            # Check if current span is an InvokeAgent span by:
+            # 1. Span name starts with "invoke_agent"
+            # 2. Has attribute gen_ai.operation.name set to INVOKE_AGENT_OPERATION_NAME
+            operation_name = attrs.get(GEN_AI_OPERATION_NAME_KEY)
+            if (
+                sp.name.startswith(INVOKE_AGENT_OPERATION_NAME)
+                and operation_name == INVOKE_AGENT_OPERATION_NAME
+            ):
+                # Remove input messages attribute
+                attrs.pop(GEN_AI_INPUT_MESSAGES_KEY, None)
         
         # events
         events = []
