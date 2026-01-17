@@ -85,7 +85,7 @@ class TestOperationResult:
         result = OperationResult.failed()
 
         # Assert
-        assert str(result) == "Failed : "
+        assert str(result) == "Failed"
 
     def test_operation_result_failed_string_representation_with_errors(self):
         """Test that failed OperationResult with errors has correct string representation."""

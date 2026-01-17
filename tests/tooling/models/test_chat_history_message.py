@@ -70,7 +70,7 @@ class TestChatHistoryMessage:
     def test_chat_history_message_requires_timestamp(self):
         """Test that ChatHistoryMessage requires a timestamp."""
         # Act & Assert
-        with pytest.raises(ValueError, match="timestamp cannot be empty"):
+        with pytest.raises(ValueError, match="timestamp cannot be None"):
             ChatHistoryMessage("msg-001", "user", "Test content", None)
 
     def test_chat_history_message_supports_system_role(self):

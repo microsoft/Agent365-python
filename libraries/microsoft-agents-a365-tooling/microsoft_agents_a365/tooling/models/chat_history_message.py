@@ -38,8 +38,8 @@ class ChatHistoryMessage:
             raise ValueError("role cannot be empty")
         if not self.content:
             raise ValueError("content cannot be empty")
-        if not self.timestamp:
-            raise ValueError("timestamp cannot be empty")
+        if self.timestamp is None:
+            raise ValueError("timestamp cannot be None")
 
     def to_dict(self):
         """

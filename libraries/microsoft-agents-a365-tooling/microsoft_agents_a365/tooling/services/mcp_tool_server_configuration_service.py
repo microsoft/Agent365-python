@@ -31,11 +31,16 @@ import aiohttp
 from microsoft_agents.hosting.core import TurnContext
 
 # Local imports
-from ..models import ChatHistoryMessage, MCPServerConfig, ToolOptions
+from ..models import ChatHistoryMessage, ChatMessageRequest, MCPServerConfig, ToolOptions
 from ..utils import Constants
-from ..utils.utility import get_tooling_gateway_for_digital_worker, build_mcp_server_url
+from ..utils.utility import (
+    get_tooling_gateway_for_digital_worker,
+    build_mcp_server_url,
+    get_chat_history_endpoint,
+)
 
 # Runtime Imports
+from microsoft_agents_a365.runtime import OperationError, OperationResult
 from microsoft_agents_a365.runtime.utility import Utility as RuntimeUtility
 
 
@@ -520,12 +525,6 @@ class McpToolServerConfigurationService:
         Raises:
             ValueError: If required parameters are invalid or empty.
         """
-        # Import here to avoid circular dependency
-        from microsoft_agents_a365.runtime import OperationError, OperationResult
-
-        from ..models import ChatMessageRequest
-        from ..utils.utility import get_chat_history_endpoint
-
         # Validate input parameters
         if not turn_context:
             raise ValueError("turn_context cannot be empty or None")
@@ -560,7 +559,7 @@ class McpToolServerConfigurationService:
         # Get the endpoint URL
         endpoint = get_chat_history_endpoint()
 
-        self._logger.info(f"Sending chat history to endpoint: {endpoint}")
+        self._logger.debug(f"Sending chat history to endpoint: {endpoint}")
 
         # Create the request payload
         request = ChatMessageRequest(

@@ -47,9 +47,11 @@ class OperationResult:
         Get the list of errors that occurred during the operation.
 
         Returns:
-            List[OperationError]: List of operation errors.
+            List[OperationError]: A copy of the list of operation errors.
+                The returned list is a defensive copy to protect the singleton
+                instance returned by success() from accidental modification.
         """
-        return self._errors
+        return list(self._errors)
 
     @staticmethod
     def success() -> "OperationResult":
@@ -88,4 +90,4 @@ class OperationResult:
             return "Succeeded"
         else:
             error_messages = ", ".join(str(error.message) for error in self._errors)
-            return f"Failed : {error_messages}"
+            return f"Failed: {error_messages}" if error_messages else "Failed"
