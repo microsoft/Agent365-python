@@ -543,6 +543,20 @@ class McpToolServerConfigurationService:
             ValueError: If turn_context is None, chat_history_messages is None or empty,
                         turn_context.activity is None, or any of the required fields
                         (conversation.id, activity.id, activity.text) are missing or empty.
+
+        Example:
+            >>> from datetime import datetime, timezone
+            >>> from microsoft_agents_a365.tooling.models import ChatHistoryMessage
+            >>>
+            >>> history = [
+            ...     ChatHistoryMessage("msg-1", "user", "Hello", datetime.now(timezone.utc)),
+            ...     ChatHistoryMessage("msg-2", "assistant", "Hi!", datetime.now(timezone.utc))
+            ... ]
+            >>>
+            >>> service = McpToolServerConfigurationService()
+            >>> result = await service.send_chat_history(turn_context, history)
+            >>> if result.succeeded:
+            ...     print("Chat history sent successfully")
         """
         # Validate input parameters
         if turn_context is None:
