@@ -46,6 +46,17 @@ from microsoft_agents_a365.runtime.utility import Utility as RuntimeUtility
 
 
 # ==============================================================================
+# CONSTANTS
+# ==============================================================================
+
+# HTTP timeout in seconds for request operations
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
+
+# HTTP status code for successful response
+HTTP_STATUS_OK = 200
+
+
+# ==============================================================================
 # MAIN SERVICE CLASS
 # ==============================================================================
 
@@ -594,10 +605,10 @@ class McpToolServerConfigurationService:
             json_data = json.dumps(request.to_dict())
 
             # Send POST request with timeout to prevent indefinite hangs
-            timeout = aiohttp.ClientTimeout(total=30)  # 30 second timeout
+            timeout = aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT_SECONDS)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(endpoint, headers=headers, data=json_data) as response:
-                    if response.status == 200:
+                    if response.status == HTTP_STATUS_OK:
                         self._logger.info("Successfully sent chat history to MCP platform")
                         return OperationResult.success()
                     else:
