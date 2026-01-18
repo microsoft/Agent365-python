@@ -46,10 +46,13 @@ class OperationResult:
         """
         Get the list of errors that occurred during the operation.
 
+        Note:
+            This property returns a defensive copy of the internal error list
+            to prevent external modifications, which is especially important for
+            protecting the singleton instance returned by success().
+
         Returns:
             List[OperationError]: A copy of the list of operation errors.
-                The returned list is a defensive copy to protect the singleton
-                instance returned by success() from accidental modification.
         """
         return list(self._errors)
 
