@@ -94,3 +94,48 @@ class TestChatHistoryMessage:
         # Assert
         assert message.timestamp == timestamp
         assert "2024-01-15T10:30:45.123000" in message_dict["timestamp"]
+
+    def test_chat_history_message_rejects_whitespace_only_id(self):
+        """Test that ChatHistoryMessage rejects whitespace-only id."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="id cannot be empty"):
+            ChatHistoryMessage("   ", "user", "Content", timestamp)
+
+    def test_chat_history_message_rejects_whitespace_only_role(self):
+        """Test that ChatHistoryMessage rejects whitespace-only role."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="role cannot be empty"):
+            ChatHistoryMessage("msg-1", "   ", "Content", timestamp)
+
+    def test_chat_history_message_rejects_whitespace_only_content(self):
+        """Test that ChatHistoryMessage rejects whitespace-only content."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="content cannot be empty"):
+            ChatHistoryMessage("msg-1", "user", "   ", timestamp)
+
+    def test_chat_history_message_rejects_tab_only_id(self):
+        """Test that ChatHistoryMessage rejects tab-only id."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="id cannot be empty"):
+            ChatHistoryMessage("\t", "user", "Content", timestamp)
+
+    def test_chat_history_message_rejects_newline_only_content(self):
+        """Test that ChatHistoryMessage rejects newline-only content."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="content cannot be empty"):
+            ChatHistoryMessage("msg-1", "user", "\n\n", timestamp)

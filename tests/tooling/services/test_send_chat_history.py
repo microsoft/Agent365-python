@@ -92,7 +92,9 @@ class TestSendChatHistory:
             # Assert
             assert result.succeeded is False
             assert len(result.errors) == 1
-            assert "HTTP 500" in str(result.errors[0].message)
+            # Error now uses aiohttp.ClientResponseError which formats as "status, message=..."
+            assert "500" in str(result.errors[0].message)
+            assert "Internal Server Error" in str(result.errors[0].message)
 
     @pytest.mark.asyncio
     async def test_send_chat_history_with_options(
@@ -128,7 +130,7 @@ class TestSendChatHistory:
     async def test_send_chat_history_validates_turn_context(self, service, chat_history_messages):
         """Test that send_chat_history validates turn_context parameter."""
         # Act & Assert
-        with pytest.raises(ValueError, match="turn_context cannot be empty or None"):
+        with pytest.raises(ValueError, match="turn_context cannot be None"):
             await service.send_chat_history(None, chat_history_messages)
 
     @pytest.mark.asyncio
@@ -137,8 +139,17 @@ class TestSendChatHistory:
     ):
         """Test that send_chat_history validates chat_history_messages parameter."""
         # Act & Assert
-        with pytest.raises(ValueError, match="chat_history_messages cannot be empty or None"):
+        with pytest.raises(ValueError, match="chat_history_messages cannot be None or empty"):
             await service.send_chat_history(mock_turn_context, None)
+
+    @pytest.mark.asyncio
+    async def test_send_chat_history_validates_empty_chat_history_list(
+        self, service, mock_turn_context
+    ):
+        """Test that send_chat_history validates empty chat_history list."""
+        # Act & Assert
+        with pytest.raises(ValueError, match="chat_history_messages cannot be None or empty"):
+            await service.send_chat_history(mock_turn_context, [])
 
     @pytest.mark.asyncio
     async def test_send_chat_history_validates_activity(self, service, chat_history_messages):

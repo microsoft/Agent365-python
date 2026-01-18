@@ -103,3 +103,49 @@ class TestChatMessageRequest:
         assert result["chatHistory"][0]["id"] == "msg-1"
         assert result["chatHistory"][1]["id"] == "msg-2"
         assert result["chatHistory"][2]["id"] == "msg-3"
+
+    def test_chat_message_request_rejects_whitespace_only_conversation_id(self):
+        """Test that ChatMessageRequest rejects whitespace-only conversation_id."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+        message = ChatHistoryMessage("msg-1", "user", "Hello", timestamp)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="conversation_id cannot be empty"):
+            ChatMessageRequest("   ", "msg-456", "How are you?", [message])
+
+    def test_chat_message_request_rejects_whitespace_only_message_id(self):
+        """Test that ChatMessageRequest rejects whitespace-only message_id."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+        message = ChatHistoryMessage("msg-1", "user", "Hello", timestamp)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="message_id cannot be empty"):
+            ChatMessageRequest("conv-123", "   ", "How are you?", [message])
+
+    def test_chat_message_request_rejects_whitespace_only_user_message(self):
+        """Test that ChatMessageRequest rejects whitespace-only user_message."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+        message = ChatHistoryMessage("msg-1", "user", "Hello", timestamp)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="user_message cannot be empty"):
+            ChatMessageRequest("conv-123", "msg-456", "   ", [message])
+
+    def test_chat_message_request_rejects_tab_only_conversation_id(self):
+        """Test that ChatMessageRequest rejects tab-only conversation_id."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+        message = ChatHistoryMessage("msg-1", "user", "Hello", timestamp)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="conversation_id cannot be empty"):
+            ChatMessageRequest("\t\t", "msg-456", "How are you?", [message])
+
+    def test_chat_message_request_rejects_none_chat_history(self):
+        """Test that ChatMessageRequest rejects None chat_history."""
+        # Act & Assert
+        with pytest.raises(ValueError, match="chat_history cannot be empty"):
+            ChatMessageRequest("conv-123", "msg-456", "How are you?", None)
