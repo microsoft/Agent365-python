@@ -25,6 +25,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 # Third-party imports
 import aiohttp
@@ -510,26 +511,33 @@ class McpToolServerConfigurationService:
         turn_context: TurnContext,
         chat_history_messages: List[ChatHistoryMessage],
         options: Optional[ToolOptions] = None,
-    ):
+    ) -> OperationResult:
         """
         Sends chat history to the MCP platform for real-time threat protection.
 
         Args:
             turn_context: TurnContext from the Agents SDK containing conversation information.
-            chat_history_messages: List of ChatHistoryMessage objects representing the chat history.
+                          Must have a valid activity with conversation.id, activity.id, and
+                          activity.text.
+            chat_history_messages: List of ChatHistoryMessage objects representing the chat
+                                   history. Must be non-empty.
             options: Optional ToolOptions instance containing optional parameters.
 
         Returns:
             OperationResult: An OperationResult indicating success or failure.
+                             On success, returns OperationResult.success().
+                             On failure, returns OperationResult.failed() with error details.
 
         Raises:
-            ValueError: If required parameters are invalid or empty.
+            ValueError: If turn_context is None, chat_history_messages is None or empty,
+                        turn_context.activity is None, or any of the required fields
+                        (conversation.id, activity.id, activity.text) are missing or empty.
         """
         # Validate input parameters
-        if not turn_context:
-            raise ValueError("turn_context cannot be empty or None")
-        if not chat_history_messages:
-            raise ValueError("chat_history_messages cannot be empty or None")
+        if turn_context is None:
+            raise ValueError("turn_context cannot be None")
+        if chat_history_messages is None or len(chat_history_messages) == 0:
+            raise ValueError("chat_history_messages cannot be None or empty")
 
         # Extract required information from turn context
         if not turn_context.activity:
@@ -541,13 +549,13 @@ class McpToolServerConfigurationService:
         message_id = turn_context.activity.id
         user_message = turn_context.activity.text
 
-        if not conversation_id:
+        if conversation_id is None or (isinstance(conversation_id, str) and not conversation_id.strip()):
             raise ValueError(
                 "conversation_id cannot be empty or None (from turn_context.activity.conversation.id)"
             )
-        if not message_id:
+        if message_id is None or (isinstance(message_id, str) and not message_id.strip()):
             raise ValueError("message_id cannot be empty or None (from turn_context.activity.id)")
-        if not user_message:
+        if user_message is None or (isinstance(user_message, str) and not user_message.strip()):
             raise ValueError(
                 "user_message cannot be empty or None (from turn_context.activity.text)"
             )
@@ -559,7 +567,9 @@ class McpToolServerConfigurationService:
         # Get the endpoint URL
         endpoint = get_chat_history_endpoint()
 
-        self._logger.debug(f"Sending chat history to endpoint: {endpoint}")
+        # Log only the URL path to avoid accidentally exposing sensitive data in query strings
+        parsed_url = urlparse(endpoint)
+        self._logger.debug(f"Sending chat history to endpoint path: {parsed_url.path}")
 
         # Create the request payload
         request = ChatMessageRequest(
@@ -581,21 +591,27 @@ class McpToolServerConfigurationService:
             # Convert request to JSON
             json_data = json.dumps(request.to_dict())
 
-            # Send POST request
-            async with aiohttp.ClientSession() as session:
+            # Send POST request with timeout to prevent indefinite hangs
+            timeout = aiohttp.ClientTimeout(total=30)  # 30 second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(endpoint, headers=headers, data=json_data) as response:
                     if response.status == 200:
                         self._logger.info("Successfully sent chat history to MCP platform")
                         return OperationResult.success()
                     else:
                         error_text = await response.text()
-                        error_msg = f"HTTP {response.status}: {error_text}"
                         self._logger.error(
-                            f"HTTP error sending chat history to '{endpoint}': {error_msg}"
+                            f"HTTP error sending chat history: HTTP {response.status}"
                         )
-                        return OperationResult.failed(
-                            OperationError(Exception(f"HTTP error: {error_msg}"))
+                        # Use ClientResponseError for consistent error handling
+                        http_error = aiohttp.ClientResponseError(
+                            request_info=response.request_info,
+                            history=response.history,
+                            status=response.status,
+                            message=error_text,
+                            headers=response.headers,
                         )
+                        return OperationResult.failed(OperationError(http_error))
 
         except aiohttp.ClientError as http_ex:
             self._logger.error(f"HTTP error sending chat history to '{endpoint}': {str(http_ex)}")
