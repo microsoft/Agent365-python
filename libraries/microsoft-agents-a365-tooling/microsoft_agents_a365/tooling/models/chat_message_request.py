@@ -6,7 +6,7 @@ Chat Message Request model.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import Any, Dict, List
 
 from .chat_history_message import ChatHistoryMessage
 
@@ -33,22 +33,30 @@ class ChatMessageRequest:
     chat_history: List[ChatHistoryMessage]
 
     def __post_init__(self):
-        """Validate the request after initialization."""
-        if not self.conversation_id:
+        """
+        Validate the request after initialization.
+
+        Ensures that all required fields are present and non-empty.
+
+        Raises:
+            ValueError: If conversation_id, message_id, or user_message is empty
+                        or whitespace-only, or if chat_history is None or empty.
+        """
+        if not self.conversation_id or not self.conversation_id.strip():
             raise ValueError("conversation_id cannot be empty")
-        if not self.message_id:
+        if not self.message_id or not self.message_id.strip():
             raise ValueError("message_id cannot be empty")
-        if not self.user_message:
+        if not self.user_message or not self.user_message.strip():
             raise ValueError("user_message cannot be empty")
-        if not self.chat_history:
+        if self.chat_history is None or len(self.chat_history) == 0:
             raise ValueError("chat_history cannot be empty")
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         """
         Convert the request to a dictionary for JSON serialization.
 
         Returns:
-            dict: Dictionary representation of the request.
+            Dict[str, Any]: Dictionary representation of the request.
         """
         return {
             "conversationId": self.conversation_id,
