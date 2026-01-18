@@ -46,6 +46,17 @@ from microsoft_agents_a365.runtime.utility import Utility as RuntimeUtility
 
 
 # ==============================================================================
+# CONSTANTS
+# ==============================================================================
+
+# HTTP timeout in seconds for request operations
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
+
+# HTTP status code for successful response
+HTTP_STATUS_OK = 200
+
+
+# ==============================================================================
 # MAIN SERVICE CLASS
 # ==============================================================================
 
@@ -532,6 +543,20 @@ class McpToolServerConfigurationService:
             ValueError: If turn_context is None, chat_history_messages is None or empty,
                         turn_context.activity is None, or any of the required fields
                         (conversation.id, activity.id, activity.text) are missing or empty.
+
+        Example:
+            >>> from datetime import datetime, timezone
+            >>> from microsoft_agents_a365.tooling.models import ChatHistoryMessage
+            >>>
+            >>> history = [
+            ...     ChatHistoryMessage("msg-1", "user", "Hello", datetime.now(timezone.utc)),
+            ...     ChatHistoryMessage("msg-2", "assistant", "Hi!", datetime.now(timezone.utc))
+            ... ]
+            >>>
+            >>> service = McpToolServerConfigurationService()
+            >>> result = await service.send_chat_history(turn_context, history)
+            >>> if result.succeeded:
+            ...     print("Chat history sent successfully")
         """
         # Validate input parameters
         if turn_context is None:
@@ -543,13 +568,15 @@ class McpToolServerConfigurationService:
         if not turn_context.activity:
             raise ValueError("turn_context.activity cannot be None")
 
-        conversation_id = (
+        conversation_id: Optional[str] = (
             turn_context.activity.conversation.id if turn_context.activity.conversation else None
         )
-        message_id = turn_context.activity.id
-        user_message = turn_context.activity.text
+        message_id: Optional[str] = turn_context.activity.id
+        user_message: Optional[str] = turn_context.activity.text
 
-        if conversation_id is None or (isinstance(conversation_id, str) and not conversation_id.strip()):
+        if conversation_id is None or (
+            isinstance(conversation_id, str) and not conversation_id.strip()
+        ):
             raise ValueError(
                 "conversation_id cannot be empty or None (from turn_context.activity.conversation.id)"
             )
@@ -592,16 +619,17 @@ class McpToolServerConfigurationService:
             json_data = json.dumps(request.to_dict())
 
             # Send POST request with timeout to prevent indefinite hangs
-            timeout = aiohttp.ClientTimeout(total=30)  # 30 second timeout
+            timeout = aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT_SECONDS)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(endpoint, headers=headers, data=json_data) as response:
-                    if response.status == 200:
+                    if response.status == HTTP_STATUS_OK:
                         self._logger.info("Successfully sent chat history to MCP platform")
                         return OperationResult.success()
                     else:
                         error_text = await response.text()
                         self._logger.error(
-                            f"HTTP error sending chat history: HTTP {response.status}"
+                            f"HTTP error sending chat history: HTTP {response.status}. "
+                            f"Response: {error_text[:500]}"
                         )
                         # Use ClientResponseError for consistent error handling
                         http_error = aiohttp.ClientResponseError(
@@ -613,14 +641,16 @@ class McpToolServerConfigurationService:
                         )
                         return OperationResult.failed(OperationError(http_error))
 
-        except aiohttp.ClientError as http_ex:
-            self._logger.error(f"HTTP error sending chat history to '{endpoint}': {str(http_ex)}")
-            return OperationResult.failed(OperationError(http_ex))
         except asyncio.TimeoutError as timeout_ex:
+            # Catch TimeoutError before ClientError since aiohttp.ServerTimeoutError
+            # inherits from both asyncio.TimeoutError and aiohttp.ClientError
             self._logger.error(
                 f"Request timeout sending chat history to '{endpoint}': {str(timeout_ex)}"
             )
             return OperationResult.failed(OperationError(timeout_ex))
+        except aiohttp.ClientError as http_ex:
+            self._logger.error(f"HTTP error sending chat history to '{endpoint}': {str(http_ex)}")
+            return OperationResult.failed(OperationError(http_ex))
         except Exception as ex:
             self._logger.error(f"Failed to send chat history to '{endpoint}': {str(ex)}")
             return OperationResult.failed(OperationError(ex))

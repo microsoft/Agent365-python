@@ -46,10 +46,13 @@ class OperationResult:
         """
         Get the list of errors that occurred during the operation.
 
+        Note:
+            This property returns a defensive copy of the internal error list
+            to prevent external modifications, which is especially important for
+            protecting the singleton instance returned by success().
+
         Returns:
             List[OperationError]: A copy of the list of operation errors.
-                The returned list is a defensive copy to protect the singleton
-                instance returned by success() from accidental modification.
         """
         return list(self._errors)
 
@@ -61,8 +64,6 @@ class OperationResult:
         Returns:
             OperationResult: An OperationResult indicating a successful operation.
         """
-        if OperationResult._success_instance is None:
-            OperationResult._success_instance = OperationResult(succeeded=True)
         return OperationResult._success_instance
 
     @staticmethod
@@ -91,3 +92,7 @@ class OperationResult:
         else:
             error_messages = ", ".join(str(error.message) for error in self._errors)
             return f"Failed: {error_messages}" if error_messages else "Failed"
+
+
+# Module-level eager initialization (thread-safe by Python's import lock)
+OperationResult._success_instance = OperationResult(succeeded=True)

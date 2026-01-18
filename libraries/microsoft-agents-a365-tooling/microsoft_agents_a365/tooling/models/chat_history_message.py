@@ -42,11 +42,11 @@ class ChatHistoryMessage:
                         or if timestamp is None.
         """
         if not self.id or not self.id.strip():
-            raise ValueError("id cannot be empty")
+            raise ValueError("id cannot be empty or whitespace-only")
         if not self.role or not self.role.strip():
-            raise ValueError("role cannot be empty")
+            raise ValueError("role cannot be empty or whitespace-only")
         if not self.content or not self.content.strip():
-            raise ValueError("content cannot be empty")
+            raise ValueError("content cannot be empty or whitespace-only")
         if self.timestamp is None:
             raise ValueError("timestamp cannot be None")
 
