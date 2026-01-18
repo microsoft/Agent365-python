@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+from microsoft_agents.hosting.core import TurnContext
 from microsoft_agents_a365.tooling.models import ChatHistoryMessage
 from microsoft_agents_a365.tooling.services import McpToolServerConfigurationService
 
@@ -16,8 +17,8 @@ class TestSendChatHistory:
 
     @pytest.fixture
     def mock_turn_context(self):
-        """Create a mock TurnContext."""
-        mock_context = Mock()
+        """Create a mock TurnContext with spec for stricter interface validation."""
+        mock_context = Mock(spec=TurnContext)
         mock_activity = Mock()
         mock_conversation = Mock()
 
