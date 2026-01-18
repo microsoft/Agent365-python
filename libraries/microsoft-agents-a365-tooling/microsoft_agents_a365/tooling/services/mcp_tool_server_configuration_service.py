@@ -549,7 +549,9 @@ class McpToolServerConfigurationService:
         message_id = turn_context.activity.id
         user_message = turn_context.activity.text
 
-        if conversation_id is None or (isinstance(conversation_id, str) and not conversation_id.strip()):
+        if conversation_id is None or (
+            isinstance(conversation_id, str) and not conversation_id.strip()
+        ):
             raise ValueError(
                 "conversation_id cannot be empty or None (from turn_context.activity.conversation.id)"
             )
@@ -601,7 +603,8 @@ class McpToolServerConfigurationService:
                     else:
                         error_text = await response.text()
                         self._logger.error(
-                            f"HTTP error sending chat history: HTTP {response.status}"
+                            f"HTTP error sending chat history: HTTP {response.status}. "
+                            f"Response: {error_text[:500]}"
                         )
                         # Use ClientResponseError for consistent error handling
                         http_error = aiohttp.ClientResponseError(
