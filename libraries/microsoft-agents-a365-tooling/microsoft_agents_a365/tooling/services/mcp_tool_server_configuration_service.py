@@ -616,14 +616,16 @@ class McpToolServerConfigurationService:
                         )
                         return OperationResult.failed(OperationError(http_error))
 
-        except aiohttp.ClientError as http_ex:
-            self._logger.error(f"HTTP error sending chat history to '{endpoint}': {str(http_ex)}")
-            return OperationResult.failed(OperationError(http_ex))
         except asyncio.TimeoutError as timeout_ex:
+            # Catch TimeoutError before ClientError since aiohttp.ServerTimeoutError
+            # inherits from both asyncio.TimeoutError and aiohttp.ClientError
             self._logger.error(
                 f"Request timeout sending chat history to '{endpoint}': {str(timeout_ex)}"
             )
             return OperationResult.failed(OperationError(timeout_ex))
+        except aiohttp.ClientError as http_ex:
+            self._logger.error(f"HTTP error sending chat history to '{endpoint}': {str(http_ex)}")
+            return OperationResult.failed(OperationError(http_ex))
         except Exception as ex:
             self._logger.error(f"Failed to send chat history to '{endpoint}': {str(ex)}")
             return OperationResult.failed(OperationError(ex))
