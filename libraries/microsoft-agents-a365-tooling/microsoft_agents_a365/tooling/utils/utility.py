@@ -11,6 +11,9 @@ import os
 # Constants for base URLs
 MCP_PLATFORM_PROD_BASE_URL = "https://agent365.svc.cloud.microsoft"
 
+# API endpoint paths
+CHAT_HISTORY_ENDPOINT_PATH = "/agents/real-time-threat-protection/chat-message"
+
 PPAPI_TOKEN_SCOPE = "https://api.powerplatform.com"
 PROD_MCP_PLATFORM_AUTHENTICATION_SCOPE = "ea9ffc3e-8a23-4a7d-836d-234d7c7565c1/.default"
 
@@ -99,4 +102,4 @@ def get_chat_history_endpoint() -> str:
     Returns:
         str: The chat history endpoint URL.
     """
-    return f"{_get_mcp_platform_base_url()}/agents/real-time-threat-protection/chat-message"
+    return f"{_get_mcp_platform_base_url()}{CHAT_HISTORY_ENDPOINT_PATH}"
