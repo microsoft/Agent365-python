@@ -104,10 +104,13 @@ coverage/
 
 # We should have at some point .vscode, but for not ignore since we don't have standard
 .vscode
-.claude/
-**/.claude/
 .idea/
 
 # OS-specific files
 .DS_Store
 Thumbs.db
+
+# Claude Code local settings
+.claude/settings.local.json
+
+.codereviews/
