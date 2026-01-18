@@ -61,8 +61,6 @@ class OperationResult:
         Returns:
             OperationResult: An OperationResult indicating a successful operation.
         """
-        if OperationResult._success_instance is None:
-            OperationResult._success_instance = OperationResult(succeeded=True)
         return OperationResult._success_instance
 
     @staticmethod
@@ -91,3 +89,7 @@ class OperationResult:
         else:
             error_messages = ", ".join(str(error.message) for error in self._errors)
             return f"Failed: {error_messages}" if error_messages else "Failed"
+
+
+# Module-level eager initialization (thread-safe by Python's import lock)
+OperationResult._success_instance = OperationResult(succeeded=True)
