@@ -543,11 +543,11 @@ class McpToolServerConfigurationService:
         if not turn_context.activity:
             raise ValueError("turn_context.activity cannot be None")
 
-        conversation_id = (
+        conversation_id: Optional[str] = (
             turn_context.activity.conversation.id if turn_context.activity.conversation else None
         )
-        message_id = turn_context.activity.id
-        user_message = turn_context.activity.text
+        message_id: Optional[str] = turn_context.activity.id
+        user_message: Optional[str] = turn_context.activity.text
 
         if conversation_id is None or (
             isinstance(conversation_id, str) and not conversation_id.strip()
