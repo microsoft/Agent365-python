@@ -153,7 +153,9 @@ class TestChatHistoryMessage:
         timestamp = datetime.now(timezone.utc)
 
         # Act & Assert
-        with pytest.raises(ValidationError, match="Input should be 'user', 'assistant' or 'system'"):
+        with pytest.raises(
+            ValidationError, match="Input should be 'user', 'assistant' or 'system'"
+        ):
             ChatHistoryMessage(
                 id="msg-1",
                 role="invalid_role",

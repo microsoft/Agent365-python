@@ -18,7 +18,9 @@ class TestChatMessageRequest:
         # Arrange
         timestamp = datetime.now(timezone.utc)
         message1 = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
-        message2 = ChatHistoryMessage(id="msg-2", role="assistant", content="Hi there!", timestamp=timestamp)
+        message2 = ChatHistoryMessage(
+            id="msg-2", role="assistant", content="Hi there!", timestamp=timestamp
+        )
         chat_history = [message1, message2]
 
         # Act
@@ -123,8 +125,12 @@ class TestChatMessageRequest:
         # Arrange
         timestamp = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
         message1 = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
-        message2 = ChatHistoryMessage(id="msg-2", role="assistant", content="Hi!", timestamp=timestamp)
-        message3 = ChatHistoryMessage(id="msg-3", role="user", content="How are you?", timestamp=timestamp)
+        message2 = ChatHistoryMessage(
+            id="msg-2", role="assistant", content="Hi!", timestamp=timestamp
+        )
+        message3 = ChatHistoryMessage(
+            id="msg-3", role="user", content="How are you?", timestamp=timestamp
+        )
         chat_history = [message1, message2, message3]
 
         # Act
