@@ -6,6 +6,7 @@
 from datetime import datetime, timezone
 
 import pytest
+from pydantic import ValidationError
 from microsoft_agents_a365.tooling.models import ChatHistoryMessage
 
 
@@ -16,7 +17,12 @@ class TestChatHistoryMessage:
         """Test that ChatHistoryMessage can be instantiated with valid parameters."""
         # Arrange & Act
         timestamp = datetime.now(timezone.utc)
-        message = ChatHistoryMessage("msg-123", "user", "Hello, world!", timestamp)
+        message = ChatHistoryMessage(
+            id="msg-123",
+            role="user",
+            content="Hello, world!",
+            timestamp=timestamp,
+        )
 
         # Assert
         assert message is not None
@@ -29,34 +35,32 @@ class TestChatHistoryMessage:
         """Test that ChatHistoryMessage converts to dictionary correctly."""
         # Arrange
         timestamp = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
-        message = ChatHistoryMessage("msg-456", "assistant", "How can I help you?", timestamp)
+        message = ChatHistoryMessage(
+            id="msg-456",
+            role="assistant",
+            content="How can I help you?",
+            timestamp=timestamp,
+        )
 
         # Act
-        result = message.to_dict()
+        result = message.model_dump(mode="json")
 
         # Assert
         assert result["id"] == "msg-456"
         assert result["role"] == "assistant"
         assert result["content"] == "How can I help you?"
-        assert result["timestamp"] == "2024-01-15T10:30:00+00:00"
+        assert result["timestamp"] == "2024-01-15T10:30:00Z"
 
-    def test_chat_history_message_requires_non_empty_id(self):
-        """Test that ChatHistoryMessage requires a non-empty id."""
-        # Arrange
-        timestamp = datetime.now(timezone.utc)
+    def test_chat_history_message_with_optional_id_none(self):
+        """Test that ChatHistoryMessage allows None for optional id field."""
+        # Arrange & Act
+        message = ChatHistoryMessage(
+            role="user",
+            content="Test content",
+        )
 
-        # Act & Assert
-        with pytest.raises(ValueError, match="id cannot be empty"):
-            ChatHistoryMessage("", "user", "Test content", timestamp)
-
-    def test_chat_history_message_requires_non_empty_role(self):
-        """Test that ChatHistoryMessage requires a non-empty role."""
-        # Arrange
-        timestamp = datetime.now(timezone.utc)
-
-        # Act & Assert
-        with pytest.raises(ValueError, match="role cannot be empty"):
-            ChatHistoryMessage("msg-001", "", "Test content", timestamp)
+        # Assert
+        assert message.id is None
 
     def test_chat_history_message_requires_non_empty_content(self):
         """Test that ChatHistoryMessage requires a non-empty content."""
@@ -64,20 +68,35 @@ class TestChatHistoryMessage:
         timestamp = datetime.now(timezone.utc)
 
         # Act & Assert
-        with pytest.raises(ValueError, match="content cannot be empty"):
-            ChatHistoryMessage("msg-001", "user", "", timestamp)
+        with pytest.raises(ValidationError, match="cannot be empty or whitespace"):
+            ChatHistoryMessage(
+                id="msg-001",
+                role="user",
+                content="",
+                timestamp=timestamp,
+            )
 
-    def test_chat_history_message_requires_timestamp(self):
-        """Test that ChatHistoryMessage requires a timestamp."""
-        # Act & Assert
-        with pytest.raises(ValueError, match="timestamp cannot be None"):
-            ChatHistoryMessage("msg-001", "user", "Test content", None)
+    def test_chat_history_message_with_optional_timestamp_none(self):
+        """Test that ChatHistoryMessage allows None for optional timestamp field."""
+        # Arrange & Act
+        message = ChatHistoryMessage(
+            role="user",
+            content="Test content",
+        )
+
+        # Assert
+        assert message.timestamp is None
 
     def test_chat_history_message_supports_system_role(self):
         """Test that ChatHistoryMessage supports system role."""
         # Arrange & Act
         timestamp = datetime.now(timezone.utc)
-        message = ChatHistoryMessage("sys-001", "system", "You are a helpful assistant.", timestamp)
+        message = ChatHistoryMessage(
+            id="sys-001",
+            role="system",
+            content="You are a helpful assistant.",
+            timestamp=timestamp,
+        )
 
         # Assert
         assert message.role == "system"
@@ -86,32 +105,19 @@ class TestChatHistoryMessage:
         """Test that ChatHistoryMessage preserves timestamp precision."""
         # Arrange
         timestamp = datetime(2024, 1, 15, 10, 30, 45, 123000, tzinfo=timezone.utc)
-        message = ChatHistoryMessage("msg-001", "user", "Test", timestamp)
+        message = ChatHistoryMessage(
+            id="msg-001",
+            role="user",
+            content="Test",
+            timestamp=timestamp,
+        )
 
         # Act
-        message_dict = message.to_dict()
+        message_dict = message.model_dump(mode="json")
 
         # Assert
         assert message.timestamp == timestamp
-        assert "2024-01-15T10:30:45.123000" in message_dict["timestamp"]
-
-    def test_chat_history_message_rejects_whitespace_only_id(self):
-        """Test that ChatHistoryMessage rejects whitespace-only id."""
-        # Arrange
-        timestamp = datetime.now(timezone.utc)
-
-        # Act & Assert
-        with pytest.raises(ValueError, match="id cannot be empty"):
-            ChatHistoryMessage("   ", "user", "Content", timestamp)
-
-    def test_chat_history_message_rejects_whitespace_only_role(self):
-        """Test that ChatHistoryMessage rejects whitespace-only role."""
-        # Arrange
-        timestamp = datetime.now(timezone.utc)
-
-        # Act & Assert
-        with pytest.raises(ValueError, match="role cannot be empty"):
-            ChatHistoryMessage("msg-1", "   ", "Content", timestamp)
+        assert "2024-01-15T10:30:45.123" in message_dict["timestamp"]
 
     def test_chat_history_message_rejects_whitespace_only_content(self):
         """Test that ChatHistoryMessage rejects whitespace-only content."""
@@ -119,17 +125,13 @@ class TestChatHistoryMessage:
         timestamp = datetime.now(timezone.utc)
 
         # Act & Assert
-        with pytest.raises(ValueError, match="content cannot be empty"):
-            ChatHistoryMessage("msg-1", "user", "   ", timestamp)
-
-    def test_chat_history_message_rejects_tab_only_id(self):
-        """Test that ChatHistoryMessage rejects tab-only id."""
-        # Arrange
-        timestamp = datetime.now(timezone.utc)
-
-        # Act & Assert
-        with pytest.raises(ValueError, match="id cannot be empty"):
-            ChatHistoryMessage("\t", "user", "Content", timestamp)
+        with pytest.raises(ValidationError, match="cannot be empty or whitespace"):
+            ChatHistoryMessage(
+                id="msg-1",
+                role="user",
+                content="   ",
+                timestamp=timestamp,
+            )
 
     def test_chat_history_message_rejects_newline_only_content(self):
         """Test that ChatHistoryMessage rejects newline-only content."""
@@ -137,5 +139,37 @@ class TestChatHistoryMessage:
         timestamp = datetime.now(timezone.utc)
 
         # Act & Assert
-        with pytest.raises(ValueError, match="content cannot be empty"):
-            ChatHistoryMessage("msg-1", "user", "\n\n", timestamp)
+        with pytest.raises(ValidationError, match="cannot be empty or whitespace"):
+            ChatHistoryMessage(
+                id="msg-1",
+                role="user",
+                content="\n\n",
+                timestamp=timestamp,
+            )
+
+    def test_chat_history_message_rejects_invalid_role(self):
+        """Test that ChatHistoryMessage rejects invalid role values."""
+        # Arrange
+        timestamp = datetime.now(timezone.utc)
+
+        # Act & Assert
+        with pytest.raises(ValidationError, match="Input should be 'user', 'assistant' or 'system'"):
+            ChatHistoryMessage(
+                id="msg-1",
+                role="invalid_role",
+                content="Test content",
+                timestamp=timestamp,
+            )
+
+    def test_chat_history_message_supports_all_valid_roles(self):
+        """Test that ChatHistoryMessage supports all valid role values."""
+        timestamp = datetime.now(timezone.utc)
+
+        for role in ["user", "assistant", "system"]:
+            message = ChatHistoryMessage(
+                id=f"msg-{role}",
+                role=role,
+                content="Test content",
+                timestamp=timestamp,
+            )
+            assert message.role == role

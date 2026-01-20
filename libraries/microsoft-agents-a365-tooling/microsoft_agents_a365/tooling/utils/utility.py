@@ -74,23 +74,24 @@ def _get_mcp_platform_base_url() -> str:
     Returns:
         str: The base URL for MCP platform.
     """
-    if os.getenv("MCP_PLATFORM_ENDPOINT") is not None:
-        return os.getenv("MCP_PLATFORM_ENDPOINT")
+    endpoint = os.getenv("MCP_PLATFORM_ENDPOINT")
+    if endpoint is not None:
+        return endpoint
 
     return MCP_PLATFORM_PROD_BASE_URL
 
 
-def get_mcp_platform_authentication_scope():
+def get_mcp_platform_authentication_scope() -> list[str]:
     """
     Gets the MCP platform authentication scope.
 
     Returns:
-        list: A list containing the appropriate MCP platform authentication scope.
+        list[str]: A list containing the appropriate MCP platform authentication scope.
     """
-    envScope = os.getenv("MCP_PLATFORM_AUTHENTICATION_SCOPE", "")
+    env_scope = os.getenv("MCP_PLATFORM_AUTHENTICATION_SCOPE", "")
 
-    if envScope:
-        return [envScope]
+    if env_scope:
+        return [env_scope]
 
     return [PROD_MCP_PLATFORM_AUTHENTICATION_SCOPE]
 

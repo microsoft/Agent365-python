@@ -615,8 +615,8 @@ class McpToolServerConfigurationService:
                 "Content-Type": "application/json",
             }
 
-            # Convert request to JSON
-            json_data = json.dumps(request.to_dict())
+            # Convert request to JSON (using Pydantic's model_dump with aliases for camelCase)
+            json_data = json.dumps(request.model_dump(by_alias=True, mode="json"))
 
             # Send POST request with timeout to prevent indefinite hangs
             timeout = aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT_SECONDS)

@@ -1,65 +1,49 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""
-Chat History Message model.
-"""
+"""Chat history message model."""
 
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict
+from typing import Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-@dataclass
-class ChatHistoryMessage:
+class ChatHistoryMessage(BaseModel):
     """
     Represents a single message in the chat history.
 
-    This class is used to send chat history to the MCP platform for real-time
-    threat protection analysis.
+    This model is used to capture individual messages exchanged between
+    users and the AI assistant for threat protection analysis and
+    compliance monitoring.
+
+    Attributes:
+        id: Optional unique identifier for the message.
+        role: The role of the message sender (user, assistant, or system).
+        content: The text content of the message.
+        timestamp: Optional timestamp when the message was created.
+
+    Example:
+        >>> message = ChatHistoryMessage(role="user", content="Hello, how can you help?")
+        >>> print(message.role)
+        'user'
+        >>> print(message.content)
+        'Hello, how can you help?'
     """
 
-    #: The unique identifier for the chat message.
-    id: str
+    model_config = ConfigDict(populate_by_name=True)
 
-    #: The role of the message sender (e.g., "user", "assistant", "system").
-    role: str
+    id: Optional[str] = Field(default=None, description="Unique message identifier")
+    role: Literal["user", "assistant", "system"] = Field(
+        ..., description="The role of the message sender"
+    )
+    content: str = Field(..., description="The message content")
+    timestamp: Optional[datetime] = Field(default=None, description="When the message was created")
 
-    #: The content of the chat message.
-    content: str
-
-    #: The timestamp of when the message was sent.
-    timestamp: datetime
-
-    def __post_init__(self):
-        """
-        Validate the message after initialization.
-
-        Ensures that all required fields are present and non-empty.
-
-        Raises:
-            ValueError: If id, role, or content is empty or whitespace-only,
-                        or if timestamp is None.
-        """
-        if not self.id or not self.id.strip():
-            raise ValueError("id cannot be empty or whitespace-only")
-        if not self.role or not self.role.strip():
-            raise ValueError("role cannot be empty or whitespace-only")
-        if not self.content or not self.content.strip():
-            raise ValueError("content cannot be empty or whitespace-only")
-        if self.timestamp is None:
-            raise ValueError("timestamp cannot be None")
-
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert the message to a dictionary for JSON serialization.
-
-        Returns:
-            Dict[str, Any]: Dictionary representation of the message.
-        """
-        return {
-            "id": self.id,
-            "role": self.role,
-            "content": self.content,
-            "timestamp": self.timestamp.isoformat(),
-        }
+    @field_validator("content")
+    @classmethod
+    def content_not_empty(cls, v: str) -> str:
+        """Validate that content is not empty or whitespace-only."""
+        if not v or not v.strip():
+            raise ValueError("content cannot be empty or whitespace")
+        return v

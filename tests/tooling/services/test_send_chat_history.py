@@ -35,8 +35,8 @@ class TestSendChatHistory:
         """Create sample chat history messages."""
         timestamp = datetime.now(timezone.utc)
         return [
-            ChatHistoryMessage("msg-1", "user", "Hello", timestamp),
-            ChatHistoryMessage("msg-2", "assistant", "Hi there!", timestamp),
+            ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp),
+            ChatHistoryMessage(id="msg-2", role="assistant", content="Hi there!", timestamp=timestamp),
         ]
 
     @pytest.fixture

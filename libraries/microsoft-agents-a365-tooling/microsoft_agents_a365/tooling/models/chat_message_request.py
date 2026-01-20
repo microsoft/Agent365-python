@@ -1,66 +1,64 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""
-Chat Message Request model.
-"""
+"""Chat message request model."""
 
-from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import List
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .chat_history_message import ChatHistoryMessage
 
 
-@dataclass
-class ChatMessageRequest:
+class ChatMessageRequest(BaseModel):
     """
-    Represents the request payload for a real-time threat protection check on a chat message.
+    Request payload for sending chat history to MCP platform.
 
-    This class encapsulates the information needed to send chat history to the MCP platform
-    for threat analysis.
+    This model represents the complete request body sent to the MCP platform's
+    chat history endpoint for threat protection analysis. It includes the
+    current conversation context and historical messages.
+
+    The model uses field aliases to serialize to camelCase JSON format
+    as required by the MCP platform API.
+
+    Attributes:
+        conversation_id: Unique identifier for the conversation.
+        message_id: Unique identifier for the current message.
+        user_message: The current user message being processed.
+        chat_history: List of previous messages in the conversation.
+
+    Example:
+        >>> from microsoft_agents_a365.tooling.models import ChatHistoryMessage
+        >>> request = ChatMessageRequest(
+        ...     conversation_id="conv-123",
+        ...     message_id="msg-456",
+        ...     user_message="What is the weather today?",
+        ...     chat_history=[
+        ...         ChatHistoryMessage(role="user", content="Hello"),
+        ...         ChatHistoryMessage(role="assistant", content="Hi there!"),
+        ...     ]
+        ... )
+        >>> # Serialize to camelCase JSON
+        >>> json_dict = request.model_dump(by_alias=True)
+        >>> print(json_dict["conversationId"])
+        'conv-123'
     """
 
-    #: The unique identifier for the conversation.
-    conversation_id: str
+    model_config = ConfigDict(populate_by_name=True)
 
-    #: The unique identifier for the message within the conversation.
-    message_id: str
+    conversation_id: str = Field(
+        ..., alias="conversationId", description="Unique conversation identifier"
+    )
+    message_id: str = Field(..., alias="messageId", description="Current message identifier")
+    user_message: str = Field(..., alias="userMessage", description="The current user message")
+    chat_history: List[ChatHistoryMessage] = Field(
+        ..., alias="chatHistory", description="Previous messages in the conversation"
+    )
 
-    #: The content of the user's message.
-    user_message: str
-
-    #: The chat history messages.
-    chat_history: List[ChatHistoryMessage]
-
-    def __post_init__(self):
-        """
-        Validate the request after initialization.
-
-        Ensures that all required fields are present and non-empty.
-
-        Raises:
-            ValueError: If conversation_id, message_id, or user_message is empty
-                        or whitespace-only, or if chat_history is None or empty.
-        """
-        if not self.conversation_id or not self.conversation_id.strip():
-            raise ValueError("conversation_id cannot be empty")
-        if not self.message_id or not self.message_id.strip():
-            raise ValueError("message_id cannot be empty")
-        if not self.user_message or not self.user_message.strip():
-            raise ValueError("user_message cannot be empty")
-        if self.chat_history is None or len(self.chat_history) == 0:
-            raise ValueError("chat_history cannot be empty")
-
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert the request to a dictionary for JSON serialization.
-
-        Returns:
-            Dict[str, Any]: Dictionary representation of the request.
-        """
-        return {
-            "conversationId": self.conversation_id,
-            "messageId": self.message_id,
-            "userMessage": self.user_message,
-            "chatHistory": [msg.to_dict() for msg in self.chat_history],
-        }
+    @field_validator("conversation_id", "message_id", "user_message")
+    @classmethod
+    def not_empty(cls, v: str) -> str:
+        """Validate that string fields are not empty or whitespace-only."""
+        if not v or not v.strip():
+            raise ValueError("Field cannot be empty or whitespace")
+        return v

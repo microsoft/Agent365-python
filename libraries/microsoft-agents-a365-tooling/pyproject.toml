@@ -52,6 +52,7 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 "*" = ["../../LICENSE"]
+"microsoft_agents_a365.tooling" = ["py.typed"]
 
 [tool.black]
 line-length = 100
