@@ -76,6 +76,7 @@ Custom Trace Processor for OpenAI Agents SDK
 
 class OpenAIAgentsTraceProcessor(TracingProcessor):
     _MAX_HANDOFFS_IN_FLIGHT = 1000
+    _MAX_PENDING_TOOL_CALLS = 1000
 
     def __init__(self, tracer: Tracer) -> None:
         self._tracer = tracer
@@ -95,7 +96,9 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         # Track parent-child relationships: child_span_id -> parent_span_id
         self._span_parents: dict[str, str] = {}
         # Track tool_call_ids from GenerationSpan: (function_name, trace_id) -> call_id
-        self._pending_tool_calls: dict[str, str] = {}
+        # Use an OrderedDict and _MAX_PENDING_TOOL_CALLS to cap the size of the dict
+        # in case tool calls are captured but never consumed
+        self._pending_tool_calls: OrderedDict[str, str] = OrderedDict()
 
     # helper
     def _stamp_custom_parent(self, otel_span: OtelSpan, trace_id: str) -> None:
@@ -202,7 +205,9 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                     capture_output_message(agent_span_id, data.output, self._agent_outputs)
             # Capture tool_call_ids for later use by FunctionSpan
             if data.output:
-                capture_tool_call_ids(data.output, self._pending_tool_calls)
+                capture_tool_call_ids(
+                    data.output, self._pending_tool_calls, self._MAX_PENDING_TOOL_CALLS
+                )
             otel_span.update_name(
                 f"{otel_span.attributes[GEN_AI_OPERATION_NAME_KEY]} {otel_span.attributes[GEN_AI_REQUEST_MODEL_KEY]}"
             )
