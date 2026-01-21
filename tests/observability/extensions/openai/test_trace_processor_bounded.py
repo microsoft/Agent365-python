@@ -9,9 +9,7 @@ This test can be run without installing the full package.
 from collections import OrderedDict
 
 
-def capture_tool_call_ids_test(
-    output_list, pending_tool_calls, max_size=1000
-):
+def capture_tool_call_ids_test(output_list, pending_tool_calls, max_size=1000):
     """Test version of capture_tool_call_ids function."""
     if not output_list:
         return
@@ -64,8 +62,12 @@ def test_bounded_size():
         print(f"After adding call {i}: size = {len(pending_tool_calls)}")
 
     # Verify the size does not exceed max_size
-    assert len(pending_tool_calls) <= max_size, f"Size {len(pending_tool_calls)} exceeds max {max_size}"
-    assert len(pending_tool_calls) == max_size, f"Size {len(pending_tool_calls)} should equal max {max_size}"
+    assert len(pending_tool_calls) <= max_size, (
+        f"Size {len(pending_tool_calls)} exceeds max {max_size}"
+    )
+    assert len(pending_tool_calls) == max_size, (
+        f"Size {len(pending_tool_calls)} should equal max {max_size}"
+    )
 
     print(f"\n✅ Final size: {len(pending_tool_calls)} (max: {max_size})")
 
