@@ -21,13 +21,17 @@ from agents.tracing.span_data import (
 from microsoft_agents_a365.observability.core.constants import (
     CUSTOM_PARENT_SPAN_ID_KEY,
     EXECUTE_TOOL_OPERATION_NAME,
+    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
     GEN_AI_REQUEST_MODEL_KEY,
     GEN_AI_SYSTEM_KEY,
+    GEN_AI_TOOL_CALL_ID_KEY,
+    GEN_AI_TOOL_TYPE_KEY,
     INVOKE_AGENT_OPERATION_NAME,
 )
+from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.core.utils import as_utc_nano, safe_json_dumps
 from opentelemetry import trace as ot_trace
 from opentelemetry.context import attach, detach
@@ -44,10 +48,13 @@ from openai.types.responses import (
 )
 
 from .constants import (
-    GEN_AI_GRAPH_NODE_ID,
     GEN_AI_GRAPH_NODE_PARENT_ID,
 )
 from .utils import (
+    capture_input_message,
+    capture_output_message,
+    capture_tool_call_ids,
+    find_ancestor_agent_span_id,
     get_attributes_from_function_span_data,
     get_attributes_from_generation_span_data,
     get_attributes_from_input,
@@ -56,6 +63,7 @@ from .utils import (
     get_span_kind,
     get_span_name,
     get_span_status,
+    get_tool_call_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,6 +87,15 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         # Use an OrderedDict and _MAX_HANDOFFS_IN_FLIGHT to cap the size of the dict
         # in case there are large numbers of orphaned handoffs
         self._reverse_handoffs_dict: OrderedDict[str, str] = OrderedDict()
+        # Track input/output messages for agent spans (keyed by agent span_id)
+        self._agent_inputs: dict[str, str] = {}
+        self._agent_outputs: dict[str, str] = {}
+        # Track agent span IDs to find nearest ancestor
+        self._agent_span_ids: set[str] = set()
+        # Track parent-child relationships: child_span_id -> parent_span_id
+        self._span_parents: dict[str, str] = {}
+        # Track tool_call_ids from GenerationSpan: (function_name, trace_id) -> call_id
+        self._pending_tool_calls: dict[str, str] = {}
 
     # helper
     def _stamp_custom_parent(self, otel_span: OtelSpan, trace_id: str) -> None:
@@ -133,6 +150,12 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         )
         self._otel_spans[span.span_id] = otel_span
         self._tokens[span.span_id] = attach(set_span_in_context(otel_span))
+        # Track parent-child relationship for ancestor lookup
+        if span.parent_id:
+            self._span_parents[span.span_id] = span.parent_id
+        # Track AgentSpan IDs
+        if isinstance(span.span_data, AgentSpanData):
+            self._agent_span_ids.add(span.span_id)
 
     def on_span_end(self, span: Span[Any]) -> None:
         """Called when a span is finished. Should not block or raise exceptions.
@@ -142,6 +165,8 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         """
         if token := self._tokens.pop(span.span_id, None):
             detach(token)  # type: ignore[arg-type]
+        # Clean up parent tracking
+        self._span_parents.pop(span.span_id, None)
         if not (otel_span := self._otel_spans.pop(span.span_id, None)):
             return
         otel_span.update_name(get_span_name(span))
@@ -167,6 +192,17 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
             for k, v in get_attributes_from_generation_span_data(data):
                 otel_span.set_attribute(k, v)
             self._stamp_custom_parent(otel_span, span.trace_id)
+            # Capture input/output messages for nearest ancestor agent span
+            if agent_span_id := find_ancestor_agent_span_id(
+                span.parent_id, self._agent_span_ids, self._span_parents
+            ):
+                if data.input:
+                    capture_input_message(agent_span_id, data.input, self._agent_inputs)
+                if data.output:
+                    capture_output_message(agent_span_id, data.output, self._agent_outputs)
+            # Capture tool_call_ids for later use by FunctionSpan
+            if data.output:
+                capture_tool_call_ids(data.output, self._pending_tool_calls)
             otel_span.update_name(
                 f"{otel_span.attributes[GEN_AI_OPERATION_NAME_KEY]} {otel_span.attributes[GEN_AI_REQUEST_MODEL_KEY]}"
             )
@@ -174,7 +210,12 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
             for k, v in get_attributes_from_function_span_data(data):
                 otel_span.set_attribute(k, v)
             self._stamp_custom_parent(otel_span, span.trace_id)
-            otel_span.update_name(f"{EXECUTE_TOOL_OPERATION_NAME} {data.function_name}")
+            otel_span.set_attribute(GEN_AI_TOOL_TYPE_KEY, data.type)
+            # Set tool_call_id if available from preceding GenerationSpan
+            func_args = data.input if data.input else ""
+            if tool_call_id := get_tool_call_id(data.name, func_args, self._pending_tool_calls):
+                otel_span.set_attribute(GEN_AI_TOOL_CALL_ID_KEY, tool_call_id)
+            otel_span.update_name(f"{EXECUTE_TOOL_OPERATION_NAME} {data.name}")
         elif isinstance(data, MCPListToolsSpanData):
             for k, v in get_attributes_from_mcp_list_tool_span_data(data):
                 otel_span.set_attribute(k, v)
@@ -187,12 +228,19 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 while len(self._reverse_handoffs_dict) > self._MAX_HANDOFFS_IN_FLIGHT:
                     self._reverse_handoffs_dict.popitem(last=False)
         elif isinstance(data, AgentSpanData):
-            otel_span.set_attribute(GEN_AI_GRAPH_NODE_ID, data.name)
+            otel_span.set_attribute(GEN_AI_EXECUTION_TYPE_KEY, ExecutionType.HUMAN_TO_AGENT.value)
             # Lookup the parent node if exists
             key = f"{data.name}:{span.trace_id}"
             if parent_node := self._reverse_handoffs_dict.pop(key, None):
                 otel_span.set_attribute(GEN_AI_GRAPH_NODE_PARENT_ID, parent_node)
+            # Apply captured input/output messages from child spans
+            if input_msg := self._agent_inputs.pop(span.span_id, None):
+                otel_span.set_attribute(GEN_AI_INPUT_MESSAGES_KEY, input_msg)
+            if output_msg := self._agent_outputs.pop(span.span_id, None):
+                otel_span.set_attribute(GEN_AI_OUTPUT_MESSAGES_KEY, output_msg)
             otel_span.update_name(f"{INVOKE_AGENT_OPERATION_NAME} {get_span_name(span)}")
+            # Clean up tracking
+            self._agent_span_ids.discard(span.span_id)
 
         end_time: int | None = None
         if span.ended_at:

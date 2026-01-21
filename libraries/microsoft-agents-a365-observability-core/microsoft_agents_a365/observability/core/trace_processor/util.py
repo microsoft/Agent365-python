@@ -23,6 +23,7 @@ COMMON_ATTRIBUTES = [
     consts.SESSION_ID_KEY,
     consts.SESSION_DESCRIPTION_KEY,
     consts.HIRING_MANAGER_ID_KEY,
+    consts.GEN_AI_CALLER_CLIENT_IP_KEY,  # gen_ai.caller.client.ip
     # Execution context
     consts.GEN_AI_EXECUTION_SOURCE_NAME_KEY,  # gen_ai.channel.name
     consts.GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,  # gen_ai.channel.link
