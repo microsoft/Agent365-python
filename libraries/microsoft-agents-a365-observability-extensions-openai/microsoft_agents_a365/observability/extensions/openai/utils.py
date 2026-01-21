@@ -537,8 +537,16 @@ def get_span_status(obj: Span[Any]) -> Status:
         return Status(StatusCode.OK)
 
 
-def capture_tool_call_ids(output_list: Any, pending_tool_calls: dict[str, str]) -> None:
-    """Extract and store tool_call_ids from generation output for later use by FunctionSpan."""
+def capture_tool_call_ids(
+    output_list: Any, pending_tool_calls: dict[str, str], max_size: int = 1000
+) -> None:
+    """Extract and store tool_call_ids from generation output for later use by FunctionSpan.
+
+    Args:
+        output_list: The generation output containing tool calls
+        pending_tool_calls: OrderedDict to store pending tool calls
+        max_size: Maximum number of pending tool calls to keep in memory
+    """
     if not output_list:
         return
     try:
@@ -556,6 +564,9 @@ def capture_tool_call_ids(output_list: Any, pending_tool_calls: dict[str, str]) 
                                 # Key by (function_name, arguments) to uniquely identify each call
                                 key = f"{func_name}:{func_args}"
                                 pending_tool_calls[key] = call_id
+                                # Cap the size of the dict to prevent unbounded growth
+                                while len(pending_tool_calls) > max_size:
+                                    pending_tool_calls.popitem(last=False)
     except Exception:
         pass
 
