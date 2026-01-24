@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-
 import unittest
 
 from microsoft_agents_a365.observability.core import configure
