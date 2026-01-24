@@ -155,31 +155,31 @@ def get_dynamic_dependencies(
             raise ImportError(
                 "Failed to import TOML library. For Python < 3.11, please install tomli: "
                 "pip install tomli"
-            )
+            ) from None
 
     # Read and parse pyproject.toml with comprehensive error handling
     try:
         with open(pyproject_path, "rb") as f:
             pyproject = tomllib.load(f)
-    except FileNotFoundError:
+    except FileNotFoundError as err:
         raise FileNotFoundError(
             f"Could not find {pyproject_path}. "
             f"Ensure the file exists in the expected location. "
             f"Current working directory may be incorrect."
-        )
-    except PermissionError:
+        ) from err
+    except PermissionError as err:
         raise PermissionError(
             f"Permission denied reading {pyproject_path}. Check file permissions."
-        )
+        ) from err
     except Exception as e:
         # Catch TOML decode errors (attribute may vary by library)
         if "TOML" in type(e).__name__ or "Decode" in type(e).__name__:
             raise ValueError(
                 f"Invalid TOML syntax in {pyproject_path}: {e}. "
                 f"Please check the file for syntax errors."
-            )
+            ) from e
         # Re-raise unexpected errors
-        raise RuntimeError(f"Unexpected error reading {pyproject_path}: {type(e).__name__}: {e}")
+        raise RuntimeError(f"Unexpected error reading {pyproject_path}: {type(e).__name__}: {e}") from e
 
     # Validate pyproject.toml structure
     if "project" not in pyproject:
