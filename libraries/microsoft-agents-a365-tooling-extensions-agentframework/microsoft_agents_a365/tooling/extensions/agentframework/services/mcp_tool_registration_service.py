@@ -188,6 +188,11 @@ class McpToolRegistrationService:
 
         for msg in chat_messages:
             message_id = msg.message_id if msg.message_id is not None else str(uuid.uuid4())
+            if msg.role is None:
+                self._logger.warning(
+                    f"Skipping message {message_id} with missing role during conversion"
+                )
+                continue
             role = msg.role.value
             content = msg.text if msg.text is not None else ""
 
