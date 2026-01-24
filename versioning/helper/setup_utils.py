@@ -179,7 +179,9 @@ def get_dynamic_dependencies(
                 f"Please check the file for syntax errors."
             ) from e
         # Re-raise unexpected errors
-        raise RuntimeError(f"Unexpected error reading {pyproject_path}: {type(e).__name__}: {e}") from e
+        raise RuntimeError(
+            f"Unexpected error reading {pyproject_path}: {type(e).__name__}: {e}"
+        ) from e
 
     # Validate pyproject.toml structure
     if "project" not in pyproject:
