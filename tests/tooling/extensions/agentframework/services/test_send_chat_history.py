@@ -26,6 +26,7 @@ sys.modules["mcp_tool_registration_service"] = _module
 _spec.loader.exec_module(_module)
 McpToolRegistrationService = _module.McpToolRegistrationService
 
+import uuid  # noqa: E402
 from datetime import UTC, datetime  # noqa: E402
 from unittest.mock import AsyncMock, Mock, patch  # noqa: E402
 
@@ -171,9 +172,10 @@ class TestSendChatHistoryAsync:
         history_messages = call_args.kwargs["chat_history_messages"]
 
         assert len(history_messages) == 1
-        # Verify a UUID was generated (not None and has UUID format)
+        # Verify a UUID was generated (not None and valid UUID format)
         assert history_messages[0].id is not None
-        assert len(history_messages[0].id) == 36  # UUID format: 8-4-4-4-12
+        # Use uuid.UUID() to validate format - raises ValueError if invalid
+        uuid.UUID(history_messages[0].id)
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -431,3 +433,147 @@ class TestSendChatHistoryAsync:
         assert history_messages[0].role == "system"
         assert history_messages[1].role == "user"
         assert history_messages[2].role == "assistant"
+
+    # ==================== Additional Coverage Tests (CRM-001, 004, 005, 006, 011) ====================
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_from_store_propagates_store_exception(
+        self, service, mock_turn_context
+    ):
+        """Test that exceptions from chat_message_store.list_messages() propagate (CRM-001)."""
+        # Arrange
+        mock_store = AsyncMock()
+        mock_store.list_messages = AsyncMock(side_effect=RuntimeError("Store connection failed"))
+
+        # Act & Assert
+        with pytest.raises(RuntimeError, match="Store connection failed"):
+            await service.send_chat_history_from_store(mock_store, mock_turn_context)
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_skips_whitespace_only_content(
+        self, service, mock_turn_context, mock_role
+    ):
+        """Test that messages with whitespace-only content are filtered out (CRM-004)."""
+        # Arrange
+        msg_with_text = Mock()
+        msg_with_text.message_id = "msg-1"
+        msg_with_text.role = mock_role
+        msg_with_text.text = "Valid content"
+
+        msg_whitespace_only = Mock()
+        msg_whitespace_only.message_id = "msg-2"
+        msg_whitespace_only.role = mock_role
+        msg_whitespace_only.text = "   \t\n  "  # Whitespace only
+
+        # Act
+        await service.send_chat_history_messages(
+            [msg_with_text, msg_whitespace_only], mock_turn_context
+        )
+
+        # Assert
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        history_messages = call_args.kwargs["chat_history_messages"]
+
+        # Only the message with actual content should be included
+        assert len(history_messages) == 1
+        assert history_messages[0].content == "Valid content"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_skips_messages_with_none_role(
+        self, service, mock_turn_context, mock_role
+    ):
+        """Test that messages with None role are filtered out (CRM-005)."""
+        # Arrange
+        msg_with_role = Mock()
+        msg_with_role.message_id = "msg-1"
+        msg_with_role.role = mock_role
+        msg_with_role.text = "Valid message"
+
+        msg_without_role = Mock()
+        msg_without_role.message_id = "msg-2"
+        msg_without_role.role = None  # No role
+        msg_without_role.text = "This should be skipped"
+
+        # Act
+        await service.send_chat_history_messages(
+            [msg_with_role, msg_without_role], mock_turn_context
+        )
+
+        # Assert
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        history_messages = call_args.kwargs["chat_history_messages"]
+
+        # Only the message with a role should be included
+        assert len(history_messages) == 1
+        assert history_messages[0].content == "Valid message"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_all_filtered_returns_success(
+        self, service, mock_turn_context, mock_role
+    ):
+        """Test that all messages filtered out returns success without calling core (CRM-006)."""
+        # Arrange - all messages have empty content
+        msg1 = Mock()
+        msg1.message_id = "msg-1"
+        msg1.role = mock_role
+        msg1.text = ""  # Empty
+
+        msg2 = Mock()
+        msg2.message_id = "msg-2"
+        msg2.role = mock_role
+        msg2.text = "   "  # Whitespace only
+
+        msg3 = Mock()
+        msg3.message_id = "msg-3"
+        msg3.role = None  # None role
+        msg3.text = "Valid text but no role"
+
+        # Act
+        result = await service.send_chat_history_messages([msg1, msg2, msg3], mock_turn_context)
+
+        # Assert
+        assert result.succeeded is True
+        # Core service should not be called when all messages are filtered out
+        service._mcp_server_configuration_service.send_chat_history.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_creates_default_tool_options(
+        self, service, mock_turn_context, sample_chat_messages
+    ):
+        """Test that default ToolOptions with AgentFramework orchestrator is created (CRM-011)."""
+        # Act - call without providing tool_options
+        await service.send_chat_history_messages(sample_chat_messages, mock_turn_context)
+
+        # Assert
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        options = call_args.kwargs["options"]
+
+        assert options is not None
+        assert options.orchestrator_name == "AgentFramework"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_handles_role_without_value_attribute(
+        self, service, mock_turn_context
+    ):
+        """Test defensive handling when role doesn't have .value attribute (CRM-003)."""
+        # Arrange - role is a plain string, not an enum
+        msg = Mock()
+        msg.message_id = "msg-1"
+        msg.role = "user"  # String, not an enum with .value
+        msg.text = "Hello"
+
+        # Act
+        await service.send_chat_history_messages([msg], mock_turn_context)
+
+        # Assert
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        history_messages = call_args.kwargs["chat_history_messages"]
+
+        assert len(history_messages) == 1
+        assert history_messages[0].role == "user"
