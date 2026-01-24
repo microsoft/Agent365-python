@@ -190,16 +190,17 @@ class McpToolRegistrationService:
             message_id = msg.message_id if msg.message_id is not None else str(uuid.uuid4())
             if msg.role is None:
                 self._logger.warning(
-                    f"Skipping message {message_id} with missing role during conversion"
+                    "Skipping message %s with missing role during conversion", message_id
                 )
                 continue
-            role = msg.role.value
+            # Defensive handling: use .value if role is an enum, otherwise convert to string
+            role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
             content = msg.text if msg.text is not None else ""
 
             # Skip messages with empty content as ChatHistoryMessage validates non-empty content
-            if not content or not content.strip():
+            if not content.strip():
                 self._logger.warning(
-                    f"Skipping message {message_id} with empty content during conversion"
+                    "Skipping message %s with empty content during conversion", message_id
                 )
                 continue
 
@@ -212,7 +213,7 @@ class McpToolRegistrationService:
             history_messages.append(history_message)
 
             self._logger.debug(
-                f"Converted message {message_id} with role '{role}' to ChatHistoryMessage"
+                "Converted message %s with role '%s' to ChatHistoryMessage", message_id, role
             )
 
         return history_messages
