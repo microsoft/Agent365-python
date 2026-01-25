@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Unit tests for send_chat_history_async methods in McpToolRegistrationService."""
+"""Unit tests for send_chat_history_from_store methods in McpToolRegistrationService."""
 
 # Direct import from service file to work around namespace package resolution issues
 # with editable installs in the uv workspace
@@ -26,6 +26,7 @@ sys.modules["mcp_tool_registration_service"] = _module
 _spec.loader.exec_module(_module)
 McpToolRegistrationService = _module.McpToolRegistrationService
 
+import uuid  # noqa: E402
 from datetime import UTC, datetime  # noqa: E402
 from unittest.mock import AsyncMock, Mock, patch  # noqa: E402
 
@@ -36,7 +37,7 @@ from microsoft_agents_a365.tooling.models import ToolOptions  # noqa: E402
 
 
 class TestSendChatHistoryAsync:
-    """Tests for send_chat_history_messages_async and send_chat_history_async methods."""
+    """Tests for send_chat_history_messages and send_chat_history_from_store methods."""
 
     @pytest.fixture
     def mock_turn_context(self):
@@ -103,46 +104,48 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_validates_messages_none(
+    async def test_send_chat_history_messages_validates_messages_none(
         self, service, mock_turn_context
     ):
-        """Test that send_chat_history_messages_async raises ValueError for None messages."""
+        """Test that send_chat_history_messages raises ValueError for None messages."""
         with pytest.raises(ValueError, match="chat_messages cannot be None"):
-            await service.send_chat_history_messages_async(None, mock_turn_context)
+            await service.send_chat_history_messages(None, mock_turn_context)
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_validates_turn_context_none(
+    async def test_send_chat_history_messages_validates_turn_context_none(
         self, service, sample_chat_messages
     ):
-        """Test that send_chat_history_messages_async raises ValueError for None turn_context."""
+        """Test that send_chat_history_messages raises ValueError for None turn_context."""
         with pytest.raises(ValueError, match="turn_context cannot be None"):
-            await service.send_chat_history_messages_async(sample_chat_messages, None)
+            await service.send_chat_history_messages(sample_chat_messages, None)
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_validates_store_none(self, service, mock_turn_context):
-        """Test that send_chat_history_async raises ValueError for None store."""
+    async def test_send_chat_history_from_store_validates_store_none(
+        self, service, mock_turn_context
+    ):
+        """Test that send_chat_history_from_store raises ValueError for None store."""
         with pytest.raises(ValueError, match="chat_message_store cannot be None"):
-            await service.send_chat_history_async(None, mock_turn_context)
+            await service.send_chat_history_from_store(None, mock_turn_context)
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_validates_turn_context_none(
+    async def test_send_chat_history_from_store_validates_turn_context_none(
         self, service, mock_chat_message_store
     ):
-        """Test that send_chat_history_async raises ValueError for None turn_context."""
+        """Test that send_chat_history_from_store raises ValueError for None turn_context."""
         with pytest.raises(ValueError, match="turn_context cannot be None"):
-            await service.send_chat_history_async(mock_chat_message_store, None)
+            await service.send_chat_history_from_store(mock_chat_message_store, None)
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_empty_messages_returns_success(
+    async def test_send_chat_history_messages_empty_messages_returns_success(
         self, service, mock_turn_context
     ):
         """Test that empty message list returns success with warning log."""
         # Act
-        result = await service.send_chat_history_messages_async([], mock_turn_context)
+        result = await service.send_chat_history_messages([], mock_turn_context)
 
         # Assert
         assert result.succeeded is True
@@ -151,7 +154,7 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_generates_uuid_for_missing_id(
+    async def test_send_chat_history_messages_generates_uuid_for_missing_id(
         self, service, mock_turn_context, mock_role
     ):
         """Test that UUID is generated when message_id is None."""
@@ -162,26 +165,27 @@ class TestSendChatHistoryAsync:
         msg.text = "Hello"
 
         # Act
-        await service.send_chat_history_messages_async([msg], mock_turn_context)
+        await service.send_chat_history_messages([msg], mock_turn_context)
 
         # Assert
         call_args = service._mcp_server_configuration_service.send_chat_history.call_args
         history_messages = call_args.kwargs["chat_history_messages"]
 
         assert len(history_messages) == 1
-        # Verify a UUID was generated (not None and has UUID format)
+        # Verify a UUID was generated (not None and valid UUID format)
         assert history_messages[0].id is not None
-        assert len(history_messages[0].id) == 36  # UUID format: 8-4-4-4-12
+        # Use uuid.UUID() to validate format - raises ValueError if invalid
+        uuid.UUID(history_messages[0].id)
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_generates_timestamp(
+    async def test_send_chat_history_messages_generates_timestamp(
         self, service, mock_turn_context, sample_chat_messages
     ):
         """Test that current UTC timestamp is generated for messages."""
         # Act
         before_time = datetime.now(UTC)
-        await service.send_chat_history_messages_async(sample_chat_messages, mock_turn_context)
+        await service.send_chat_history_messages(sample_chat_messages, mock_turn_context)
         after_time = datetime.now(UTC)
 
         # Assert
@@ -194,7 +198,7 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_handles_missing_text(
+    async def test_send_chat_history_messages_handles_missing_text(
         self, service, mock_turn_context, mock_role
     ):
         """Test that messages with None text are skipped (empty content not allowed)."""
@@ -210,7 +214,7 @@ class TestSendChatHistoryAsync:
         msg_without_text.text = None  # No text
 
         # Act
-        await service.send_chat_history_messages_async(
+        await service.send_chat_history_messages(
             [msg_with_text, msg_without_text], mock_turn_context
         )
 
@@ -226,14 +230,12 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_success(
+    async def test_send_chat_history_messages_success(
         self, service, mock_turn_context, sample_chat_messages
     ):
-        """Test successful send_chat_history_messages_async call."""
+        """Test successful send_chat_history_messages call."""
         # Act
-        result = await service.send_chat_history_messages_async(
-            sample_chat_messages, mock_turn_context
-        )
+        result = await service.send_chat_history_messages(sample_chat_messages, mock_turn_context)
 
         # Assert
         assert result.succeeded is True
@@ -242,12 +244,14 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_with_store_success(
+    async def test_send_chat_history_from_store_with_store_success(
         self, service, mock_turn_context, mock_chat_message_store
     ):
-        """Test successful send_chat_history_async call with ChatMessageStore."""
+        """Test successful send_chat_history_from_store call with ChatMessageStore."""
         # Act
-        result = await service.send_chat_history_async(mock_chat_message_store, mock_turn_context)
+        result = await service.send_chat_history_from_store(
+            mock_chat_message_store, mock_turn_context
+        )
 
         # Assert
         assert result.succeeded is True
@@ -256,18 +260,18 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_delegates_to_messages_async(
+    async def test_send_chat_history_from_store_delegates_to_messages_async(
         self, service, mock_turn_context, mock_chat_message_store, sample_chat_messages
     ):
-        """Test that send_chat_history_async delegates to send_chat_history_messages_async."""
+        """Test that send_chat_history_from_store delegates to send_chat_history_messages."""
         # Arrange
         with patch.object(
-            service, "send_chat_history_messages_async", new_callable=AsyncMock
+            service, "send_chat_history_messages", new_callable=AsyncMock
         ) as mock_messages_method:
             mock_messages_method.return_value = OperationResult.success()
 
             # Act
-            result = await service.send_chat_history_async(
+            result = await service.send_chat_history_from_store(
                 mock_chat_message_store, mock_turn_context
             )
 
@@ -282,7 +286,7 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_with_tool_options(
+    async def test_send_chat_history_messages_with_tool_options(
         self, service, mock_turn_context, sample_chat_messages
     ):
         """Test that ToolOptions are passed correctly to core service."""
@@ -290,7 +294,7 @@ class TestSendChatHistoryAsync:
         options = ToolOptions(orchestrator_name="TestOrchestrator")
 
         # Act
-        await service.send_chat_history_messages_async(
+        await service.send_chat_history_messages(
             sample_chat_messages, mock_turn_context, tool_options=options
         )
 
@@ -300,12 +304,12 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_converts_messages_correctly(
+    async def test_send_chat_history_messages_converts_messages_correctly(
         self, service, mock_turn_context, sample_chat_messages
     ):
         """Test that ChatMessage objects are correctly converted to ChatHistoryMessage."""
         # Act
-        await service.send_chat_history_messages_async(sample_chat_messages, mock_turn_context)
+        await service.send_chat_history_messages(sample_chat_messages, mock_turn_context)
 
         # Assert
         call_args = service._mcp_server_configuration_service.send_chat_history.call_args
@@ -329,10 +333,10 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_handles_http_error(
+    async def test_send_chat_history_messages_handles_http_error(
         self, service, mock_turn_context, sample_chat_messages
     ):
-        """Test send_chat_history_messages_async handles HTTP errors from core service."""
+        """Test send_chat_history_messages handles HTTP errors from core service."""
         # Arrange
         error = OperationError(Exception("500, Internal Server Error"))
         service._mcp_server_configuration_service.send_chat_history = AsyncMock(
@@ -340,9 +344,7 @@ class TestSendChatHistoryAsync:
         )
 
         # Act
-        result = await service.send_chat_history_messages_async(
-            sample_chat_messages, mock_turn_context
-        )
+        result = await service.send_chat_history_messages(sample_chat_messages, mock_turn_context)
 
         # Assert
         assert result.succeeded is False
@@ -351,10 +353,10 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_handles_timeout(
+    async def test_send_chat_history_messages_handles_timeout(
         self, service, mock_turn_context, sample_chat_messages
     ):
-        """Test send_chat_history_messages_async handles timeout errors."""
+        """Test send_chat_history_messages handles timeout errors."""
         # Arrange
         error = OperationError(Exception("Request timed out"))
         service._mcp_server_configuration_service.send_chat_history = AsyncMock(
@@ -362,9 +364,7 @@ class TestSendChatHistoryAsync:
         )
 
         # Act
-        result = await service.send_chat_history_messages_async(
-            sample_chat_messages, mock_turn_context
-        )
+        result = await service.send_chat_history_messages(sample_chat_messages, mock_turn_context)
 
         # Assert
         assert result.succeeded is False
@@ -373,10 +373,10 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_handles_connection_error(
+    async def test_send_chat_history_messages_handles_connection_error(
         self, service, mock_turn_context, sample_chat_messages
     ):
-        """Test send_chat_history_messages_async handles connection errors."""
+        """Test send_chat_history_messages handles connection errors."""
         # Arrange
         error = OperationError(Exception("Connection failed"))
         service._mcp_server_configuration_service.send_chat_history = AsyncMock(
@@ -384,9 +384,7 @@ class TestSendChatHistoryAsync:
         )
 
         # Act
-        result = await service.send_chat_history_messages_async(
-            sample_chat_messages, mock_turn_context
-        )
+        result = await service.send_chat_history_messages(sample_chat_messages, mock_turn_context)
 
         # Assert
         assert result.succeeded is False
@@ -395,7 +393,7 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_role_value_conversion(
+    async def test_send_chat_history_messages_role_value_conversion(
         self, service, mock_turn_context
     ):
         """Test that Role.value is used for string conversion."""
@@ -425,7 +423,7 @@ class TestSendChatHistoryAsync:
         msg3.text = "Assistant response"
 
         # Act
-        await service.send_chat_history_messages_async([msg1, msg2, msg3], mock_turn_context)
+        await service.send_chat_history_messages([msg1, msg2, msg3], mock_turn_context)
 
         # Assert
         call_args = service._mcp_server_configuration_service.send_chat_history.call_args
@@ -435,3 +433,147 @@ class TestSendChatHistoryAsync:
         assert history_messages[0].role == "system"
         assert history_messages[1].role == "user"
         assert history_messages[2].role == "assistant"
+
+    # ==================== Additional Coverage Tests (CRM-001, 004, 005, 006, 011) ====================
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_from_store_propagates_store_exception(
+        self, service, mock_turn_context
+    ):
+        """Test that exceptions from chat_message_store.list_messages() propagate (CRM-001)."""
+        # Arrange
+        mock_store = AsyncMock()
+        mock_store.list_messages = AsyncMock(side_effect=RuntimeError("Store connection failed"))
+
+        # Act & Assert
+        with pytest.raises(RuntimeError, match="Store connection failed"):
+            await service.send_chat_history_from_store(mock_store, mock_turn_context)
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_skips_whitespace_only_content(
+        self, service, mock_turn_context, mock_role
+    ):
+        """Test that messages with whitespace-only content are filtered out (CRM-004)."""
+        # Arrange
+        msg_with_text = Mock()
+        msg_with_text.message_id = "msg-1"
+        msg_with_text.role = mock_role
+        msg_with_text.text = "Valid content"
+
+        msg_whitespace_only = Mock()
+        msg_whitespace_only.message_id = "msg-2"
+        msg_whitespace_only.role = mock_role
+        msg_whitespace_only.text = "   \t\n  "  # Whitespace only
+
+        # Act
+        await service.send_chat_history_messages(
+            [msg_with_text, msg_whitespace_only], mock_turn_context
+        )
+
+        # Assert
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        history_messages = call_args.kwargs["chat_history_messages"]
+
+        # Only the message with actual content should be included
+        assert len(history_messages) == 1
+        assert history_messages[0].content == "Valid content"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_skips_messages_with_none_role(
+        self, service, mock_turn_context, mock_role
+    ):
+        """Test that messages with None role are filtered out (CRM-005)."""
+        # Arrange
+        msg_with_role = Mock()
+        msg_with_role.message_id = "msg-1"
+        msg_with_role.role = mock_role
+        msg_with_role.text = "Valid message"
+
+        msg_without_role = Mock()
+        msg_without_role.message_id = "msg-2"
+        msg_without_role.role = None  # No role
+        msg_without_role.text = "This should be skipped"
+
+        # Act
+        await service.send_chat_history_messages(
+            [msg_with_role, msg_without_role], mock_turn_context
+        )
+
+        # Assert
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        history_messages = call_args.kwargs["chat_history_messages"]
+
+        # Only the message with a role should be included
+        assert len(history_messages) == 1
+        assert history_messages[0].content == "Valid message"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_all_filtered_returns_success(
+        self, service, mock_turn_context, mock_role
+    ):
+        """Test that all messages filtered out returns success without calling core (CRM-006)."""
+        # Arrange - all messages have empty content
+        msg1 = Mock()
+        msg1.message_id = "msg-1"
+        msg1.role = mock_role
+        msg1.text = ""  # Empty
+
+        msg2 = Mock()
+        msg2.message_id = "msg-2"
+        msg2.role = mock_role
+        msg2.text = "   "  # Whitespace only
+
+        msg3 = Mock()
+        msg3.message_id = "msg-3"
+        msg3.role = None  # None role
+        msg3.text = "Valid text but no role"
+
+        # Act
+        result = await service.send_chat_history_messages([msg1, msg2, msg3], mock_turn_context)
+
+        # Assert
+        assert result.succeeded is True
+        # Core service should not be called when all messages are filtered out
+        service._mcp_server_configuration_service.send_chat_history.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_creates_default_tool_options(
+        self, service, mock_turn_context, sample_chat_messages
+    ):
+        """Test that default ToolOptions with AgentFramework orchestrator is created (CRM-011)."""
+        # Act - call without providing tool_options
+        await service.send_chat_history_messages(sample_chat_messages, mock_turn_context)
+
+        # Assert
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        options = call_args.kwargs["options"]
+
+        assert options is not None
+        assert options.orchestrator_name == "AgentFramework"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_messages_handles_role_without_value_attribute(
+        self, service, mock_turn_context
+    ):
+        """Test defensive handling when role doesn't have .value attribute (CRM-003)."""
+        # Arrange - role is a plain string, not an enum
+        msg = Mock()
+        msg.message_id = "msg-1"
+        msg.role = "user"  # String, not an enum with .value
+        msg.text = "Hello"
+
+        # Act
+        await service.send_chat_history_messages([msg], mock_turn_context)
+
+        # Assert
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        history_messages = call_args.kwargs["chat_history_messages"]
+
+        assert len(history_messages) == 1
+        assert history_messages[0].role == "user"

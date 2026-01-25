@@ -190,16 +190,17 @@ class McpToolRegistrationService:
             message_id = msg.message_id if msg.message_id is not None else str(uuid.uuid4())
             if msg.role is None:
                 self._logger.warning(
-                    f"Skipping message {message_id} with missing role during conversion"
+                    "Skipping message %s with missing role during conversion", message_id
                 )
                 continue
-            role = msg.role.value
+            # Defensive handling: use .value if role is an enum, otherwise convert to string
+            role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
             content = msg.text if msg.text is not None else ""
 
             # Skip messages with empty content as ChatHistoryMessage validates non-empty content
-            if not content or not content.strip():
+            if not content.strip():
                 self._logger.warning(
-                    f"Skipping message {message_id} with empty content during conversion"
+                    "Skipping message %s with empty content during conversion", message_id
                 )
                 continue
 
@@ -212,12 +213,12 @@ class McpToolRegistrationService:
             history_messages.append(history_message)
 
             self._logger.debug(
-                f"Converted message {message_id} with role '{role}' to ChatHistoryMessage"
+                "Converted message %s with role '%s' to ChatHistoryMessage", message_id, role
             )
 
         return history_messages
 
-    async def send_chat_history_messages_async(
+    async def send_chat_history_messages(
         self,
         chat_messages: Sequence[ChatMessage],
         turn_context: TurnContext,
@@ -244,7 +245,7 @@ class McpToolRegistrationService:
         Example:
             >>> service = McpToolRegistrationService()
             >>> messages = [ChatMessage(role=Role.USER, text="Hello")]
-            >>> result = await service.send_chat_history_messages_async(messages, turn_context)
+            >>> result = await service.send_chat_history_messages(messages, turn_context)
             >>> if result.succeeded:
             ...     print("Chat history sent successfully")
         """
@@ -257,7 +258,7 @@ class McpToolRegistrationService:
 
         # Handle empty messages - return success with warning
         if len(chat_messages) == 0:
-            self._logger.warning("Empty message list provided to send_chat_history_messages_async")
+            self._logger.warning("Empty message list provided to send_chat_history_messages")
             return OperationResult.success()
 
         self._logger.info(f"Send chat history initiated with {len(chat_messages)} messages")
@@ -290,7 +291,7 @@ class McpToolRegistrationService:
 
         return result
 
-    async def send_chat_history_async(
+    async def send_chat_history_from_store(
         self,
         chat_message_store: ChatMessageStoreProtocol,
         turn_context: TurnContext,
@@ -300,7 +301,7 @@ class McpToolRegistrationService:
         Send chat history from a ChatMessageStore to the MCP platform.
 
         This is a convenience method that extracts messages from the store
-        and delegates to send_chat_history_messages_async().
+        and delegates to send_chat_history_messages().
 
         Args:
             chat_message_store: ChatMessageStore containing the conversation history.
@@ -315,7 +316,7 @@ class McpToolRegistrationService:
 
         Example:
             >>> service = McpToolRegistrationService()
-            >>> result = await service.send_chat_history_async(
+            >>> result = await service.send_chat_history_from_store(
             ...     thread.chat_message_store, turn_context
             ... )
         """
@@ -330,7 +331,7 @@ class McpToolRegistrationService:
         messages = await chat_message_store.list_messages()
 
         # Delegate to the primary implementation
-        return await self.send_chat_history_messages_async(
+        return await self.send_chat_history_messages(
             chat_messages=messages,
             turn_context=turn_context,
             tool_options=tool_options,
