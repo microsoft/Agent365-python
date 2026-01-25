@@ -173,6 +173,7 @@ Place it before imports with one blank line after.
 - Use explicit `None` checks: `if x is not None:` not `if x:`
 - Local imports should be moved to top of file
 - Return defensive copies of mutable data to protect singletons
+- **Async method naming**: Do NOT use `_async` suffix on async methods. The `_async` suffix is only appropriate when providing both sync and async versions of the same method. Since this SDK is async-only, use plain method names (e.g., `send_chat_history_messages` not `send_chat_history_messages_async`)
 
 ## CI/CD
 
