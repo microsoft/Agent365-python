@@ -23,4 +23,6 @@ for finder in sys.meta_path:
                     if path not in __path__ and not path.endswith(".__path_hook__"):
                         __path__.append(path)
         except (ImportError, TypeError):
+            # Some meta path finders may not support this namespace and can raise
+            # ImportError or TypeError; ignore these and continue discovering paths.
             pass
