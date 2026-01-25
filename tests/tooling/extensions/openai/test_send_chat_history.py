@@ -216,9 +216,7 @@ class TestSuccessPath:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            await service.send_chat_history_messages(
-                mock_turn_context, sample_openai_messages
-            )
+            await service.send_chat_history_messages(mock_turn_context, sample_openai_messages)
 
             # Verify default orchestrator name
             call_args = mock_send.call_args
@@ -238,9 +236,7 @@ class TestSuccessPath:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            await service.send_chat_history_messages(
-                mock_turn_context, sample_openai_messages
-            )
+            await service.send_chat_history_messages(mock_turn_context, sample_openai_messages)
 
             # Verify delegation
             mock_send.assert_called_once()
@@ -394,20 +390,14 @@ class TestErrorHandling:
     # EH-04
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_conversion_error(
-        self, service, mock_turn_context
-    ):
+    async def test_send_chat_history_messages_conversion_error(self, service, mock_turn_context):
         """Test send_chat_history_messages handles conversion errors gracefully."""
         sample_messages = [MockUserMessage(content="Hello")]
 
-        with patch.object(
-            service, "_convert_openai_messages_to_chat_history"
-        ) as mock_convert:
+        with patch.object(service, "_convert_openai_messages_to_chat_history") as mock_convert:
             mock_convert.side_effect = Exception("Conversion failed")
 
-            result = await service.send_chat_history_messages(
-                mock_turn_context, sample_messages
-            )
+            result = await service.send_chat_history_messages(mock_turn_context, sample_messages)
 
             assert result.succeeded is False
             assert len(result.errors) == 1

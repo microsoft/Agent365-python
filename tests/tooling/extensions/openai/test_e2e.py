@@ -76,9 +76,7 @@ class TestEndToEndWithMockedHttp:
     # E2E-02
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_e2e_server_error(
-        self, service, mock_turn_context
-    ):
+    async def test_send_chat_history_e2e_server_error(self, service, mock_turn_context):
         """Test full end-to-end flow with HTTP 500 error."""
         messages = [
             MockUserMessage(content="Hello"),
@@ -199,9 +197,7 @@ class TestConversionChainE2E:
 
             mock_send.side_effect = capture_args
 
-            await service.send_chat_history_messages(
-                mock_turn_context, sample_openai_messages
-            )
+            await service.send_chat_history_messages(mock_turn_context, sample_openai_messages)
 
             # Verify all messages are ChatHistoryMessage instances
             assert captured_messages is not None
@@ -343,9 +339,7 @@ class TestHeadersE2E:
             mock_session_instance.post.side_effect = capture_post
             mock_session_class.return_value.__aenter__.return_value = mock_session_instance
 
-            await service.send_chat_history_messages(
-                mock_turn_context, sample_openai_messages
-            )
+            await service.send_chat_history_messages(mock_turn_context, sample_openai_messages)
 
             # Verify headers
             assert captured_headers is not None
