@@ -1,7 +1,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Integration tests for OpenAI send_chat_history methods."""
+"""End-to-end tests for OpenAI send_chat_history methods with mocked HTTP.
+
+These tests verify the complete flow from Session/messages through conversion
+to the HTTP call, using mocked HTTP responses. They are marked as unit tests
+because they use mocks and don't require real external services.
+"""
 
 import json
 from datetime import UTC, datetime
@@ -19,17 +24,22 @@ from .conftest import (
 )
 
 # =============================================================================
-# INTEGRATION TESTS (IT-01 to IT-03)
+# END-TO-END TESTS WITH MOCKED HTTP (E2E-01 to E2E-03)
 # =============================================================================
 
 
-class TestEndToEndIntegration:
-    """Integration tests for end-to-end flow with mocked HTTP."""
+class TestEndToEndWithMockedHttp:
+    """End-to-end tests with mocked HTTP dependencies.
 
-    # IT-01
+    These tests verify the complete flow through the service but use mocked
+    HTTP responses. They are marked as unit tests since no real network
+    calls are made.
+    """
+
+    # E2E-01
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_end_to_end_success(self, service, mock_turn_context):
+    async def test_send_chat_history_e2e_success(self, service, mock_turn_context):
         """Test full end-to-end flow: Session -> conversion -> HTTP -> success."""
         # Create a session with realistic messages
         messages = [
@@ -54,7 +64,7 @@ class TestEndToEndIntegration:
             mock_session_class.return_value.__aenter__.return_value = mock_session_instance
 
             # Execute
-            result = await service.send_chat_history_async(mock_turn_context, session)
+            result = await service.send_chat_history(mock_turn_context, session)
 
             # Verify
             assert result.succeeded is True
@@ -63,10 +73,10 @@ class TestEndToEndIntegration:
             # Verify HTTP call was made
             assert mock_session_instance.post.called
 
-    # IT-02
+    # E2E-02
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_end_to_end_server_error(
+    async def test_send_chat_history_e2e_server_error(
         self, service, mock_turn_context
     ):
         """Test full end-to-end flow with HTTP 500 error."""
@@ -92,16 +102,16 @@ class TestEndToEndIntegration:
             mock_session_class.return_value.__aenter__.return_value = mock_session_instance
 
             # Execute
-            result = await service.send_chat_history_async(mock_turn_context, session)
+            result = await service.send_chat_history(mock_turn_context, session)
 
             # Verify failure
             assert result.succeeded is False
             assert len(result.errors) == 1
 
-    # IT-03
+    # E2E-03
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_payload_format(self, service, mock_turn_context):
+    async def test_send_chat_history_e2e_payload_format(self, service, mock_turn_context):
         """Test that the JSON payload has the correct structure."""
         messages = [
             MockUserMessage(content="Hello", id="user-001"),
@@ -129,7 +139,7 @@ class TestEndToEndIntegration:
             mock_session_class.return_value.__aenter__.return_value = mock_session_instance
 
             # Execute
-            result = await service.send_chat_history_async(mock_turn_context, session)
+            result = await service.send_chat_history(mock_turn_context, session)
 
             # Verify success
             assert result.succeeded is True
@@ -164,8 +174,8 @@ class TestEndToEndIntegration:
             assert chat_history[1]["id"] == "assistant-001"
 
 
-class TestConversionChainIntegration:
-    """Integration tests for the full conversion chain."""
+class TestConversionChainE2E:
+    """End-to-end tests for the full conversion chain with mocked dependencies."""
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -189,7 +199,7 @@ class TestConversionChainIntegration:
 
             mock_send.side_effect = capture_args
 
-            await service.send_chat_history_messages_async(
+            await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages
             )
 
@@ -224,7 +234,7 @@ class TestConversionChainIntegration:
 
             mock_send.side_effect = capture_args
 
-            result = await service.send_chat_history_async(mock_turn_context, session)
+            result = await service.send_chat_history(mock_turn_context, session)
 
             # Verify success
             assert result.succeeded is True
@@ -242,8 +252,8 @@ class TestConversionChainIntegration:
             assert captured_messages[1].timestamp == timestamp
 
 
-class TestLimitParameterIntegration:
-    """Integration tests for the limit parameter."""
+class TestLimitParameterE2E:
+    """End-to-end tests for the limit parameter with mocked dependencies."""
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -269,7 +279,7 @@ class TestLimitParameterIntegration:
             mock_send.side_effect = capture_args
 
             # Send with limit
-            result = await service.send_chat_history_async(mock_turn_context, session, limit=10)
+            result = await service.send_chat_history(mock_turn_context, session, limit=10)
 
             assert result.succeeded is True
             assert captured_messages is not None
@@ -298,15 +308,15 @@ class TestLimitParameterIntegration:
             mock_send.side_effect = capture_args
 
             # Send without limit
-            result = await service.send_chat_history_async(mock_turn_context, session)
+            result = await service.send_chat_history(mock_turn_context, session)
 
             assert result.succeeded is True
             assert captured_messages is not None
             assert len(captured_messages) == 50
 
 
-class TestHeadersIntegration:
-    """Integration tests for HTTP headers."""
+class TestHeadersE2E:
+    """End-to-end tests for HTTP headers with mocked dependencies."""
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -333,7 +343,7 @@ class TestHeadersIntegration:
             mock_session_instance.post.side_effect = capture_post
             mock_session_class.return_value.__aenter__.return_value = mock_session_instance
 
-            await service.send_chat_history_messages_async(
+            await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages
             )
 

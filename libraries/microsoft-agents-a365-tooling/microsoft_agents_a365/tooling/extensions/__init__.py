@@ -1,22 +1,20 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
-"""
-Microsoft Agent 365 Tooling Extensions.
+"""Microsoft Agent 365 Tooling Extensions namespace package.
 
-This is a namespace package that allows extension packages to contribute
-their modules under the microsoft_agents_a365.tooling.extensions namespace.
+This file enables the `microsoft_agents_a365.tooling.extensions` namespace
+to span multiple installed packages (e.g., extensions-openai, extensions-agentframework).
 """
 
 import sys
 from pkgutil import extend_path
 
-# First, try standard pkgutil-style namespace extension
+# Standard pkgutil-style namespace extension
 __path__ = extend_path(__path__, __name__)
 
-# For editable installs with custom finders, we need to manually discover
-# extension paths by checking meta_path finders
+# For editable installs with custom finders, manually discover extension paths
 for finder in sys.meta_path:
-    # Check if this is an editable finder with namespace support
     if hasattr(finder, "find_spec"):
         try:
             spec = finder.find_spec(__name__, None)
@@ -25,6 +23,4 @@ for finder in sys.meta_path:
                     if path not in __path__ and not path.endswith(".__path_hook__"):
                         __path__.append(path)
         except (ImportError, TypeError):
-            # Silently skip finders that don't support our find_spec call signature
-            # or fail to locate the module - we'll try other finders in meta_path
             pass

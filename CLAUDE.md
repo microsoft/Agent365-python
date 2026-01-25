@@ -183,7 +183,7 @@ Place it before imports with one blank line after.
    from agents.memory import Session
    from agents.items import TResponseInputItem
 
-   async def send_chat_history_async(self, session: Session) -> OperationResult:
+   async def send_chat_history(self, session: Session) -> OperationResult:
        ...
    ```
 

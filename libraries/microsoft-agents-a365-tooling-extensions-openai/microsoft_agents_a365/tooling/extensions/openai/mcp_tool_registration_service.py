@@ -35,7 +35,6 @@ from microsoft_agents_a365.tooling.utils.utility import (
 )
 
 
-# TODO: This is not needed. Remove this.
 @dataclass
 class MCPServerInfo:
     """Information about an MCP server"""
@@ -249,7 +248,7 @@ class McpToolRegistrationService:
     # SEND CHAT HISTORY - OpenAI-specific implementations
     # --------------------------------------------------------------------------
 
-    async def send_chat_history_async(
+    async def send_chat_history(
         self,
         turn_context: TurnContext,
         session: Session,
@@ -293,7 +292,7 @@ class McpToolRegistrationService:
             >>> # In your agent handler:
             >>> async with Runner.run(agent, messages) as result:
             ...     session = result.session
-            ...     op_result = await service.send_chat_history_async(
+            ...     op_result = await service.send_chat_history(
             ...         turn_context, session
             ...     )
             ...     if op_result.succeeded:
@@ -316,7 +315,7 @@ class McpToolRegistrationService:
             self._logger.debug(f"Retrieved {len(messages)} items from session")
 
             # Delegate to the list-based method
-            return await self.send_chat_history_messages_async(
+            return await self.send_chat_history_messages(
                 turn_context=turn_context,
                 messages=messages,
                 options=options,
@@ -328,7 +327,7 @@ class McpToolRegistrationService:
             self._logger.error(f"Failed to send chat history from session: {ex}")
             return OperationResult.failed(OperationError(ex))
 
-    async def send_chat_history_messages_async(
+    async def send_chat_history_messages(
         self,
         turn_context: TurnContext,
         messages: List[TResponseInputItem],
@@ -369,7 +368,7 @@ class McpToolRegistrationService:
             ...     {"role": "assistant", "content": "Hi there!"},
             ... ]
             >>>
-            >>> result = await service.send_chat_history_messages_async(
+            >>> result = await service.send_chat_history_messages(
             ...     turn_context, messages
             ... )
             >>> if result.succeeded:

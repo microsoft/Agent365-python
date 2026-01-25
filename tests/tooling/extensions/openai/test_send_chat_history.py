@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Unit tests for send_chat_history_async and send_chat_history_messages_async methods."""
+"""Unit tests for send_chat_history and send_chat_history_messages methods."""
 
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -25,31 +25,31 @@ class TestInputValidation:
     # UV-01
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_validates_turn_context_none(
+    async def test_send_chat_history_messages_validates_turn_context_none(
         self, service, sample_openai_messages
     ):
-        """Test that send_chat_history_messages_async raises ValueError when turn_context is None."""
+        """Test that send_chat_history_messages raises ValueError when turn_context is None."""
         with pytest.raises(ValueError, match="turn_context cannot be None"):
-            await service.send_chat_history_messages_async(None, sample_openai_messages)
+            await service.send_chat_history_messages(None, sample_openai_messages)
 
     # UV-02
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_validates_messages_none(
+    async def test_send_chat_history_messages_validates_messages_none(
         self, service, mock_turn_context
     ):
-        """Test that send_chat_history_messages_async raises ValueError when messages is None."""
+        """Test that send_chat_history_messages raises ValueError when messages is None."""
         with pytest.raises(ValueError, match="messages cannot be None"):
-            await service.send_chat_history_messages_async(mock_turn_context, None)
+            await service.send_chat_history_messages(mock_turn_context, None)
 
     # UV-03
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_empty_list_returns_success(
+    async def test_send_chat_history_messages_empty_list_returns_success(
         self, service, mock_turn_context
     ):
         """Test that empty message list returns success (no-op)."""
-        result = await service.send_chat_history_messages_async(mock_turn_context, [])
+        result = await service.send_chat_history_messages(mock_turn_context, [])
 
         assert result.succeeded is True
         assert len(result.errors) == 0
@@ -57,10 +57,10 @@ class TestInputValidation:
     # UV-04
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_validates_activity_none(
+    async def test_send_chat_history_messages_validates_activity_none(
         self, service, mock_turn_context_no_activity, sample_openai_messages
     ):
-        """Test that send_chat_history_messages_async validates turn_context.activity."""
+        """Test that send_chat_history_messages validates turn_context.activity."""
         with patch.object(
             service.config_service,
             "send_chat_history",
@@ -69,17 +69,17 @@ class TestInputValidation:
             mock_send.side_effect = ValueError("turn_context.activity cannot be None")
 
             with pytest.raises(ValueError, match="turn_context.activity cannot be None"):
-                await service.send_chat_history_messages_async(
+                await service.send_chat_history_messages(
                     mock_turn_context_no_activity, sample_openai_messages
                 )
 
     # UV-05
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_validates_conversation_id(
+    async def test_send_chat_history_messages_validates_conversation_id(
         self, service, mock_turn_context_no_conversation_id, sample_openai_messages
     ):
-        """Test that send_chat_history_messages_async validates conversation_id."""
+        """Test that send_chat_history_messages validates conversation_id."""
         with patch.object(
             service.config_service,
             "send_chat_history",
@@ -88,17 +88,17 @@ class TestInputValidation:
             mock_send.side_effect = ValueError("conversation_id cannot be empty or None")
 
             with pytest.raises(ValueError, match="conversation_id cannot be empty"):
-                await service.send_chat_history_messages_async(
+                await service.send_chat_history_messages(
                     mock_turn_context_no_conversation_id, sample_openai_messages
                 )
 
     # UV-06
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_validates_message_id(
+    async def test_send_chat_history_messages_validates_message_id(
         self, service, mock_turn_context_no_message_id, sample_openai_messages
     ):
-        """Test that send_chat_history_messages_async validates message_id."""
+        """Test that send_chat_history_messages validates message_id."""
         with patch.object(
             service.config_service,
             "send_chat_history",
@@ -107,17 +107,17 @@ class TestInputValidation:
             mock_send.side_effect = ValueError("message_id cannot be empty or None")
 
             with pytest.raises(ValueError, match="message_id cannot be empty"):
-                await service.send_chat_history_messages_async(
+                await service.send_chat_history_messages(
                     mock_turn_context_no_message_id, sample_openai_messages
                 )
 
     # UV-07
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_validates_user_message(
+    async def test_send_chat_history_messages_validates_user_message(
         self, service, mock_turn_context_no_user_message, sample_openai_messages
     ):
-        """Test that send_chat_history_messages_async validates user_message text."""
+        """Test that send_chat_history_messages validates user_message text."""
         with patch.object(
             service.config_service,
             "send_chat_history",
@@ -126,25 +126,25 @@ class TestInputValidation:
             mock_send.side_effect = ValueError("user_message cannot be empty or None")
 
             with pytest.raises(ValueError, match="user_message cannot be empty"):
-                await service.send_chat_history_messages_async(
+                await service.send_chat_history_messages(
                     mock_turn_context_no_user_message, sample_openai_messages
                 )
 
     # UV-08
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_validates_turn_context_none(self, service, mock_session):
-        """Test that send_chat_history_async raises ValueError when turn_context is None."""
+    async def test_send_chat_history_validates_turn_context_none(self, service, mock_session):
+        """Test that send_chat_history raises ValueError when turn_context is None."""
         with pytest.raises(ValueError, match="turn_context cannot be None"):
-            await service.send_chat_history_async(None, mock_session)
+            await service.send_chat_history(None, mock_session)
 
     # UV-09
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_validates_session_none(self, service, mock_turn_context):
-        """Test that send_chat_history_async raises ValueError when session is None."""
+    async def test_send_chat_history_validates_session_none(self, service, mock_turn_context):
+        """Test that send_chat_history raises ValueError when session is None."""
         with pytest.raises(ValueError, match="session cannot be None"):
-            await service.send_chat_history_async(mock_turn_context, None)
+            await service.send_chat_history(mock_turn_context, None)
 
 
 # =============================================================================
@@ -158,10 +158,10 @@ class TestSuccessPath:
     # SP-01
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_success(
+    async def test_send_chat_history_messages_success(
         self, service, mock_turn_context, sample_openai_messages
     ):
-        """Test successful send_chat_history_messages_async call."""
+        """Test successful send_chat_history_messages call."""
         with patch.object(
             service.config_service,
             "send_chat_history",
@@ -169,7 +169,7 @@ class TestSuccessPath:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            result = await service.send_chat_history_messages_async(
+            result = await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages
             )
 
@@ -180,10 +180,10 @@ class TestSuccessPath:
     # SP-02
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_with_options(
+    async def test_send_chat_history_messages_with_options(
         self, service, mock_turn_context, sample_openai_messages
     ):
-        """Test send_chat_history_messages_async with custom ToolOptions."""
+        """Test send_chat_history_messages with custom ToolOptions."""
         custom_options = ToolOptions(orchestrator_name="CustomOrchestrator")
 
         with patch.object(
@@ -193,7 +193,7 @@ class TestSuccessPath:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            result = await service.send_chat_history_messages_async(
+            result = await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages, options=custom_options
             )
 
@@ -205,7 +205,7 @@ class TestSuccessPath:
     # SP-03
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_default_orchestrator_name(
+    async def test_send_chat_history_messages_default_orchestrator_name(
         self, service, mock_turn_context, sample_openai_messages
     ):
         """Test that default orchestrator name is set to 'OpenAI'."""
@@ -216,7 +216,7 @@ class TestSuccessPath:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            await service.send_chat_history_messages_async(
+            await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages
             )
 
@@ -227,10 +227,10 @@ class TestSuccessPath:
     # SP-04
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_delegates_to_config_service(
+    async def test_send_chat_history_messages_delegates_to_config_service(
         self, service, mock_turn_context, sample_openai_messages
     ):
-        """Test that send_chat_history_messages_async delegates to config_service."""
+        """Test that send_chat_history_messages delegates to config_service."""
         with patch.object(
             service.config_service,
             "send_chat_history",
@@ -238,7 +238,7 @@ class TestSuccessPath:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            await service.send_chat_history_messages_async(
+            await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages
             )
 
@@ -256,8 +256,8 @@ class TestSuccessPath:
     # SP-05
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_success(self, service, mock_turn_context, mock_session):
-        """Test successful send_chat_history_async call."""
+    async def test_send_chat_history_success(self, service, mock_turn_context, mock_session):
+        """Test successful send_chat_history call."""
         with patch.object(
             service.config_service,
             "send_chat_history",
@@ -265,7 +265,7 @@ class TestSuccessPath:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            result = await service.send_chat_history_async(mock_turn_context, mock_session)
+            result = await service.send_chat_history(mock_turn_context, mock_session)
 
             assert result.succeeded is True
             mock_send.assert_called_once()
@@ -273,8 +273,8 @@ class TestSuccessPath:
     # SP-06
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_with_limit(self, service, mock_turn_context):
-        """Test send_chat_history_async with limit parameter."""
+    async def test_send_chat_history_with_limit(self, service, mock_turn_context):
+        """Test send_chat_history with limit parameter."""
         # Create session with many messages
         messages = [MockUserMessage(content=f"Message {i}") for i in range(10)]
         session = MockSession(items=messages)
@@ -286,7 +286,7 @@ class TestSuccessPath:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            result = await service.send_chat_history_async(mock_turn_context, session, limit=5)
+            result = await service.send_chat_history(mock_turn_context, session, limit=5)
 
             assert result.succeeded is True
 
@@ -298,18 +298,18 @@ class TestSuccessPath:
     # SP-07
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_delegates_to_send_chat_history_messages(
+    async def test_send_chat_history_delegates_to_send_chat_history_messages(
         self, service, mock_turn_context, mock_session
     ):
-        """Test that send_chat_history_async calls send_chat_history_messages_async."""
+        """Test that send_chat_history calls send_chat_history_messages."""
         with patch.object(
             service,
-            "send_chat_history_messages_async",
+            "send_chat_history_messages",
             new_callable=AsyncMock,
         ) as mock_method:
             mock_method.return_value = OperationResult.success()
 
-            await service.send_chat_history_async(mock_turn_context, mock_session)
+            await service.send_chat_history(mock_turn_context, mock_session)
 
             mock_method.assert_called_once()
             call_args = mock_method.call_args
@@ -327,10 +327,10 @@ class TestErrorHandling:
     # EH-01
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_http_error(
+    async def test_send_chat_history_messages_http_error(
         self, service, mock_turn_context, sample_openai_messages
     ):
-        """Test send_chat_history_messages_async handles HTTP errors."""
+        """Test send_chat_history_messages handles HTTP errors."""
 
         with patch.object(
             service.config_service,
@@ -341,7 +341,7 @@ class TestErrorHandling:
                 MagicMock(message="HTTP 500: Internal Server Error")
             )
 
-            result = await service.send_chat_history_messages_async(
+            result = await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages
             )
 
@@ -350,10 +350,10 @@ class TestErrorHandling:
     # EH-02
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_timeout_error(
+    async def test_send_chat_history_messages_timeout_error(
         self, service, mock_turn_context, sample_openai_messages
     ):
-        """Test send_chat_history_messages_async handles timeout errors."""
+        """Test send_chat_history_messages handles timeout errors."""
         with patch.object(
             service.config_service,
             "send_chat_history",
@@ -361,7 +361,7 @@ class TestErrorHandling:
         ) as mock_send:
             mock_send.side_effect = TimeoutError("Request timed out")
 
-            result = await service.send_chat_history_messages_async(
+            result = await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages
             )
 
@@ -371,10 +371,10 @@ class TestErrorHandling:
     # EH-03
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_client_error(
+    async def test_send_chat_history_messages_client_error(
         self, service, mock_turn_context, sample_openai_messages
     ):
-        """Test send_chat_history_messages_async handles network/client errors."""
+        """Test send_chat_history_messages handles network/client errors."""
         import aiohttp
 
         with patch.object(
@@ -384,7 +384,7 @@ class TestErrorHandling:
         ) as mock_send:
             mock_send.side_effect = aiohttp.ClientError("Connection failed")
 
-            result = await service.send_chat_history_messages_async(
+            result = await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages
             )
 
@@ -394,10 +394,10 @@ class TestErrorHandling:
     # EH-04
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_async_conversion_error(
+    async def test_send_chat_history_messages_conversion_error(
         self, service, mock_turn_context
     ):
-        """Test send_chat_history_messages_async handles conversion errors gracefully."""
+        """Test send_chat_history_messages handles conversion errors gracefully."""
         # Create a message that might cause conversion issues but still has content
         problematic_message = MockUserMessage(content="Valid content")
 
@@ -409,7 +409,7 @@ class TestErrorHandling:
             mock_send.return_value = OperationResult.success()
 
             # Should not raise, should handle gracefully
-            result = await service.send_chat_history_messages_async(
+            result = await service.send_chat_history_messages(
                 mock_turn_context, [problematic_message]
             )
 
@@ -418,13 +418,13 @@ class TestErrorHandling:
     # EH-05
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_async_get_items_error(self, service, mock_turn_context):
-        """Test send_chat_history_async handles session.get_items() errors."""
+    async def test_send_chat_history_get_items_error(self, service, mock_turn_context):
+        """Test send_chat_history handles session.get_items() errors."""
         # Create a mock session that raises an error
         mock_session = Mock()
         mock_session.get_items.side_effect = Exception("Session error")
 
-        result = await service.send_chat_history_async(mock_turn_context, mock_session)
+        result = await service.send_chat_history(mock_turn_context, mock_session)
 
         assert result.succeeded is False
         assert len(result.errors) == 1
@@ -453,7 +453,7 @@ class TestOrchestratorNameHandling:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            await service.send_chat_history_messages_async(
+            await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages, options=options
             )
 
@@ -475,9 +475,56 @@ class TestOrchestratorNameHandling:
         ) as mock_send:
             mock_send.return_value = OperationResult.success()
 
-            await service.send_chat_history_messages_async(
+            await service.send_chat_history_messages(
                 mock_turn_context, sample_openai_messages, options=options
             )
 
             call_args = mock_send.call_args
             assert call_args.kwargs["options"].orchestrator_name == "MyCustomOrchestrator"
+
+
+# =============================================================================
+# THREAD SAFETY / CONCURRENT CALLS TESTS
+# =============================================================================
+
+
+class TestConcurrentCalls:
+    """Tests for thread safety and concurrent call isolation."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_concurrent_calls_do_not_interfere(self, service, mock_turn_context):
+        """Test that concurrent calls to send_chat_history_messages are isolated."""
+        import asyncio
+
+        messages1 = [MockUserMessage(content="Message set 1")]
+        messages2 = [MockUserMessage(content="Message set 2")]
+
+        captured_payloads: list[list[object]] = []
+
+        with patch.object(
+            service.config_service,
+            "send_chat_history",
+            new_callable=AsyncMock,
+        ) as mock_send:
+
+            async def capture_and_succeed(*args: object, **kwargs: object) -> OperationResult:
+                captured_payloads.append(kwargs.get("chat_history_messages"))
+                await asyncio.sleep(0.01)  # Simulate async work
+                return OperationResult.success()
+
+            mock_send.side_effect = capture_and_succeed
+
+            # Run concurrently
+            results = await asyncio.gather(
+                service.send_chat_history_messages(mock_turn_context, messages1),
+                service.send_chat_history_messages(mock_turn_context, messages2),
+            )
+
+            # Both should succeed independently
+            assert all(r.succeeded for r in results)
+            assert len(captured_payloads) == 2
+            # Verify no cross-contamination
+            contents = [p[0].content for p in captured_payloads]
+            assert "Message set 1" in contents
+            assert "Message set 2" in contents
