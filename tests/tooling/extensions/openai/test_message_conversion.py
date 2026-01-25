@@ -139,8 +139,8 @@ class TestContentExtraction:
 
     # CV-11
     @pytest.mark.unit
-    def test_convert_empty_content_uses_empty_string(self, service):
-        """Test that empty content is handled - message skipped due to validator."""
+    def test_convert_empty_content_skips_message(self, service):
+        """Test that messages with empty content are skipped during conversion."""
         message = MockUserMessage(content="")
 
         result = service._convert_single_message(message)

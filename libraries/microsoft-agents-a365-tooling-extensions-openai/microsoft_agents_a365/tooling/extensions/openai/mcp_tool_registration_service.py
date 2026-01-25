@@ -69,7 +69,7 @@ class McpToolRegistrationService:
         auth_handler_name: str,
         context: TurnContext,
         auth_token: Optional[str] = None,
-    ):
+    ) -> Agent:
         """
         Add new MCP servers to the agent by creating a new Agent instance.
 
@@ -88,7 +88,7 @@ class McpToolRegistrationService:
             New Agent instance with all MCP servers, or original agent if no new servers
         """
 
-        if not auth_token:
+        if auth_token is None:
             scopes = get_mcp_platform_authentication_scope()
             authToken = await auth.exchange_token(context, scopes, auth_handler_name)
             auth_token = authToken.token
@@ -190,8 +190,6 @@ class McpToolRegistrationService:
                 all_mcp_servers = existing_mcp_servers + new_mcp_servers
 
                 # Recreate the agent with all MCP servers
-                from agents import Agent
-
                 new_agent = Agent(
                     name=agent.name,
                     model=agent.model,
@@ -223,12 +221,12 @@ class McpToolRegistrationService:
                 # Clean up connected servers if agent creation fails
                 self._logger.error(f"Failed to recreate agent with new MCP servers: {e}")
                 await self._cleanup_servers(connected_servers)
-                raise e
+                raise
 
         self._logger.info("No new MCP servers to add to agent")
         return agent
 
-    async def _cleanup_servers(self, servers):
+    async def _cleanup_servers(self, servers: List[MCPServerStreamableHttp]) -> None:
         """Clean up connected MCP servers"""
         for server in servers:
             try:
@@ -238,7 +236,7 @@ class McpToolRegistrationService:
                 # Log cleanup errors but don't raise them
                 self._logger.debug(f"Error during server cleanup: {e}")
 
-    async def cleanup_all_servers(self):
+    async def cleanup_all_servers(self) -> None:
         """Clean up all connected MCP servers"""
         if hasattr(self, "_connected_servers"):
             await self._cleanup_servers(self._connected_servers)

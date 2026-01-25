@@ -398,22 +398,20 @@ class TestErrorHandling:
         self, service, mock_turn_context
     ):
         """Test send_chat_history_messages handles conversion errors gracefully."""
-        # Create a message that might cause conversion issues but still has content
-        problematic_message = MockUserMessage(content="Valid content")
+        sample_messages = [MockUserMessage(content="Hello")]
 
         with patch.object(
-            service.config_service,
-            "send_chat_history",
-            new_callable=AsyncMock,
-        ) as mock_send:
-            mock_send.return_value = OperationResult.success()
+            service, "_convert_openai_messages_to_chat_history"
+        ) as mock_convert:
+            mock_convert.side_effect = Exception("Conversion failed")
 
-            # Should not raise, should handle gracefully
             result = await service.send_chat_history_messages(
-                mock_turn_context, [problematic_message]
+                mock_turn_context, sample_messages
             )
 
-            assert result.succeeded is True
+            assert result.succeeded is False
+            assert len(result.errors) == 1
+            assert "Conversion failed" in str(result.errors[0].message)
 
     # EH-05
     @pytest.mark.asyncio
