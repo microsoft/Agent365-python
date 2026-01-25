@@ -4,7 +4,7 @@
 """Shared pytest fixtures for OpenAI extension tests."""
 
 from datetime import UTC, datetime
-from typing import Union
+from typing import TypeAlias
 from unittest.mock import Mock
 
 import pytest
@@ -14,7 +14,7 @@ import pytest
 # --------------------------------------------------------------------------
 
 # Content can be string, list of content parts, or None (mimics OpenAI SDK)
-MessageContent = Union[str, list[object], None]
+MessageContent: TypeAlias = str | list[object] | None
 
 
 # --------------------------------------------------------------------------
@@ -99,13 +99,13 @@ class MockContentPart:
 
 
 # Type alias for mock messages
-MockMessage = Union[
-    MockUserMessage,
-    MockAssistantMessage,
-    MockSystemMessage,
-    MockResponseOutputMessage,
-    MockUnknownMessage,
-]
+MockMessage: TypeAlias = (
+    MockUserMessage
+    | MockAssistantMessage
+    | MockSystemMessage
+    | MockResponseOutputMessage
+    | MockUnknownMessage
+)
 
 
 class MockSession:
