@@ -65,6 +65,10 @@ target-version = ['py311']
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "# Copyright \\(c\\) Microsoft Corporation\\.\\r?\\n# Licensed under the MIT License\\."
+min-file-size = 1
+
 [tool.mypy]
 python_version = "3.11"
 strict = true

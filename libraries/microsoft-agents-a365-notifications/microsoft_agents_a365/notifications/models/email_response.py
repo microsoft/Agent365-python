@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 from typing import Literal
 from microsoft_agents.activity.activity import Activity
 from microsoft_agents.activity.entity import Entity

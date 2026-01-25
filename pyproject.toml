@@ -66,8 +66,11 @@ line-length = 100
 target-version = "py311"
 preview = true
 
+[tool.ruff.lint]
+preview = true
+
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
-lint.select = [
+select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings  
     "F",  # Pyflakes
@@ -78,13 +81,13 @@ lint.select = [
     "CPY",
 ]
 
-lint.ignore = [
+ignore = [
     "E501",  # Line too long, handled by formatter
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
-lint.fixable = ["ALL"]
-lint.unfixable = []
+fixable = ["ALL"]
+unfixable = []
 
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -112,8 +115,8 @@ exclude = [
 ]
 
 [tool.ruff.lint.flake8-copyright]
-# Require this exact line anywhere in the first 4096 bytes
-notice-rgx = "^# Copyright \\(c\\) Microsoft\\. All rights reserved\\."
+# Require this exact copyright header (matches CLAUDE.md specification)
+notice-rgx = "# Copyright \\(c\\) Microsoft Corporation\\.\\r?\\n# Licensed under the MIT License\\."
 # (optional) ensure all files are checked regardless of size
 min-file-size = 1
 
