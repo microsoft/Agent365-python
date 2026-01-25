@@ -68,7 +68,7 @@ Write the consolidated review to a markdown file using the Write tool:
 
 Use this exact format:
 
-```markdown
+````markdown
 # Code Review Report (Staged Changes)
 
 ---
@@ -78,7 +78,6 @@ Use this exact format:
 ```
 Review Type:         Pre-commit (Staged Changes)
 Review Date/Time:    [ISO 8601 timestamp]
-Reviewer:            code-review-manager
 Subagents Used:      architecture-reviewer, code-reviewer, test-coverage-reviewer
 ```
 
@@ -134,13 +133,13 @@ Subagents Used:      architecture-reviewer, code-reviewer, test-coverage-reviewe
 **Status:** [READY TO COMMIT / FIX ISSUES FIRST / NEEDS DISCUSSION]
 
 [Brief explanation of the status]
-```
+````
 
 ### Structured Issue Format
 
 For EVERY finding, use this structure:
 
-```markdown
+````markdown
 #### [CRM-001] Issue Title
 
 | Field | Value |
@@ -166,7 +165,7 @@ IMPORTANT: Include the relevant diff snippet that shows the code being discussed
 
 **Suggestion:**
 [Specific recommendation]
-```
+````
 
 ### Step 5: Report to User
 

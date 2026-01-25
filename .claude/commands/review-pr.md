@@ -67,7 +67,7 @@ Write the consolidated review to a markdown file using the Write tool:
 
 Use this exact format:
 
-```markdown
+````markdown
 # Code Review Report
 
 ---
@@ -79,7 +79,6 @@ PR Number:           #$ARGUMENTS
 PR Title:            [title from gh pr view]
 PR Iteration:        1
 Review Date/Time:    [ISO 8601 timestamp]
-Reviewer:            code-review-manager
 Subagents Used:      architecture-reviewer, code-reviewer, test-coverage-reviewer
 ```
 
@@ -133,13 +132,13 @@ Subagents Used:      architecture-reviewer, code-reviewer, test-coverage-reviewe
 ## Approval Status
 
 **Final Status:** [APPROVED / APPROVED WITH MINOR NOTES / CHANGES REQUESTED / REJECTED]
-```
+````
 
 ### Structured Issue Format
 
 For EVERY finding, use this structure:
 
-```markdown
+````markdown
 #### [CRM-001] Issue Title
 
 | Field | Value |
@@ -166,7 +165,7 @@ IMPORTANT: Include the relevant diff snippet from the PR that shows the code bei
 
 **Suggestion:**
 [Specific recommendation]
-```
+````
 
 ### Step 5: Report to User
 
