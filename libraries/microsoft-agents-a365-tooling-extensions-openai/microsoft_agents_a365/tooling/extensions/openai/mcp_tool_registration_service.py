@@ -88,7 +88,7 @@ class McpToolRegistrationService:
             New Agent instance with all MCP servers, or original agent if no new servers
         """
 
-        if auth_token is None:
+        if auth_token is None or auth_token.strip() == "":
             scopes = get_mcp_platform_authentication_scope()
             authToken = await auth.exchange_token(context, scopes, auth_handler_name)
             auth_token = authToken.token
