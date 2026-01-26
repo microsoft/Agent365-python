@@ -3,37 +3,17 @@
 
 """Unit tests for send_chat_history_from_store methods in McpToolRegistrationService."""
 
-# Direct import from service file to work around namespace package resolution issues
-# with editable installs in the uv workspace
-import importlib.util
-import sys
-from pathlib import Path
+import uuid
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, Mock, patch
 
-_service_path = (
-    Path(__file__).parent.parent.parent.parent.parent.parent
-    / "libraries"
-    / "microsoft-agents-a365-tooling-extensions-agentframework"
-    / "microsoft_agents_a365"
-    / "tooling"
-    / "extensions"
-    / "agentframework"
-    / "services"
-    / "mcp_tool_registration_service.py"
+import pytest
+from microsoft_agents.hosting.core import TurnContext
+from microsoft_agents_a365.runtime import OperationError, OperationResult
+from microsoft_agents_a365.tooling.extensions.agentframework.services import (
+    McpToolRegistrationService,
 )
-_spec = importlib.util.spec_from_file_location("mcp_tool_registration_service", _service_path)
-_module = importlib.util.module_from_spec(_spec)
-sys.modules["mcp_tool_registration_service"] = _module
-_spec.loader.exec_module(_module)
-McpToolRegistrationService = _module.McpToolRegistrationService
-
-import uuid  # noqa: E402
-from datetime import UTC, datetime  # noqa: E402
-from unittest.mock import AsyncMock, Mock, patch  # noqa: E402
-
-import pytest  # noqa: E402
-from microsoft_agents.hosting.core import TurnContext  # noqa: E402
-from microsoft_agents_a365.runtime import OperationError, OperationResult  # noqa: E402
-from microsoft_agents_a365.tooling.models import ToolOptions  # noqa: E402
+from microsoft_agents_a365.tooling.models import ToolOptions
 
 
 class TestSendChatHistoryAsync:
