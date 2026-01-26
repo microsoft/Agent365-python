@@ -160,26 +160,6 @@ Before posting comments, ensure the GitHub CLI is up-to-date and the correct acc
    sudo apk update && sudo apk upgrade gh
    ```
 
-   Fedora/RHEL (dnf):
-   ```bash
-   sudo dnf upgrade gh -y
-   ```
-
-   openSUSE (zypper):
-   ```bash
-   sudo zypper refresh && sudo zypper update gh
-   ```
-
-   Arch Linux (pacman):
-   ```bash
-   sudo pacman -Syu gh
-   ```
-
-   Alpine (apk):
-   ```bash
-   sudo apk update && sudo apk upgrade gh
-   ```
-
    If your distribution is not listed or these commands fail, instruct the user to upgrade GitHub CLI manually using the official installation docs: https://cli.github.com/manual/installation
 4. **Verify upgrade succeeded**:
    ```bash
