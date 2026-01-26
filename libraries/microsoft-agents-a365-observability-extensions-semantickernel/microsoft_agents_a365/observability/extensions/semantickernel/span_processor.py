@@ -9,6 +9,7 @@ from microsoft_agents_a365.observability.core.constants import (
 from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.core.inference_operation_type import InferenceOperationType
 from microsoft_agents_a365.observability.core.utils import extract_model_name
+from opentelemetry import context as context_api
 from opentelemetry.sdk.trace import ReadableSpan, Span
 from opentelemetry.sdk.trace.export import SpanProcessor
 
@@ -27,7 +28,7 @@ class SemanticKernelSpanProcessor(SpanProcessor):
         """
         self.service_name = service_name
 
-    def on_start(self, span: Span, parent_context) -> None:
+    def on_start(self, span: Span, parent_context: context_api.Context | None) -> None:
         """
         Modify span while it's still writable.
 
@@ -48,10 +49,6 @@ class SemanticKernelSpanProcessor(SpanProcessor):
     def on_end(self, span: ReadableSpan) -> None:
         """
         Called when a span ends.
-
-        Note: For on_end modifications, use the span enricher pattern
-        (enrich_semantic_kernel_span) which is registered with the core SDK.
-        This ensures enriched attributes propagate to the exporter.
         """
         pass
 

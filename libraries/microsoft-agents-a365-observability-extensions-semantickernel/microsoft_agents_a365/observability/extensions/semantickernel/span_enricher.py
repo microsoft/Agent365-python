@@ -63,19 +63,11 @@ def enrich_semantic_kernel_span(span: ReadableSpan) -> ReadableSpan:
 
     # Map tool attributes for execute_tool spans
     elif span.name.startswith(EXECUTE_TOOL_OPERATION_NAME):
-        # Map SK's gen_ai.tool.arguments to standard gen_ai.tool.call.arguments
-        tool_arguments = attributes.get(GEN_AI_TOOL_ARGS_KEY) or attributes.get(
-            SK_TOOL_CALL_ARGUMENTS_KEY
-        )
-        if tool_arguments:
-            extra_attributes[GEN_AI_TOOL_ARGS_KEY] = tool_arguments
+        if SK_TOOL_CALL_ARGUMENTS_KEY in attributes:
+            extra_attributes[GEN_AI_TOOL_ARGS_KEY] = attributes[SK_TOOL_CALL_ARGUMENTS_KEY]
 
-        # Map SK's tool result to standard gen_ai.tool.call.result
-        tool_result = attributes.get(GEN_AI_TOOL_CALL_RESULT_KEY) or attributes.get(
-            SK_TOOL_CALL_RESULT_KEY
-        )
-        if tool_result:
-            extra_attributes[GEN_AI_TOOL_CALL_RESULT_KEY] = tool_result
+        if SK_TOOL_CALL_RESULT_KEY in attributes:
+            extra_attributes[GEN_AI_TOOL_CALL_RESULT_KEY] = attributes[SK_TOOL_CALL_RESULT_KEY]
 
     if extra_attributes:
         return EnrichedReadableSpan(span, extra_attributes)
