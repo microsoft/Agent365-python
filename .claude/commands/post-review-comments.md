@@ -268,7 +268,7 @@ The function should include a return type annotation for better IDE support.
 
 For findings missing `diff_line` or `diff_side`, fall back to regular PR comments:
 
-```bash
+````bash
 gh pr comment <PR_NUMBER> --body "$(cat <<'EOF'
 ### <severity_emoji> [<CRM-ID>] <title>
 
@@ -291,7 +291,7 @@ gh pr comment <PR_NUMBER> --body "$(cat <<'EOF'
 <suggestion>
 EOF
 )"
-```
+````
 
 **Severity Emojis:**
 - `critical`: 🔴 (Red circle)
