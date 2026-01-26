@@ -5,14 +5,14 @@
 
 import json
 import os
-from typing import Dict, Any
-from unittest.mock import patch, AsyncMock, MagicMock
-import pytest
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from microsoft_agents_a365.tooling.models import MCPServerConfig
 from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_service import (
     McpToolServerConfigurationService,
 )
-from microsoft_agents_a365.tooling.models import MCPServerConfig
 
 
 class TestMCPServerConfig:
@@ -59,7 +59,7 @@ class TestMcpToolServerConfigurationService:
         return McpToolServerConfigurationService()
 
     @pytest.fixture
-    def mock_manifest_data(self) -> Dict[str, Any]:
+    def mock_manifest_data(self) -> dict[str, Any]:
         """Create mock manifest data."""
         return {
             "mcpServers": [
