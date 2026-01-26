@@ -183,14 +183,14 @@ The following fields are **required** for posting inline comments on the PR:
 | Field | Description | Example |
 |-------|-------------|---------|
 | **File** | The exact path to the file as it appears in the diff | `libraries/microsoft-agents-a365-runtime/src/microsoft_agents_a365/runtime/utils.py` |
-| **Diff Line** | The line number where the comment should appear in the diff. For multi-line issues, use the **last line** of the relevant code block. Count lines in the diff hunk, not the file. | `47` |
+| **Diff Line** | The **absolute line number** in the target file where the comment should appear. For multi-line issues, use the **last line** of the relevant code block. You can compute this from the diff hunk header plus the line's position within the hunk. | `47` |
 | **Diff Side** | Which side of the diff: `RIGHT` for added/modified lines (`+`), `LEFT` for removed lines (`-`). Most comments should be on `RIGHT`. | `RIGHT` |
 
 **How to determine Diff Line:**
-1. Look at the diff hunk header (e.g., `@@ -10,5 +10,8 @@`)
-2. Count lines from the start of the hunk
-3. The line number is relative to the new file for `RIGHT`, old file for `LEFT`
-4. For additions (`+` lines), use the line number shown after the `+` in the hunk header
+1. Look at the diff hunk header (e.g., `@@ -10,5 +10,8 @@`). The number after `+` (`10` in this example) is the starting line in the **new** file; the number after `-` is the starting line in the **old** file.
+2. In the hunk body, locate the exact line you want to comment on and determine its offset from the first line of the hunk (counting all context and added/removed lines above it).
+3. Add this offset to the starting line from the appropriate side of the header: use the `+` side for `RIGHT` comments (new file), and the `-` side for `LEFT` comments (old file). This sum is the absolute `Diff Line` value.
+4. For additions (`+` lines), this means starting from the line number shown after the `+` in the hunk header; for removals (`-` lines), start from the line number shown after the `-`.
 
 **Example:**
 ```diff
