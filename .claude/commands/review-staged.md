@@ -179,7 +179,7 @@ Even though staged changes are not a PR yet, capture these fields so inline comm
 | Field | Description | Example |
 |-------|-------------|---------|
 | **File** | The exact path to the file | `libraries/microsoft-agents-a365-runtime/src/microsoft_agents_a365/runtime/utils.py` |
-| **Diff Line** | The line number in the diff where the issue occurs. For multi-line issues, use the **last line**. | `47` |
+| **Diff Line** | The **absolute line number** in the target file where the comment should appear. For multi-line issues, use the **last line** of the relevant code block. Compute this from the diff hunk header plus the line's position within the hunk. | `47` |
 | **Diff Side** | `RIGHT` for added/modified lines (`+`), `LEFT` for removed lines (`-`) | `RIGHT` |
 
 **Note:** To post these findings as inline PR comments later, use `/review-pr` after creating the PR, or create a PR and use `/post-review-comments` with the staged review file (it will attempt to map the findings).
