@@ -253,7 +253,7 @@ gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
 **Example:**
 ```bash
 gh api repos/microsoft/Agent365-python/pulls/123/comments \
-  -f body="[CRM-001] Missing type hints for return value
+  -f body="🔵 **[CRM-001] Missing type hints for return value**
 
 The function should include a return type annotation for better IDE support.
 
