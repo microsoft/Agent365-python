@@ -181,6 +181,10 @@ For each issue marked "Agent Resolvable: Yes":
    ```bash
    rmdir .worktrees 2>/dev/null || true
    ```
+   On Windows, use PowerShell:
+   ```powershell
+   if ((Test-Path .worktrees) -and ((Get-ChildItem .worktrees -Force | Measure-Object).Count -eq 0)) { Remove-Item .worktrees }
+   ```
 
 **For Staged Reviews:**
 
