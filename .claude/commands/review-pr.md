@@ -22,8 +22,18 @@ First, collect information about the pull request:
 
 1. Get PR details, changed files, and the HEAD commit SHA:
    ```bash
-   gh pr view $ARGUMENTS --json number,title,body,baseRefName,headRefName,headRefOid,url,files
-   gh pr diff $ARGUMENTS
+   if [ -z "$ARGUMENTS" ]; then
+     echo "Error: Missing PR number. Usage: /review-pr <PR_NUMBER>" >&2
+     exit 1
+   fi
+   
+   if ! printf '%s\n' "$ARGUMENTS" | grep -Eq '^[0-9]+$'; then
+     echo "Error: Invalid PR number '$ARGUMENTS'. PR number must be a positive integer. Usage: /review-pr <PR_NUMBER>" >&2
+     exit 1
+   fi
+   
+   gh pr view "$ARGUMENTS" --json number,title,body,baseRefName,headRefName,headRefOid,url,files
+   gh pr diff "$ARGUMENTS"
    ```
 
 2. Extract key information:
