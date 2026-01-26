@@ -1,31 +1,40 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from typing import Dict, Optional
-from dataclasses import dataclass
+"""
+MCP Tool Registration Service for OpenAI.
+
+This module provides OpenAI-specific extensions for MCP tool registration,
+including methods to send chat history from OpenAI Sessions and message lists.
+"""
+
 import logging
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 
 from agents import Agent
-
-from microsoft_agents.hosting.core import Authorization, TurnContext
-
+from agents.items import TResponseInputItem
 from agents.mcp import (
     MCPServerStreamableHttp,
     MCPServerStreamableHttpParams,
 )
+from agents.memory import Session
+from microsoft_agents.hosting.core import Authorization, TurnContext
+
+from microsoft_agents_a365.runtime import OperationError, OperationResult
 from microsoft_agents_a365.runtime.utility import Utility
+from microsoft_agents_a365.tooling.models import ChatHistoryMessage, ToolOptions
 from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_service import (
     McpToolServerConfigurationService,
 )
-
-from microsoft_agents_a365.tooling.models import ToolOptions
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
 )
 
 
-# TODO: This is not needed. Remove this.
 @dataclass
 class MCPServerInfo:
     """Information about an MCP server"""
@@ -60,7 +69,7 @@ class McpToolRegistrationService:
         auth_handler_name: str,
         context: TurnContext,
         auth_token: Optional[str] = None,
-    ):
+    ) -> Agent:
         """
         Add new MCP servers to the agent by creating a new Agent instance.
 
@@ -79,7 +88,7 @@ class McpToolRegistrationService:
             New Agent instance with all MCP servers, or original agent if no new servers
         """
 
-        if not auth_token:
+        if auth_token is None or auth_token.strip() == "":
             scopes = get_mcp_platform_authentication_scope()
             authToken = await auth.exchange_token(context, scopes, auth_handler_name)
             auth_token = authToken.token
@@ -185,8 +194,6 @@ class McpToolRegistrationService:
                 all_mcp_servers = existing_mcp_servers + new_mcp_servers
 
                 # Recreate the agent with all MCP servers
-                from agents import Agent
-
                 new_agent = Agent(
                     name=agent.name,
                     model=agent.model,
@@ -218,12 +225,12 @@ class McpToolRegistrationService:
                 # Clean up connected servers if agent creation fails
                 self._logger.error(f"Failed to recreate agent with new MCP servers: {e}")
                 await self._cleanup_servers(connected_servers)
-                raise e
+                raise
 
         self._logger.info("No new MCP servers to add to agent")
         return agent
 
-    async def _cleanup_servers(self, servers):
+    async def _cleanup_servers(self, servers: List[MCPServerStreamableHttp]) -> None:
         """Clean up connected MCP servers"""
         for server in servers:
             try:
@@ -233,8 +240,430 @@ class McpToolRegistrationService:
                 # Log cleanup errors but don't raise them
                 self._logger.debug(f"Error during server cleanup: {e}")
 
-    async def cleanup_all_servers(self):
+    async def cleanup_all_servers(self) -> None:
         """Clean up all connected MCP servers"""
         if hasattr(self, "_connected_servers"):
             await self._cleanup_servers(self._connected_servers)
             self._connected_servers = []
+
+    # --------------------------------------------------------------------------
+    # SEND CHAT HISTORY - OpenAI-specific implementations
+    # --------------------------------------------------------------------------
+
+    async def send_chat_history(
+        self,
+        turn_context: TurnContext,
+        session: Session,
+        limit: Optional[int] = None,
+        options: Optional[ToolOptions] = None,
+    ) -> OperationResult:
+        """
+        Extract chat history from an OpenAI Session and send it to the MCP platform.
+
+        This method extracts messages from an OpenAI Session object using get_items()
+        and sends them to the MCP platform for real-time threat protection.
+
+        Args:
+            turn_context: TurnContext from the Agents SDK containing conversation info.
+                          Must have a valid activity with conversation.id, activity.id,
+                          and activity.text.
+            session: OpenAI Session instance to extract messages from. Must support
+                     the get_items() method which returns a list of TResponseInputItem.
+            limit: Optional maximum number of items to retrieve from session.
+                   If None, retrieves all items.
+            options: Optional ToolOptions for customization. If not provided,
+                     uses default options with orchestrator_name="OpenAI".
+
+        Returns:
+            OperationResult indicating success or failure. On success, returns
+            OperationResult.success(). On failure, returns OperationResult.failed()
+            with error details.
+
+        Raises:
+            ValueError: If turn_context is None or session is None.
+
+        Example:
+            >>> from agents import Agent, Runner
+            >>> from microsoft_agents_a365.tooling.extensions.openai import (
+            ...     McpToolRegistrationService
+            ... )
+            >>>
+            >>> service = McpToolRegistrationService()
+            >>> agent = Agent(name="my-agent", model="gpt-4")
+            >>>
+            >>> # In your agent handler:
+            >>> async with Runner.run(agent, messages) as result:
+            ...     session = result.session
+            ...     op_result = await service.send_chat_history(
+            ...         turn_context, session
+            ...     )
+            ...     if op_result.succeeded:
+            ...         print("Chat history sent successfully")
+        """
+        # Validate inputs
+        if turn_context is None:
+            raise ValueError("turn_context cannot be None")
+        if session is None:
+            raise ValueError("session cannot be None")
+
+        try:
+            # Extract messages from session
+            self._logger.info("Extracting messages from OpenAI session")
+            if limit is not None:
+                messages = session.get_items(limit=limit)
+            else:
+                messages = session.get_items()
+
+            self._logger.debug(f"Retrieved {len(messages)} items from session")
+
+            # Delegate to the list-based method
+            return await self.send_chat_history_messages(
+                turn_context=turn_context,
+                messages=messages,
+                options=options,
+            )
+        except ValueError:
+            # Re-raise validation errors
+            raise
+        except Exception as ex:
+            self._logger.error(f"Failed to send chat history from session: {ex}")
+            return OperationResult.failed(OperationError(ex))
+
+    async def send_chat_history_messages(
+        self,
+        turn_context: TurnContext,
+        messages: List[TResponseInputItem],
+        options: Optional[ToolOptions] = None,
+    ) -> OperationResult:
+        """
+        Send OpenAI chat history messages to the MCP platform for threat protection.
+
+        This method accepts a list of OpenAI TResponseInputItem messages, converts
+        them to ChatHistoryMessage format, and sends them to the MCP platform.
+
+        Args:
+            turn_context: TurnContext from the Agents SDK containing conversation info.
+                          Must have a valid activity with conversation.id, activity.id,
+                          and activity.text.
+            messages: List of OpenAI TResponseInputItem messages to send. Supports
+                      UserMessage, AssistantMessage, SystemMessage, and other OpenAI
+                      message types.
+            options: Optional ToolOptions for customization. If not provided,
+                     uses default options with orchestrator_name="OpenAI".
+
+        Returns:
+            OperationResult indicating success or failure. On success, returns
+            OperationResult.success(). On failure, returns OperationResult.failed()
+            with error details.
+
+        Raises:
+            ValueError: If turn_context is None or messages is None.
+
+        Example:
+            >>> from microsoft_agents_a365.tooling.extensions.openai import (
+            ...     McpToolRegistrationService
+            ... )
+            >>>
+            >>> service = McpToolRegistrationService()
+            >>> messages = [
+            ...     {"role": "user", "content": "Hello"},
+            ...     {"role": "assistant", "content": "Hi there!"},
+            ... ]
+            >>>
+            >>> result = await service.send_chat_history_messages(
+            ...     turn_context, messages
+            ... )
+            >>> if result.succeeded:
+            ...     print("Chat history sent successfully")
+        """
+        # Validate inputs
+        if turn_context is None:
+            raise ValueError("turn_context cannot be None")
+        if messages is None:
+            raise ValueError("messages cannot be None")
+
+        # Handle empty list as no-op
+        if len(messages) == 0:
+            self._logger.info("Empty message list provided, returning success")
+            return OperationResult.success()
+
+        self._logger.info(f"Sending {len(messages)} OpenAI messages as chat history")
+
+        # Set default options
+        if options is None:
+            options = ToolOptions(orchestrator_name=self._orchestrator_name)
+        elif options.orchestrator_name is None:
+            options.orchestrator_name = self._orchestrator_name
+
+        try:
+            # Convert OpenAI messages to ChatHistoryMessage format
+            chat_history_messages = self._convert_openai_messages_to_chat_history(messages)
+
+            if len(chat_history_messages) == 0:
+                self._logger.warning("No messages could be converted to chat history format")
+                return OperationResult.success()
+
+            self._logger.debug(
+                f"Converted {len(chat_history_messages)} messages to ChatHistoryMessage format"
+            )
+
+            # Delegate to core service
+            return await self.config_service.send_chat_history(
+                turn_context=turn_context,
+                chat_history_messages=chat_history_messages,
+                options=options,
+            )
+        except ValueError:
+            # Re-raise validation errors from the core service
+            raise
+        except Exception as ex:
+            self._logger.error(f"Failed to send chat history messages: {ex}")
+            return OperationResult.failed(OperationError(ex))
+
+    # --------------------------------------------------------------------------
+    # PRIVATE HELPER METHODS - Message Conversion
+    # --------------------------------------------------------------------------
+
+    def _convert_openai_messages_to_chat_history(
+        self, messages: List[TResponseInputItem]
+    ) -> List[ChatHistoryMessage]:
+        """
+        Convert a list of OpenAI messages to ChatHistoryMessage format.
+
+        Args:
+            messages: List of OpenAI TResponseInputItem messages.
+
+        Returns:
+            List of ChatHistoryMessage objects. Messages that cannot be converted
+            are filtered out with a warning log.
+        """
+        chat_history_messages: List[ChatHistoryMessage] = []
+
+        for idx, message in enumerate(messages):
+            converted = self._convert_single_message(message, idx)
+            if converted is not None:
+                chat_history_messages.append(converted)
+
+        self._logger.info(
+            f"Converted {len(chat_history_messages)} of {len(messages)} messages "
+            "to ChatHistoryMessage format"
+        )
+        return chat_history_messages
+
+    def _convert_single_message(
+        self, message: TResponseInputItem, index: int = 0
+    ) -> Optional[ChatHistoryMessage]:
+        """
+        Convert a single OpenAI message to ChatHistoryMessage format.
+
+        Args:
+            message: Single OpenAI TResponseInputItem message.
+            index: Index of the message in the list (for logging).
+
+        Returns:
+            ChatHistoryMessage object or None if conversion fails.
+        """
+        try:
+            role = self._extract_role(message)
+            content = self._extract_content(message)
+            msg_id = self._extract_id(message)
+            timestamp = self._extract_timestamp(message)
+
+            self._logger.debug(
+                f"Converting message {index}: role={role}, "
+                f"has_id={msg_id is not None}, has_timestamp={timestamp is not None}"
+            )
+
+            # Skip messages with empty content after extraction
+            # The ChatHistoryMessage validator requires non-empty content
+            if not content or not content.strip():
+                self._logger.warning(f"Message {index} has empty content, skipping")
+                return None
+
+            return ChatHistoryMessage(
+                id=msg_id,
+                role=role,
+                content=content,
+                timestamp=timestamp,
+            )
+        except Exception as ex:
+            self._logger.error(f"Failed to convert message {index}: {ex}")
+            return None
+
+    def _extract_role(self, message: TResponseInputItem) -> str:
+        """
+        Extract the role from an OpenAI message.
+
+        Role mapping:
+        - UserMessage or role="user" -> "user"
+        - AssistantMessage or role="assistant" -> "assistant"
+        - SystemMessage or role="system" -> "system"
+        - ResponseOutputMessage with role="assistant" -> "assistant"
+        - Unknown types -> "user" (default fallback with warning)
+
+        Args:
+            message: OpenAI message object.
+
+        Returns:
+            Role string: "user", "assistant", or "system".
+        """
+        # Check for role attribute directly
+        if hasattr(message, "role"):
+            role = message.role
+            if role in ("user", "assistant", "system"):
+                return role
+
+        # Check message type by class name
+        type_name = type(message).__name__
+
+        if "UserMessage" in type_name or "user" in type_name.lower():
+            return "user"
+        elif "AssistantMessage" in type_name or "assistant" in type_name.lower():
+            return "assistant"
+        elif "SystemMessage" in type_name or "system" in type_name.lower():
+            return "system"
+        elif "ResponseOutputMessage" in type_name:
+            # ResponseOutputMessage typically has role attribute
+            if hasattr(message, "role") and message.role == "assistant":
+                return "assistant"
+            return "assistant"  # Default for response output
+
+        # For dict-like objects
+        if isinstance(message, dict):
+            role = message.get("role", "")
+            if role in ("user", "assistant", "system"):
+                return role
+
+        # Default fallback with warning
+        self._logger.warning(f"Unknown message type {type_name}, defaulting to 'user' role")
+        return "user"
+
+    def _extract_content(self, message: TResponseInputItem) -> str:
+        """
+        Extract text content from an OpenAI message.
+
+        Content extraction priority:
+        1. If message has .content as string -> use directly
+        2. If message has .content as list -> concatenate all text parts
+        3. If message has .text attribute -> use directly
+        4. If content is empty/None -> return empty string with warning
+
+        Args:
+            message: OpenAI message object.
+
+        Returns:
+            Extracted text content as string.
+        """
+        content = ""
+
+        # Try .content attribute first
+        if hasattr(message, "content"):
+            raw_content = message.content
+
+            if isinstance(raw_content, str):
+                content = raw_content
+            elif isinstance(raw_content, list):
+                # Concatenate text parts from content list
+                text_parts = []
+                for part in raw_content:
+                    if isinstance(part, str):
+                        text_parts.append(part)
+                    elif hasattr(part, "text"):
+                        text_parts.append(str(part.text))
+                    elif isinstance(part, dict):
+                        if "text" in part:
+                            text_parts.append(str(part["text"]))
+                        elif part.get("type") == "text" and "text" in part:
+                            text_parts.append(str(part["text"]))
+                content = " ".join(text_parts)
+
+        # Try .text attribute as fallback
+        if not content and hasattr(message, "text"):
+            content = str(message.text) if message.text else ""
+
+        # Try dict-like access
+        if not content and isinstance(message, dict):
+            content = message.get("content", "") or message.get("text", "") or ""
+            if isinstance(content, list):
+                text_parts = []
+                for part in content:
+                    if isinstance(part, str):
+                        text_parts.append(part)
+                    elif isinstance(part, dict) and "text" in part:
+                        text_parts.append(str(part["text"]))
+                content = " ".join(text_parts)
+
+        if not content:
+            self._logger.warning("Message has empty content, using empty string")
+
+        return content
+
+    def _extract_id(self, message: TResponseInputItem) -> str:
+        """
+        Extract or generate a unique ID for the message.
+
+        If the message has an existing ID, it is preserved. Otherwise,
+        a new UUID is generated.
+
+        Args:
+            message: OpenAI message object.
+
+        Returns:
+            Message ID as string.
+        """
+        # Try to get existing ID
+        existing_id = None
+
+        if hasattr(message, "id") and message.id:
+            existing_id = str(message.id)
+        elif isinstance(message, dict) and message.get("id"):
+            existing_id = str(message["id"])
+
+        if existing_id:
+            return existing_id
+
+        # Generate new UUID
+        generated_id = str(uuid.uuid4())
+        self._logger.debug(f"Generated UUID {generated_id} for message without ID")
+        return generated_id
+
+    def _extract_timestamp(self, message: TResponseInputItem) -> datetime:
+        """
+        Extract or generate a timestamp for the message.
+
+        If the message has an existing timestamp, it is preserved. Otherwise,
+        the current UTC time is used.
+
+        Args:
+            message: OpenAI message object.
+
+        Returns:
+            Timestamp as datetime object.
+        """
+        # Try to get existing timestamp
+        existing_timestamp = None
+
+        if hasattr(message, "timestamp") and message.timestamp:
+            existing_timestamp = message.timestamp
+        elif hasattr(message, "created_at") and message.created_at:
+            existing_timestamp = message.created_at
+        elif isinstance(message, dict):
+            existing_timestamp = message.get("timestamp") or message.get("created_at")
+
+        if existing_timestamp:
+            # Convert to datetime if needed
+            if isinstance(existing_timestamp, datetime):
+                return existing_timestamp
+            elif isinstance(existing_timestamp, (int, float)):
+                # Unix timestamp
+                return datetime.fromtimestamp(existing_timestamp, tz=timezone.utc)
+            elif isinstance(existing_timestamp, str):
+                # Try ISO format parsing
+                try:
+                    return datetime.fromisoformat(existing_timestamp.replace("Z", "+00:00"))
+                except ValueError:
+                    pass
+
+        # Use current UTC time
+        self._logger.debug("Using current UTC time for message without timestamp")
+        return datetime.now(timezone.utc)
