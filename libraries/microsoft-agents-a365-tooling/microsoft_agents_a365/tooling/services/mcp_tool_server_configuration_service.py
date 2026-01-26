@@ -599,8 +599,13 @@ class McpToolServerConfigurationService:
         # Validate input parameters
         if turn_context is None:
             raise ValueError("turn_context cannot be None")
-        if chat_history_messages is None or len(chat_history_messages) == 0:
-            raise ValueError("chat_history_messages cannot be None or empty")
+        if chat_history_messages is None:
+            raise ValueError("chat_history_messages cannot be None")
+
+        # Handle empty messages - return success with warning (consistent with extension behavior)
+        if len(chat_history_messages) == 0:
+            self._logger.warning("Empty message list provided to send_chat_history")
+            return OperationResult.success()
 
         # Extract required information from turn context
         if not turn_context.activity:

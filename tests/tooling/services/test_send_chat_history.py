@@ -142,17 +142,18 @@ class TestSendChatHistory:
     ):
         """Test that send_chat_history validates chat_history_messages parameter."""
         # Act & Assert
-        with pytest.raises(ValueError, match="chat_history_messages cannot be None or empty"):
+        with pytest.raises(ValueError, match="chat_history_messages cannot be None"):
             await service.send_chat_history(mock_turn_context, None)
 
     @pytest.mark.asyncio
-    async def test_send_chat_history_validates_empty_chat_history_list(
-        self, service, mock_turn_context
-    ):
-        """Test that send_chat_history validates empty chat_history list."""
-        # Act & Assert
-        with pytest.raises(ValueError, match="chat_history_messages cannot be None or empty"):
-            await service.send_chat_history(mock_turn_context, [])
+    async def test_send_chat_history_empty_list_returns_success(self, service, mock_turn_context):
+        """Test that send_chat_history returns success for empty list (CRM-008)."""
+        # Act
+        result = await service.send_chat_history(mock_turn_context, [])
+
+        # Assert - empty list should return success, not raise exception
+        assert result.succeeded is True
+        assert len(result.errors) == 0
 
     @pytest.mark.asyncio
     async def test_send_chat_history_validates_activity(self, service, chat_history_messages):
