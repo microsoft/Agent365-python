@@ -294,10 +294,10 @@ EOF
 ```
 
 **Severity Emojis:**
-- `critical`: Red circle
-- `high`: Orange circle
-- `medium`: Yellow circle
-- `low`: Blue circle
+- `critical`: 🔴 (Red circle)
+- `high`: 🟠 (Orange circle)
+- `medium`: 🟡 (Yellow circle)
+- `low`: 🔵 (Blue circle)
 
 #### 6.3 Handle API Errors
 
