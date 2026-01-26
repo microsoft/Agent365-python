@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 # Microsoft Agent 365 Python SDK for OpenTelemetry tracing.
 
@@ -8,7 +9,10 @@ from .config import (
     get_tracer,
     get_tracer_provider,
     is_configured,
+    register_span_enricher,
+    unregister_span_enricher,
 )
+from .enriched_span import EnrichedReadableSpan
 from .execute_tool_scope import ExecuteToolScope
 from .execution_type import ExecutionType
 from .inference_call_details import InferenceCallDetails
@@ -31,6 +35,10 @@ __all__ = [
     "is_configured",
     "get_tracer",
     "get_tracer_provider",
+    # Span enrichment
+    "register_span_enricher",
+    "unregister_span_enricher",
+    "EnrichedReadableSpan",
     # Span processor
     "SpanProcessor",
     # Base scope class

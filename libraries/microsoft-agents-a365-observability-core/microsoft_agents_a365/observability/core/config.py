@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 import logging
 import threading
@@ -7,7 +8,7 @@ from typing import Any, Optional
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_NAMESPACE, Resource
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
 from .exporters.agent365_exporter import _Agent365Exporter
@@ -16,6 +17,67 @@ from .exporters.utils import is_agent365_exporter_enabled
 from .trace_processor.span_processor import SpanProcessor
 
 DEFAULT_LOGGER_NAME = __name__
+
+# Registry for span enrichers - allows extensions to add attributes to spans before export
+_span_enrichers: list[Callable[[ReadableSpan], ReadableSpan]] = []
+_enrichers_lock = threading.Lock()
+
+
+def register_span_enricher(enricher: Callable[[ReadableSpan], ReadableSpan]) -> None:
+    """
+    Register a function that enriches spans before export.
+
+    Extensions (like Semantic Kernel, LangChain, etc.) can register enrichers
+    that modify spans before they are exported by the BatchSpanProcessor.
+
+    Args:
+        enricher: A function that takes a ReadableSpan and returns an
+                  enriched ReadableSpan (or the same span if no changes).
+    """
+    with _enrichers_lock:
+        if enricher not in _span_enrichers:
+            _span_enrichers.append(enricher)
+
+
+def unregister_span_enricher(enricher: Callable[[ReadableSpan], ReadableSpan]) -> None:
+    """
+    Remove a previously registered enricher.
+
+    Args:
+        enricher: The enricher function to remove.
+    """
+    with _enrichers_lock:
+        if enricher in _span_enrichers:
+            _span_enrichers.remove(enricher)
+
+
+class _EnrichingBatchSpanProcessor(BatchSpanProcessor):
+    """
+    BatchSpanProcessor that applies registered enrichers before export.
+
+    This allows extensions to modify spans after they end but before
+    they are batched and exported.
+    """
+
+    def on_end(self, span: ReadableSpan) -> None:
+        """
+        Apply all registered enrichers to the span before batching.
+
+        Args:
+            span: The ReadableSpan that has ended.
+        """
+        enriched_span = span
+        with _enrichers_lock:
+            enrichers = list(_span_enrichers)  # Copy to avoid holding lock during enrichment
+
+        for enricher in enrichers:
+            try:
+                enriched_span = enricher(enriched_span)
+            except Exception:
+                # Don't let enrichment failures break the pipeline
+                pass
+
+        super().on_end(enriched_span)
 
 
 class TelemetryManager:
@@ -165,8 +227,9 @@ class TelemetryManager:
 
         # Add span processors
 
-        # Create BatchSpanProcessor with optimized settings
-        batch_processor = BatchSpanProcessor(exporter, **batch_processor_kwargs)
+        # Create _EnrichingBatchSpanProcessor with optimized settings
+        # This allows extensions to enrich spans before export
+        batch_processor = _EnrichingBatchSpanProcessor(exporter, **batch_processor_kwargs)
         agent_processor = SpanProcessor()
 
         tracer_provider.add_span_processor(batch_processor)
