@@ -9,6 +9,8 @@ from typing import Any
 from microsoft_agents_a365.observability.core.config import (
     get_tracer_provider,
     is_configured,
+)
+from microsoft_agents_a365.observability.core.exporters.enriching_span_processor import (
     register_span_enricher,
     unregister_span_enricher,
 )

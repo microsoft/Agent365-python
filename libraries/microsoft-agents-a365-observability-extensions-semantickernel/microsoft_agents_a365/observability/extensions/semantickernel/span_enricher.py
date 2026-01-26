@@ -11,7 +11,7 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_TOOL_CALL_RESULT_KEY,
     INVOKE_AGENT_OPERATION_NAME,
 )
-from microsoft_agents_a365.observability.core.enriched_span import EnrichedReadableSpan
+from microsoft_agents_a365.observability.core.exporters.enriched_span import EnrichedReadableSpan
 from opentelemetry.sdk.trace import ReadableSpan
 
 from .utils import extract_content_as_string_list

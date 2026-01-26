@@ -9,12 +9,14 @@ from .config import (
     get_tracer,
     get_tracer_provider,
     is_configured,
+)
+from .execute_tool_scope import ExecuteToolScope
+from .execution_type import ExecutionType
+from .exporters.enriched_span import EnrichedReadableSpan
+from .exporters.enriching_span_processor import (
     register_span_enricher,
     unregister_span_enricher,
 )
-from .enriched_span import EnrichedReadableSpan
-from .execute_tool_scope import ExecuteToolScope
-from .execution_type import ExecutionType
 from .inference_call_details import InferenceCallDetails
 from .inference_operation_type import InferenceOperationType
 from .inference_scope import InferenceScope
