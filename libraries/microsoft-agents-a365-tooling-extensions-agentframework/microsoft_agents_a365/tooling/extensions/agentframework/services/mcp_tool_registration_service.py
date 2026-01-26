@@ -97,14 +97,10 @@ class McpToolRegistrationService:
 
             # Add servers as MCPStreamableHTTPTool instances
             for config in server_configs:
-                try:
-                    server_url = getattr(config, "server_url", None) or getattr(
-                        config, "mcp_server_unique_name", None
-                    )
-                    if not server_url:
-                        self._logger.warning(f"MCP server config missing server_url: {config}")
-                        continue
+                # Use mcp_server_name if available (not None or empty), otherwise fall back to mcp_server_unique_name
+                server_name = config.mcp_server_name or config.mcp_server_unique_name
 
+                try:
                     # Prepare auth headers
                     headers = {}
                     if auth_token:
@@ -116,18 +112,16 @@ class McpToolRegistrationService:
                         self._orchestrator_name
                     )
 
-                    server_name = getattr(config, "mcp_server_name", "Unknown")
-
                     # Create and configure MCPStreamableHTTPTool
                     mcp_tools = MCPStreamableHTTPTool(
                         name=server_name,
-                        url=server_url,
+                        url=config.url,
                         headers=headers,
                         description=f"MCP tools from {server_name}",
                     )
 
                     # Let Agent Framework handle the connection automatically
-                    self._logger.info(f"Created MCP plugin for '{server_name}' at {server_url}")
+                    self._logger.info(f"Created MCP plugin for '{server_name}' at {config.url}")
 
                     all_tools.append(mcp_tools)
                     self._connected_servers.append(mcp_tools)
@@ -135,7 +129,6 @@ class McpToolRegistrationService:
                     self._logger.info(f"Added MCP plugin '{server_name}' to agent tools")
 
                 except Exception as tool_ex:
-                    server_name = getattr(config, "mcp_server_name", "Unknown")
                     self._logger.warning(
                         f"Failed to create MCP plugin for {server_name}: {tool_ex}"
                     )

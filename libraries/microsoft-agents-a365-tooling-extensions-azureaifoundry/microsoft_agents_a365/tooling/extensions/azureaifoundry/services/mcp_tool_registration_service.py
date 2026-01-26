@@ -179,8 +179,11 @@ class McpToolRegistrationService:
                 else server.mcp_server_name
             )
 
+            # Use the URL from server (always populated by the configuration service)
+            server_url = server.url
+
             # Create MCP tool using Azure Foundry SDK
-            mcp_tool = McpTool(server_label=server_label, server_url=server.mcp_server_unique_name)
+            mcp_tool = McpTool(server_label=server_label, server_url=server_url)
 
             # Configure the tool
             mcp_tool.set_approval_mode("never")

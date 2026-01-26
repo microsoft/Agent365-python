@@ -126,9 +126,15 @@ class McpToolRegistrationService:
                     self._orchestrator_name
                 )
 
+                # Use the URL from server (always populated by the configuration service)
+                server_url = server.url
+
+                # Use mcp_server_name if available (not None or empty), otherwise fall back to mcp_server_unique_name
+                server_name = server.mcp_server_name or server.mcp_server_unique_name
+
                 plugin = MCPStreamableHttpPlugin(
-                    name=server.mcp_server_name,
-                    url=server.mcp_server_unique_name,
+                    name=server_name,
+                    url=server_url,
                     headers=headers,
                 )
 
@@ -136,7 +142,7 @@ class McpToolRegistrationService:
                 await plugin.connect()
 
                 # Add plugin to kernel
-                kernel.add_plugin(plugin, server.mcp_server_name)
+                kernel.add_plugin(plugin, server_name)
 
                 # Store reference to keep plugin alive throughout application lifecycle
                 # By storing plugin references in _connected_plugins, we prevent Python's garbage collector from cleaning up the plugin objects
