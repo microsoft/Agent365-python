@@ -1,6 +1,7 @@
-"""Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
-Span processor for copying OpenTelemetry baggage entries onto spans.
+"""Span processor for copying OpenTelemetry baggage entries onto spans.
 
 This implementation assumes `opentelemetry.baggage.get_all` is available with the
 signature `get_all(context: Context | None) -> Mapping[str, object]`.
