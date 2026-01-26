@@ -233,11 +233,16 @@ For findings that have `diff_line` and `diff_side` values, post as **inline revi
 
 ```bash
 gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
-  -f body="<comment_body>" \
-  -f commit_id="<HEAD_COMMIT_SHA>" \
-  -f path="<file_path>" \
-  -F line=<diff_line> \
-  -f side="<diff_side>"
+  --method POST \
+  --input - << 'EOF'
+{
+  "body": "<comment_body>",
+  "commit_id": "<HEAD_COMMIT_SHA>",
+  "path": "<file_path>",
+  "line": <diff_line>,
+  "side": "<diff_side>"
+}
+EOF
 ```
 
 **Comment body format for inline comments** (keep concise - this appears in the code):
