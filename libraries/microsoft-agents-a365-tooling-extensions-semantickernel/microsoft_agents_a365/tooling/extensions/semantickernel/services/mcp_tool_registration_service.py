@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 """
 MCP Tool Registration Service implementation for Semantic Kernel.
@@ -20,7 +21,7 @@ from microsoft_agents_a365.runtime.utility import Utility
 from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_service import (
     McpToolServerConfigurationService,
 )
-from microsoft_agents_a365.tooling.models import MCPServerConfig, ToolOptions
+from microsoft_agents_a365.tooling.models import ToolOptions
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
@@ -125,9 +126,15 @@ class McpToolRegistrationService:
                     self._orchestrator_name
                 )
 
+                # Use the URL from server (always populated by the configuration service)
+                server_url = server.url
+
+                # Use mcp_server_name if available (not None or empty), otherwise fall back to mcp_server_unique_name
+                server_name = server.mcp_server_name or server.mcp_server_unique_name
+
                 plugin = MCPStreamableHttpPlugin(
-                    name=server.mcp_server_name,
-                    url=server.mcp_server_unique_name,
+                    name=server_name,
+                    url=server_url,
                     headers=headers,
                 )
 
@@ -135,7 +142,7 @@ class McpToolRegistrationService:
                 await plugin.connect()
 
                 # Add plugin to kernel
-                kernel.add_plugin(plugin, server.mcp_server_name)
+                kernel.add_plugin(plugin, server_name)
 
                 # Store reference to keep plugin alive throughout application lifecycle
                 # By storing plugin references in _connected_plugins, we prevent Python's garbage collector from cleaning up the plugin objects

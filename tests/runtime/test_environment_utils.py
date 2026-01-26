@@ -4,7 +4,6 @@
 """Unit tests for environment_utils module."""
 
 import pytest
-
 from microsoft_agents_a365.runtime.environment_utils import (
     PROD_OBSERVABILITY_SCOPE,
     get_observability_authentication_scope,

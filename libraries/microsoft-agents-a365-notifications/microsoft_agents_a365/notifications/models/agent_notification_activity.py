@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 from typing import Any, Optional, Type, TypeVar
 from microsoft_agents.activity import Activity
 from .notification_types import NotificationTypes
