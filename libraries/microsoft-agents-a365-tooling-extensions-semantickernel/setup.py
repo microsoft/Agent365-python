@@ -13,7 +13,7 @@ package_version = environ.get("AGENT365_PYTHON_SDK_PACKAGE_VERSION", "0.0.0")
 helper_path = Path(__file__).parent.parent.parent / "versioning" / "helper"
 sys.path.insert(0, str(helper_path))
 
-from setup_utils import get_dynamic_dependencies
+from setup_utils import get_dynamic_dependencies  # noqa: E402
 
 # Use minimum version strategy:
 # - Internal packages get: >= current_base_version (e.g., >= 0.1.0)

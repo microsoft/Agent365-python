@@ -9,7 +9,6 @@ Reads pyproject.toml files and creates a Mermaid diagram showing internal packag
 import re
 import tomllib
 from pathlib import Path
-from typing import Dict, List, Set
 
 
 class PackageInfo:
@@ -19,16 +18,16 @@ class PackageInfo:
         self.name = name
         self.package_type = package_type
         self.path = path
-        self.dependencies: Set[str] = set()
+        self.dependencies: set[str] = set()
 
 
-def read_pyproject_toml(path: Path) -> Dict:
+def read_pyproject_toml(path: Path) -> dict:
     """Read and parse a pyproject.toml file."""
     with open(path, "rb") as f:
         return tomllib.load(f)
 
 
-def extract_dependencies(pyproject_data: Dict, package_names: Set[str]) -> Set[str]:
+def extract_dependencies(pyproject_data: dict, package_names: set[str]) -> set[str]:
     """Extract internal package dependencies from pyproject.toml data."""
     dependencies = set()
 
@@ -45,7 +44,7 @@ def extract_dependencies(pyproject_data: Dict, package_names: Set[str]) -> Set[s
     return dependencies
 
 
-def generate_mermaid_diagram(packages: List[PackageInfo]) -> str:
+def generate_mermaid_diagram(packages: list[PackageInfo]) -> str:
     """Generate a Mermaid diagram from package information."""
 
     # Color scheme based on package types
@@ -96,7 +95,7 @@ def generate_mermaid_diagram(packages: List[PackageInfo]) -> str:
     lines.append("    %% Styling")
 
     # Group packages by type for styling
-    packages_by_type: Dict[str, List[str]] = {}
+    packages_by_type: dict[str, list[str]] = {}
     for pkg in packages:
         if pkg.package_type not in packages_by_type:
             packages_by_type[pkg.package_type] = []
@@ -170,8 +169,8 @@ def main():
 
     # Collect all package names first and cache pyproject data
     all_package_names = set()
-    packages: List[PackageInfo] = []
-    pyproject_data_cache: Dict[str, Dict] = {}
+    packages: list[PackageInfo] = []
+    pyproject_data_cache: dict[str, dict] = {}
 
     for path_str, pkg_type in package_configs:
         pyproject_path = repo_root / path_str / "pyproject.toml"

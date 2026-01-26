@@ -3,11 +3,11 @@
 
 """Unit tests for ChatMessageRequest class."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-from pydantic import ValidationError
 from microsoft_agents_a365.tooling.models import ChatHistoryMessage, ChatMessageRequest
+from pydantic import ValidationError
 
 
 class TestChatMessageRequest:
@@ -16,7 +16,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_can_be_instantiated(self):
         """Test that ChatMessageRequest can be instantiated with valid parameters."""
         # Arrange
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         message1 = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
         message2 = ChatHistoryMessage(
             id="msg-2", role="assistant", content="Hi there!", timestamp=timestamp
@@ -41,7 +41,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_to_dict(self):
         """Test that ChatMessageRequest converts to dictionary correctly."""
         # Arrange
-        timestamp = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        timestamp = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
         message = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
         request = ChatMessageRequest(
             conversation_id="conv-123",
@@ -65,7 +65,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_requires_non_empty_conversation_id(self):
         """Test that ChatMessageRequest requires a non-empty conversation_id."""
         # Arrange
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         message = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
 
         # Act & Assert
@@ -80,7 +80,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_requires_non_empty_message_id(self):
         """Test that ChatMessageRequest requires a non-empty message_id."""
         # Arrange
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         message = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
 
         # Act & Assert
@@ -95,7 +95,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_requires_non_empty_user_message(self):
         """Test that ChatMessageRequest requires a non-empty user_message."""
         # Arrange
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         message = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
 
         # Act & Assert
@@ -123,7 +123,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_with_multiple_messages(self):
         """Test that ChatMessageRequest handles multiple messages correctly."""
         # Arrange
-        timestamp = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        timestamp = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
         message1 = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
         message2 = ChatHistoryMessage(
             id="msg-2", role="assistant", content="Hi!", timestamp=timestamp
@@ -151,7 +151,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_rejects_whitespace_only_conversation_id(self):
         """Test that ChatMessageRequest rejects whitespace-only conversation_id."""
         # Arrange
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         message = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
 
         # Act & Assert
@@ -166,7 +166,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_rejects_whitespace_only_message_id(self):
         """Test that ChatMessageRequest rejects whitespace-only message_id."""
         # Arrange
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         message = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
 
         # Act & Assert
@@ -181,7 +181,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_rejects_whitespace_only_user_message(self):
         """Test that ChatMessageRequest rejects whitespace-only user_message."""
         # Arrange
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         message = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
 
         # Act & Assert
@@ -196,7 +196,7 @@ class TestChatMessageRequest:
     def test_chat_message_request_rejects_tab_only_conversation_id(self):
         """Test that ChatMessageRequest rejects tab-only conversation_id."""
         # Arrange
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         message = ChatHistoryMessage(id="msg-1", role="user", content="Hello", timestamp=timestamp)
 
         # Act & Assert

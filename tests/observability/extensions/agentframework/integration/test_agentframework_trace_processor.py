@@ -18,10 +18,10 @@ from microsoft_agents_a365.observability.extensions.agentframework.trace_instrum
 
 # AgentFramework SDK
 try:
-    from agent_framework.azure import AzureOpenAIChatClient
     from agent_framework import ChatAgent, ai_function
-    from azure.identity import AzureCliCredential
+    from agent_framework.azure import AzureOpenAIChatClient
     from agent_framework.observability import setup_observability
+    from azure.identity import AzureCliCredential
 except ImportError:
     pytest.skip(
         "AgentFramework library and dependencies required for integration tests",
