@@ -28,7 +28,10 @@ First, collect information about the staged changes:
    git diff --cached
    ```
 
-3. **IMPORTANT**: Save the diff output - you will need it to include relevant diff context snippets in each finding.
+3. **IMPORTANT**: Save the diff output - you will need it to:
+   - Include relevant diff context snippets in each finding
+   - Determine the exact **diff line numbers** for inline comments (line numbers as they appear in the diff, not file line numbers)
+   - Determine the **side** (RIGHT for additions `+`, LEFT for deletions `-`)
 
 4. If there are no staged changes, inform the user and suggest they stage files with `git add`.
 
@@ -43,10 +46,10 @@ Launch THREE sub-agents in parallel using the Task tool. Each agent MUST receive
 **CRITICAL**: You MUST launch all three agents in a SINGLE message with THREE parallel Task tool calls:
 
 1. **architecture-reviewer** (`subagent_type: architecture-reviewer`)
-   - Prompt: "Review staged changes for architectural concerns. Files changed: [list files]. This is a pre-commit review, not a PR. Focus on design alignment, component boundaries, and documentation gaps. Output your review in the structured markdown format specified in your instructions. Since this is not a PR, omit PR Link fields or mark them as N/A."
+   - Prompt: "Review staged changes for architectural concerns. Files changed: [list files]. This is a pre-commit review, not a PR. Focus on design alignment, component boundaries, namespace patterns, and documentation gaps. Output your review in the structured markdown format specified in your instructions. Since this is not a PR, omit PR Link fields or mark them as N/A."
 
 2. **code-reviewer** (`subagent_type: code-reviewer`)
-   - Prompt: "Review staged changes for code quality. Files changed: [list files]. This is a pre-commit review, not a PR. Focus on Python best practices, SDK usage, security, and maintainability. Output your review in the structured markdown format specified in your instructions. Since this is not a PR, omit PR Link fields or mark them as N/A."
+   - Prompt: "Review staged changes for code quality. Files changed: [list files]. This is a pre-commit review, not a PR. Focus on Python best practices, SDK usage, security, type hints, async patterns, and maintainability. Output your review in the structured markdown format specified in your instructions. Since this is not a PR, omit PR Link fields or mark them as N/A."
 
 3. **test-coverage-reviewer** (`subagent_type: test-coverage-reviewer`)
    - Prompt: "Review staged changes for test coverage. Files changed: [list files]. This is a pre-commit review, not a PR. Identify missing test scenarios and evaluate existing test quality. Output your review in the structured markdown format specified in your instructions. Since this is not a PR, omit PR Link fields or mark them as N/A."
@@ -147,6 +150,8 @@ For EVERY finding, use this structure:
 | **Identified By** | `architecture-reviewer` / `code-reviewer` / `test-coverage-reviewer` / `multiple` |
 | **File** | `full/path/to/filename.py` |
 | **Line(s)** | 42-58 |
+| **Diff Line** | 47 |
+| **Diff Side** | RIGHT |
 | **Severity** | `critical` / `high` / `medium` / `low` |
 | **Opened** | [ISO 8601 timestamp] |
 | **Resolved** | - [ ] No |
@@ -167,6 +172,18 @@ IMPORTANT: Include the relevant diff snippet that shows the code being discussed
 [Specific recommendation]
 ````
 
+### Inline Comment Fields
+
+Even though staged changes are not a PR yet, capture these fields so inline comments can be posted when a PR is created:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **File** | The exact path to the file | `libraries/microsoft-agents-a365-runtime/src/microsoft_agents_a365/runtime/utils.py` |
+| **Diff Line** | The line number in the diff where the issue occurs. For multi-line issues, use the **last line**. | `47` |
+| **Diff Side** | `RIGHT` for added/modified lines (`+`), `LEFT` for removed lines (`-`) | `RIGHT` |
+
+**Note:** To post these findings as inline PR comments later, use `/review-pr` after creating the PR, or create a PR and use `/post-review-comments` with the staged review file (it will attempt to map the findings).
+
 ### Step 5: Report to User
 
 After writing the review file, inform the user:
@@ -174,3 +191,4 @@ After writing the review file, inform the user:
 2. A summary of findings by severity count
 3. The commit readiness status
 4. If there are critical issues, list them briefly so the user knows what must be fixed
+5. Remind them about `/resolve-review` if there are agent-resolvable issues

@@ -28,6 +28,10 @@ You are resolving agent-resolvable code review comments. This skill supports two
    ```bash
    ls -t .codereviews/claude-*.md | head -1
    ```
+   On Windows, use PowerShell:
+   ```powershell
+   (Get-ChildItem .codereviews/claude-*.md | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+   ```
 3. Read the review file and extract:
    - **Review type**: PR review (contains "PR Number:") or staged review (contains "Review Type: Pre-commit")
    - **PR number** (if PR review): Extract from the metadata
@@ -103,9 +107,22 @@ For each issue marked "Agent Resolvable: Yes":
    - Use the Edit tool to make changes
 
 3. **Verify the fix**:
-   - Ensure linting passes: `uv run --frozen ruff check <file>`
-   - Ensure formatting is correct: `uv run --frozen ruff format --check <file>`
-   - Fix any linting/formatting issues before committing
+   ```bash
+   # Check linting
+   uv run --frozen ruff check <file>
+
+   # Check formatting
+   uv run --frozen ruff format --check <file>
+   ```
+
+   Fix any linting/formatting issues before committing:
+   ```bash
+   # Auto-fix linting issues
+   uv run --frozen ruff check <file> --fix
+
+   # Auto-format code
+   uv run --frozen ruff format <file>
+   ```
 
 4. **Commit the fix** (one commit per issue for clear history):
    ```bash
@@ -149,7 +166,7 @@ For each issue marked "Agent Resolvable: Yes":
    ## Review File
    See `.codereviews/<review-file-name>` for full details.
 
-   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+   Generated with [Claude Code](https://claude.com/claude-code)
    EOF
    )"
    ```
@@ -170,7 +187,10 @@ For each issue marked "Agent Resolvable: Yes":
 1. Inform the user that fixes have been applied to their staged changes
 2. The changes are now in their working directory (some staged, some unstaged)
 3. Suggest they review the changes with `git diff` and `git diff --cached`
-4. Suggest they run tests before committing: `uv run --frozen pytest tests/ -v --tb=short -m "not integration"`
+4. Suggest they run tests before committing:
+   ```bash
+   uv run --frozen pytest tests/ -v --tb=short -m "not integration"
+   ```
 
 ### Step 5: Report Results
 
@@ -200,3 +220,4 @@ Provide a summary including:
 - **Each fix gets its own commit** - this makes it easy to review and revert individual changes
 - **Follow CLAUDE.md coding standards** - especially copyright headers, no "Kairo" keyword, line length limits
 - **Worktrees are temporary** - always clean them up after creating the fix PR
+- **Python-only repository** - verify fixes with `uv run --frozen ruff check/format` and `pytest`

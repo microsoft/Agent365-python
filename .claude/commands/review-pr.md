@@ -1,6 +1,6 @@
 # Review Pull Request
 
-Review code changes in a specific pull request using a comprehensive multi-agent code review process.
+Review code changes in a specific pull request using a comprehensive multi-agent code review process with specialized reviewers for architecture, code quality, and test coverage.
 
 ## Usage
 
@@ -20,15 +20,21 @@ You are coordinating a comprehensive code review for pull request #$ARGUMENTS.
 
 First, collect information about the pull request:
 
-1. Get PR details and changed files:
+1. Get PR details, changed files, and the HEAD commit SHA:
    ```bash
-   gh pr view $ARGUMENTS --json number,title,body,baseRefName,headRefName,url,files
+   gh pr view $ARGUMENTS --json number,title,body,baseRefName,headRefName,headRefOid,url,files
    gh pr diff $ARGUMENTS
    ```
 
-2. Extract the list of changed files and the PR URL for linking in review comments.
+2. Extract key information:
+   - List of changed files
+   - PR URL for linking in review comments
+   - **HEAD commit SHA** (`headRefOid`) - required for posting inline comments
 
-3. **IMPORTANT**: Save the diff output - you will need it to include relevant diff context snippets in each finding.
+3. **IMPORTANT**: Save the diff output - you will need it to:
+   - Include relevant diff context snippets in each finding
+   - Determine the exact **diff line numbers** for inline comments (line numbers as they appear in the diff, not file line numbers)
+   - Determine the **side** (RIGHT for additions `+`, LEFT for deletions `-`)
 
 4. Create the `.codereviews/` directory if it doesn't exist.
 
@@ -42,10 +48,10 @@ Launch THREE sub-agents in parallel using the Task tool. Each agent MUST receive
 **CRITICAL**: You MUST launch all three agents in a SINGLE message with THREE parallel Task tool calls:
 
 1. **architecture-reviewer** (`subagent_type: architecture-reviewer`)
-   - Prompt: "Review PR #$ARGUMENTS for architectural concerns. Files changed: [list files]. PR URL: [url]. Focus on design alignment, component boundaries, and documentation gaps. Output your review in the structured markdown format specified in your instructions."
+   - Prompt: "Review PR #$ARGUMENTS for architectural concerns. Files changed: [list files]. PR URL: [url]. Focus on design alignment, component boundaries, namespace patterns, and documentation gaps. Output your review in the structured markdown format specified in your instructions."
 
 2. **code-reviewer** (`subagent_type: code-reviewer`)
-   - Prompt: "Review PR #$ARGUMENTS for code quality. Files changed: [list files]. PR URL: [url]. Focus on Python best practices, SDK usage, security, and maintainability. Output your review in the structured markdown format specified in your instructions."
+   - Prompt: "Review PR #$ARGUMENTS for code quality. Files changed: [list files]. PR URL: [url]. Focus on Python best practices, SDK usage, security, type hints, async patterns, and maintainability. Output your review in the structured markdown format specified in your instructions."
 
 3. **test-coverage-reviewer** (`subagent_type: test-coverage-reviewer`)
    - Prompt: "Review PR #$ARGUMENTS for test coverage. Files changed: [list files]. PR URL: [url]. Identify missing test scenarios and evaluate existing test quality. Output your review in the structured markdown format specified in your instructions."
@@ -79,6 +85,7 @@ PR Number:           #$ARGUMENTS
 PR Title:            [title from gh pr view]
 PR Iteration:        1
 Review Date/Time:    [ISO 8601 timestamp]
+HEAD Commit:         [headRefOid from gh pr view - required for inline comments]
 Subagents Used:      architecture-reviewer, code-reviewer, test-coverage-reviewer
 ```
 
@@ -146,6 +153,8 @@ For EVERY finding, use this structure:
 | **Identified By** | `architecture-reviewer` / `code-reviewer` / `test-coverage-reviewer` / `multiple` |
 | **File** | `full/path/to/filename.py` |
 | **Line(s)** | 42-58 |
+| **Diff Line** | 47 |
+| **Diff Side** | RIGHT |
 | **Severity** | `critical` / `high` / `medium` / `low` |
 | **PR Link** | [View in PR](https://github.com/.../pull/$ARGUMENTS/files#...) |
 | **Opened** | [ISO 8601 timestamp] |
@@ -167,9 +176,41 @@ IMPORTANT: Include the relevant diff snippet from the PR that shows the code bei
 [Specific recommendation]
 ````
 
+### Inline Comment Fields Explained
+
+The following fields are **required** for posting inline comments on the PR:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **File** | The exact path to the file as it appears in the diff | `libraries/microsoft-agents-a365-runtime/src/microsoft_agents_a365/runtime/utils.py` |
+| **Diff Line** | The line number where the comment should appear in the diff. For multi-line issues, use the **last line** of the relevant code block. Count lines in the diff hunk, not the file. | `47` |
+| **Diff Side** | Which side of the diff: `RIGHT` for added/modified lines (`+`), `LEFT` for removed lines (`-`). Most comments should be on `RIGHT`. | `RIGHT` |
+
+**How to determine Diff Line:**
+1. Look at the diff hunk header (e.g., `@@ -10,5 +10,8 @@`)
+2. Count lines from the start of the hunk
+3. The line number is relative to the new file for `RIGHT`, old file for `LEFT`
+4. For additions (`+` lines), use the line number shown after the `+` in the hunk header
+
+**Example:**
+```diff
+@@ -45,6 +45,9 @@ def initialize_telemetry(self):
+         tracer = get_tracer()
++        # Configure span processor
++        span_processor = BatchSpanProcessor(exporter)
++        tracer_provider.add_span_processor(span_processor)
+         return tracer_provider
+```
+For a comment on the `tracer_provider.add_span_processor` line:
+- **File**: `libraries/microsoft-agents-a365-observability-core/src/microsoft_agents_a365/observability/core/telemetry.py`
+- **Diff Line**: `48` (line 45 + 3 new lines)
+- **Diff Side**: `RIGHT` (it's an addition)
+
 ### Step 5: Report to User
 
 After writing the review file, inform the user:
 1. The path to the review file
 2. A summary of findings by severity count
 3. The overall approval status
+4. Remind them about `/resolve-review` if there are agent-resolvable issues
+5. Remind them about `/post-review-comments` to post findings as inline PR comments
