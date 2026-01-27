@@ -569,7 +569,8 @@ class McpToolServerConfigurationService:
                           Must have a valid activity with conversation.id, activity.id, and
                           activity.text.
             chat_history_messages: List of ChatHistoryMessage objects representing the chat
-                                   history. Must be non-empty.
+                                   history. May be empty - an empty list will still send a
+                                   request to the MCP platform with empty chat history.
             options: Optional ToolOptions instance containing optional parameters.
 
         Returns:
@@ -578,7 +579,7 @@ class McpToolServerConfigurationService:
                              On failure, returns OperationResult.failed() with error details.
 
         Raises:
-            ValueError: If turn_context is None, chat_history_messages is None or empty,
+            ValueError: If turn_context is None, chat_history_messages is None,
                         turn_context.activity is None, or any of the required fields
                         (conversation.id, activity.id, activity.text) are missing or empty.
 
@@ -602,10 +603,8 @@ class McpToolServerConfigurationService:
         if chat_history_messages is None:
             raise ValueError("chat_history_messages cannot be None")
 
-        # Handle empty messages - return success with warning (consistent with extension behavior)
-        if len(chat_history_messages) == 0:
-            self._logger.warning("Empty message list provided to send_chat_history")
-            return OperationResult.success()
+        # Note: Empty chat_history_messages is allowed - we still send the request to MCP platform
+        # The platform needs to receive the request even with empty chat history
 
         # Extract required information from turn context
         if not turn_context.activity:
