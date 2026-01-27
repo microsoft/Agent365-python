@@ -193,7 +193,7 @@ Implement a private helper method that converts a sequence of Azure AI Foundry `
 - [ ] Maps `message.created_at` to `ChatHistoryMessage.timestamp`
 - [ ] Uses `_extract_content_from_message()` for content extraction
 - [ ] Returns empty list if all messages filtered (logs warning)
-- [ ] Generates UUID for messages without ID (fallback, though PRD says skip - verify behavior)
+- [ ] Skips messages without ID (no UUID generated; logs warning)
 - [ ] Type hints on parameters and return type
 - [ ] Comprehensive docstring
 
