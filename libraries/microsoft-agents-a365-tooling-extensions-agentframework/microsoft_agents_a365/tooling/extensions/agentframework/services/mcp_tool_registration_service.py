@@ -9,6 +9,7 @@ from typing import Any, List, Optional, Sequence, Union
 from agent_framework import ChatAgent, ChatMessage, ChatMessageStoreProtocol, MCPStreamableHTTPTool
 from agent_framework.azure import AzureOpenAIChatClient
 from agent_framework.openai import OpenAIChatClient
+import httpx
 
 from microsoft_agents.hosting.core import Authorization, TurnContext
 
@@ -114,11 +115,14 @@ class McpToolRegistrationService:
                         self._orchestrator_name
                     )
 
-                    # Create and configure MCPStreamableHTTPTool
+                    # Create httpx client with auth headers configured
+                    http_client = httpx.AsyncClient(headers=headers, timeout=60.0)
+
+                    # Create and configure MCPStreamableHTTPTool with http_client
                     mcp_tools = MCPStreamableHTTPTool(
                         name=server_name,
                         url=config.url,
-                        headers=headers,
+                        http_client=http_client,
                         description=f"MCP tools from {server_name}",
                     )
 
