@@ -146,14 +146,29 @@ class TestSendChatHistory:
             await service.send_chat_history(mock_turn_context, None)
 
     @pytest.mark.asyncio
-    async def test_send_chat_history_empty_list_returns_success(self, service, mock_turn_context):
-        """Test that send_chat_history returns success for empty list (CRM-008)."""
-        # Act
-        result = await service.send_chat_history(mock_turn_context, [])
+    async def test_send_chat_history_empty_list_calls_api(self, service, mock_turn_context):
+        """Test that send_chat_history sends empty list to API (CRM-008)."""
+        # Arrange
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.text = AsyncMock(return_value="OK")
 
-        # Assert - empty list should return success, not raise exception
-        assert result.succeeded is True
-        assert len(result.errors) == 0
+        # Mock aiohttp.ClientSession
+        with patch("aiohttp.ClientSession") as mock_session:
+            mock_session_instance = MagicMock()
+            mock_post = AsyncMock()
+            mock_post.__aenter__.return_value = mock_response
+            mock_session_instance.post.return_value = mock_post
+            mock_session.return_value.__aenter__.return_value = mock_session_instance
+
+            # Act
+            result = await service.send_chat_history(mock_turn_context, [])
+
+            # Assert - empty list should call API and return success
+            assert result.succeeded is True
+            assert len(result.errors) == 0
+            # Verify the API was called
+            assert mock_session_instance.post.called
 
     @pytest.mark.asyncio
     async def test_send_chat_history_validates_activity(self, service, chat_history_messages):

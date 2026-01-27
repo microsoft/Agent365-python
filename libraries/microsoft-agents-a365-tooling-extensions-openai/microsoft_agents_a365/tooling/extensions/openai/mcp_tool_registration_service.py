@@ -340,6 +340,7 @@ class McpToolRegistrationService:
 
         This method accepts a list of OpenAI TResponseInputItem messages, converts
         them to ChatHistoryMessage format, and sends them to the MCP platform.
+        Empty message lists are valid and will be sent to the API.
 
         Args:
             turn_context: TurnContext from the Agents SDK containing conversation info.
@@ -347,7 +348,7 @@ class McpToolRegistrationService:
                           and activity.text.
             messages: List of OpenAI TResponseInputItem messages to send. Supports
                       UserMessage, AssistantMessage, SystemMessage, and other OpenAI
-                      message types.
+                      message types. Empty lists are valid and will be sent to the API.
             options: Optional ToolOptions for customization. If not provided,
                      uses default options with orchestrator_name="OpenAI".
 
@@ -382,11 +383,6 @@ class McpToolRegistrationService:
         if messages is None:
             raise ValueError("messages cannot be None")
 
-        # Handle empty list as no-op
-        if len(messages) == 0:
-            self._logger.info("Empty message list provided, returning success")
-            return OperationResult.success()
-
         self._logger.info(f"Sending {len(messages)} OpenAI messages as chat history")
 
         # Set default options
@@ -398,10 +394,6 @@ class McpToolRegistrationService:
         try:
             # Convert OpenAI messages to ChatHistoryMessage format
             chat_history_messages = self._convert_openai_messages_to_chat_history(messages)
-
-            if len(chat_history_messages) == 0:
-                self._logger.warning("No messages could be converted to chat history format")
-                return OperationResult.success()
 
             self._logger.debug(
                 f"Converted {len(chat_history_messages)} messages to ChatHistoryMessage format"

@@ -45,14 +45,25 @@ class TestInputValidation:
     # UV-03
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_empty_list_returns_success(
+    async def test_send_chat_history_messages_empty_list_calls_api(
         self, service, mock_turn_context
     ):
-        """Test that empty message list returns success (no-op)."""
-        result = await service.send_chat_history_messages(mock_turn_context, [])
+        """Test that empty message list is sent to the API."""
+        with patch.object(
+            service.config_service,
+            "send_chat_history",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            mock_send.return_value = OperationResult.success()
 
-        assert result.succeeded is True
-        assert len(result.errors) == 0
+            result = await service.send_chat_history_messages(mock_turn_context, [])
+
+            assert result.succeeded is True
+            assert len(result.errors) == 0
+            # Verify the API was called with empty list
+            mock_send.assert_called_once()
+            call_args = mock_send.call_args
+            assert call_args.kwargs["chat_history_messages"] == []
 
     # UV-04
     @pytest.mark.asyncio

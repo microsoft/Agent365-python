@@ -221,10 +221,12 @@ class McpToolRegistrationService:
         Send chat history messages to the MCP platform for real-time threat protection.
 
         This is the primary implementation method that handles message conversion
-        and delegation to the core tooling service.
+        and delegation to the core tooling service. Empty message lists are valid
+        and will be sent to the API.
 
         Args:
             chat_messages: Sequence of Agent Framework ChatMessage objects to send.
+                           Empty lists are valid and will be sent to the API.
             turn_context: TurnContext from the Agents SDK containing conversation info.
             tool_options: Optional configuration for the request. Defaults to
                           AgentFramework-specific options if not provided.
@@ -249,11 +251,6 @@ class McpToolRegistrationService:
         if turn_context is None:
             raise ValueError("turn_context cannot be None")
 
-        # Handle empty messages - return success with warning
-        if len(chat_messages) == 0:
-            self._logger.warning("Empty message list provided to send_chat_history_messages")
-            return OperationResult.success()
-
         self._logger.info(f"Send chat history initiated with {len(chat_messages)} messages")
 
         # Use default options if not provided
@@ -263,10 +260,7 @@ class McpToolRegistrationService:
         # Convert messages to ChatHistoryMessage format
         history_messages = self._convert_chat_messages_to_history(chat_messages)
 
-        # Check if all messages were filtered out during conversion
-        if len(history_messages) == 0:
-            self._logger.warning("All messages were filtered out during conversion (empty content)")
-            return OperationResult.success()
+        self._logger.debug(f"Converted {len(history_messages)} messages to ChatHistoryMessage format")
 
         # Delegate to core service
         result = await self._mcp_server_configuration_service.send_chat_history(
