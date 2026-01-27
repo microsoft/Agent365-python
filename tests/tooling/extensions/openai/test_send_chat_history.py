@@ -60,7 +60,7 @@ class TestInputValidation:
 
             assert result.succeeded is True
             assert len(result.errors) == 0
-            # Verify the API was called with empty list
+            # Verify the API was called with an empty list
             mock_send.assert_called_once()
             call_args = mock_send.call_args
             assert call_args.kwargs["chat_history_messages"] == []

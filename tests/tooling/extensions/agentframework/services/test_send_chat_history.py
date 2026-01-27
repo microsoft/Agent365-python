@@ -129,7 +129,7 @@ class TestSendChatHistoryAsync:
 
         # Assert
         assert result.succeeded is True
-        # Core service should be called with empty list
+        # Core service should be called with an empty list
         service._mcp_server_configuration_service.send_chat_history.assert_called_once()
         call_args = service._mcp_server_configuration_service.send_chat_history.call_args
         assert call_args.kwargs["chat_history_messages"] == []
@@ -519,7 +519,7 @@ class TestSendChatHistoryAsync:
 
         # Assert
         assert result.succeeded is True
-        # Core service should be called with empty list when all messages are filtered out
+        # Core service should be called with an empty list when all messages are filtered out
         service._mcp_server_configuration_service.send_chat_history.assert_called_once()
         call_args = service._mcp_server_configuration_service.send_chat_history.call_args
         assert call_args.kwargs["chat_history_messages"] == []
