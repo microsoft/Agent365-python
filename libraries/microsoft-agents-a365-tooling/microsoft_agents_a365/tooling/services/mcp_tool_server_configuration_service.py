@@ -569,8 +569,8 @@ class McpToolServerConfigurationService:
                           Must have a valid activity with conversation.id, activity.id, and
                           activity.text.
             chat_history_messages: List of ChatHistoryMessage objects representing the chat
-                                   history. Can be empty - the request will still be sent to
-                                   register the user message from turn_context.activity.text.
+                                   history. May be empty - an empty list will still send a
+                                   request to the MCP platform with empty chat history.
             options: Optional ToolOptions instance containing optional parameters.
 
         Returns:
@@ -608,8 +608,8 @@ class McpToolServerConfigurationService:
         if chat_history_messages is None:
             raise ValueError("chat_history_messages cannot be None")
 
-        # Empty chat_history_messages is allowed - the request will still be sent
-        # to register the user message from turn_context.activity.text in the MCP platform.
+        # Note: Empty chat_history_messages is allowed - we still send the request to MCP platform
+        # The platform needs to receive the request even with empty chat history
 
         # Extract required information from turn context
         if not turn_context.activity:
