@@ -401,10 +401,8 @@ class McpToolRegistrationService:
             # Convert OpenAI messages to ChatHistoryMessage format
             chat_history_messages = self._convert_openai_messages_to_chat_history(messages)
 
-            # Note: Even if chat_history_messages is empty (either from empty input or all messages
-            # filtered during conversion), we still call the core service. This is required so that
-            # the user message from turn_context.activity.text gets registered correctly in the
-            # MCP platform.
+            # Call core service even with empty chat_history_messages to register
+            # the user message from turn_context.activity.text in the MCP platform.
             if len(chat_history_messages) == 0:
                 self._logger.info(
                     "Empty chat history messages (either no input or all filtered), "

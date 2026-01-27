@@ -266,9 +266,8 @@ class McpToolRegistrationService:
         # Convert messages to ChatHistoryMessage format
         history_messages = self._convert_chat_messages_to_history(chat_messages)
 
-        # Note: Even if history_messages is empty (either from empty input or all messages filtered),
-        # we still call the core service. This is required so that the user message from
-        # turn_context.activity.text gets registered correctly in the MCP platform.
+        # Call core service even with empty history_messages to register
+        # the user message from turn_context.activity.text in the MCP platform.
         if len(history_messages) == 0:
             self._logger.info(
                 "Empty history messages (either no input or all filtered), "

@@ -608,9 +608,8 @@ class McpToolServerConfigurationService:
         if chat_history_messages is None:
             raise ValueError("chat_history_messages cannot be None")
 
-        # Note: Empty chat_history_messages is allowed and will still be sent to the MCP platform.
-        # This is required so that the user message from turn_context.activity.text gets registered
-        # correctly in the MCP platform for real-time threat protection.
+        # Empty chat_history_messages is allowed - the request will still be sent
+        # to register the user message from turn_context.activity.text in the MCP platform.
 
         # Extract required information from turn context
         if not turn_context.activity:
