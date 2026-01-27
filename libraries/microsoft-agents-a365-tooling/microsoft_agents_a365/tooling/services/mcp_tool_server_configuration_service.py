@@ -569,7 +569,8 @@ class McpToolServerConfigurationService:
                           Must have a valid activity with conversation.id, activity.id, and
                           activity.text.
             chat_history_messages: List of ChatHistoryMessage objects representing the chat
-                                   history. Must be non-empty.
+                                   history. Can be empty - the request will still be sent to
+                                   register the user message from turn_context.activity.text.
             options: Optional ToolOptions instance containing optional parameters.
 
         Returns:
@@ -578,9 +579,14 @@ class McpToolServerConfigurationService:
                              On failure, returns OperationResult.failed() with error details.
 
         Raises:
-            ValueError: If turn_context is None, chat_history_messages is None or empty,
+            ValueError: If turn_context is None, chat_history_messages is None,
                         turn_context.activity is None, or any of the required fields
                         (conversation.id, activity.id, activity.text) are missing or empty.
+
+        Note:
+            Even if chat_history_messages is empty, the request will still be sent to
+            the MCP platform. This ensures the user message from turn_context.activity.text
+            is registered correctly for real-time threat protection.
 
         Example:
             >>> from datetime import datetime, timezone
@@ -602,10 +608,9 @@ class McpToolServerConfigurationService:
         if chat_history_messages is None:
             raise ValueError("chat_history_messages cannot be None")
 
-        # Handle empty messages - return success with warning (consistent with extension behavior)
-        if len(chat_history_messages) == 0:
-            self._logger.warning("Empty message list provided to send_chat_history")
-            return OperationResult.success()
+        # Note: Empty chat_history_messages is allowed and will still be sent to the MCP platform.
+        # This is required so that the user message from turn_context.activity.text gets registered
+        # correctly in the MCP platform for real-time threat protection.
 
         # Extract required information from turn context
         if not turn_context.activity:
