@@ -629,14 +629,7 @@ class TestEdgeCases:
         message.content[0].text.value = "Hello"
         message.created_at = datetime.now(UTC)
 
-        # Mock isinstance to return True for MessageTextContent check
-        with patch(
-            "microsoft_agents_a365.tooling.extensions.azureaifoundry.services.mcp_tool_registration_service.isinstance",
-            side_effect=lambda obj, cls: True
-            if "MessageTextContent" in str(cls)
-            else isinstance(obj, cls),
-        ):
-            result = await service.send_chat_history_messages(mock_turn_context, [message])
+        result = await service.send_chat_history_messages(mock_turn_context, [message])
 
         # Should succeed - role is handled defensively
         assert result.succeeded is True
