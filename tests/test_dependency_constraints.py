@@ -70,13 +70,13 @@ def parse_version_constraint(constraint: str) -> dict:
     result = {"lower": None, "upper": None, "upper_inclusive": False, "raw": constraint}
 
     # Match upper bound patterns: < X.Y.Z or <= X.Y.Z
-    upper_match = re.search(r'<\s*=?\s*(\d+\.\d+\.\d+)', constraint)
+    upper_match = re.search(r"<\s*=?\s*(\d+\.\d+\.\d+)", constraint)
     if upper_match:
         result["upper"] = upper_match.group(1)
-        result["upper_inclusive"] = "<=" in constraint[:upper_match.start() + 2]
+        result["upper_inclusive"] = "<=" in constraint[: upper_match.start() + 2]
 
     # Match lower bound patterns: >= X.Y.Z or > X.Y.Z
-    lower_match = re.search(r'>=?\s*(\d+\.\d+\.\d+)', constraint)
+    lower_match = re.search(r">=?\s*(\d+\.\d+\.\d+)", constraint)
     if lower_match:
         result["lower"] = lower_match.group(1)
 
@@ -118,7 +118,7 @@ def get_dependencies_with_upper_bounds(pyproject_path: Path) -> list[dict]:
 
     for dep in dependencies:
         # Parse dependency string: "package-name >= 1.0.0, < 2.0.0"
-        match = re.match(r'^([\w\-]+)\s*(.*)$', dep.strip())
+        match = re.match(r"^([\w\-]+)\s*(.*)$", dep.strip())
         if not match:
             continue
 
