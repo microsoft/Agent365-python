@@ -15,7 +15,6 @@ the package resolver to silently pick older versions instead of the latest.
 import re
 import tomllib
 from pathlib import Path
-from typing import Optional
 
 import pytest
 
@@ -63,24 +62,24 @@ def find_all_pyproject_files() -> list[Path]:
 def parse_version_constraint(constraint: str) -> dict:
     """
     Parse a version constraint string and extract bounds.
-    
+
     Examples:
         ">= 0.4.0, < 0.6.0" -> {"lower": "0.4.0", "upper": "0.6.0", "upper_inclusive": False}
         ">= 0.4.0" -> {"lower": "0.4.0", "upper": None}
     """
     result = {"lower": None, "upper": None, "upper_inclusive": False, "raw": constraint}
-    
+
     # Match upper bound patterns: < X.Y.Z or <= X.Y.Z
     upper_match = re.search(r'<\s*=?\s*(\d+\.\d+\.\d+)', constraint)
     if upper_match:
         result["upper"] = upper_match.group(1)
         result["upper_inclusive"] = "<=" in constraint[:upper_match.start() + 2]
-    
+
     # Match lower bound patterns: >= X.Y.Z or > X.Y.Z
     lower_match = re.search(r'>=?\s*(\d+\.\d+\.\d+)', constraint)
     if lower_match:
         result["lower"] = lower_match.group(1)
-    
+
     return result
 
 
@@ -96,7 +95,7 @@ def is_version_compatible(version: str, upper_bound: str, inclusive: bool = Fals
     """Check if a version is compatible with an upper bound constraint."""
     version_t = version_tuple(version)
     upper_t = version_tuple(upper_bound)
-    
+
     if inclusive:
         return version_t <= upper_t
     return version_t < upper_t
@@ -105,7 +104,7 @@ def is_version_compatible(version: str, upper_bound: str, inclusive: bool = Fals
 def get_dependencies_with_upper_bounds(pyproject_path: Path) -> list[dict]:
     """
     Extract dependencies that have upper bound constraints.
-    
+
     Returns a list of dicts with:
         - package: package name
         - constraint: parsed constraint info
@@ -113,31 +112,31 @@ def get_dependencies_with_upper_bounds(pyproject_path: Path) -> list[dict]:
     """
     with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
-    
+
     dependencies = data.get("project", {}).get("dependencies", [])
     results = []
-    
+
     for dep in dependencies:
         # Parse dependency string: "package-name >= 1.0.0, < 2.0.0"
         match = re.match(r'^([\w\-]+)\s*(.*)$', dep.strip())
         if not match:
             continue
-        
+
         package_name = match.group(1)
         constraint_str = match.group(2).strip()
-        
+
         if not constraint_str:
             continue
-        
+
         constraint = parse_version_constraint(constraint_str)
-        
+
         if constraint["upper"]:
             results.append({
                 "package": package_name,
                 "constraint": constraint,
                 "file": pyproject_path,
             })
-    
+
     return results
 
 
@@ -147,31 +146,31 @@ class TestDependencyConstraints:
     def test_no_restrictive_upper_bounds_on_external_packages(self):
         """
         Ensure we don't have overly restrictive upper bounds on external packages.
-        
+
         Upper bounds like `< 0.6.0` can cause issues when the external package
         releases a newer version (e.g., 0.7.0) that our samples depend on.
         This causes the resolver to silently pick older versions of our packages.
         """
         pyproject_files = find_all_pyproject_files()
         issues = []
-        
+
         for pyproject_path in pyproject_files:
             deps_with_upper = get_dependencies_with_upper_bounds(pyproject_path)
-            
+
             for dep in deps_with_upper:
                 package = dep["package"]
-                
+
                 # Check if this is an external package we should monitor
                 if package in EXTERNAL_PACKAGES_TO_CHECK:
                     constraint = dep["constraint"]
                     relative_path = pyproject_path.relative_to(get_repo_root())
-                    
+
                     issues.append(
                         f"  - {relative_path}: '{package}' has upper bound constraint "
                         f"'{constraint['raw']}'. This may cause resolver issues when "
                         f"newer versions are released."
                     )
-        
+
         if issues:
             pytest.fail(
                 "Found dependencies with upper bound constraints that may cause issues:\n"
@@ -184,30 +183,30 @@ class TestDependencyConstraints:
     def test_internal_package_constraints_are_flexible(self):
         """
         Ensure internal packages don't have restrictive upper bounds on each other.
-        
+
         We want internal packages to be able to evolve together without
         version constraint conflicts.
         """
         pyproject_files = find_all_pyproject_files()
         issues = []
-        
+
         for pyproject_path in pyproject_files:
             deps_with_upper = get_dependencies_with_upper_bounds(pyproject_path)
-            
+
             for dep in deps_with_upper:
                 package = dep["package"]
-                
+
                 # Check if this is an internal package
                 if package in INTERNAL_PACKAGES:
                     constraint = dep["constraint"]
                     relative_path = pyproject_path.relative_to(get_repo_root())
-                    
+
                     issues.append(
                         f"  - {relative_path}: '{package}' has upper bound constraint "
                         f"'{constraint['raw']}'. Internal packages should not have "
                         "upper bounds on each other."
                     )
-        
+
         if issues:
             pytest.fail(
                 "Found internal packages with upper bound constraints:\n"
@@ -223,12 +222,12 @@ class TestDependencyConstraints:
         assert result["lower"] == "0.4.0"
         assert result["upper"] == "0.6.0"
         assert result["upper_inclusive"] is False
-        
+
         # Test with only lower bound
         result = parse_version_constraint(">= 1.0.0")
         assert result["lower"] == "1.0.0"
         assert result["upper"] is None
-        
+
         # Test with inclusive upper bound
         result = parse_version_constraint(">= 2.0.0, <= 3.0.0")
         assert result["lower"] == "2.0.0"
@@ -239,12 +238,12 @@ class TestDependencyConstraints:
         """Test version compatibility checking."""
         # 0.7.0 is NOT compatible with < 0.6.0
         assert is_version_compatible("0.7.0", "0.6.0", inclusive=False) is False
-        
+
         # 0.5.9 IS compatible with < 0.6.0
         assert is_version_compatible("0.5.9", "0.6.0", inclusive=False) is True
-        
+
         # 0.6.0 IS compatible with <= 0.6.0
         assert is_version_compatible("0.6.0", "0.6.0", inclusive=True) is True
-        
+
         # 0.6.0 is NOT compatible with < 0.6.0
         assert is_version_compatible("0.6.0", "0.6.0", inclusive=False) is False
