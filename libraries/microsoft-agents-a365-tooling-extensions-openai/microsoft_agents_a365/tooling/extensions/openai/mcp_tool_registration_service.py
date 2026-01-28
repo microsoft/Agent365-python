@@ -347,7 +347,8 @@ class McpToolRegistrationService:
                           and activity.text.
             messages: List of OpenAI TResponseInputItem messages to send. Supports
                       UserMessage, AssistantMessage, SystemMessage, and other OpenAI
-                      message types.
+                      message types. Can be empty - the request will still be sent to
+                      register the user message from turn_context.activity.text.
             options: Optional ToolOptions for customization. If not provided,
                      uses default options with orchestrator_name="OpenAI".
 
@@ -358,6 +359,12 @@ class McpToolRegistrationService:
 
         Raises:
             ValueError: If turn_context is None or messages is None.
+
+        Note:
+            Even if messages is empty or all messages are filtered during conversion,
+            the request will still be sent to the MCP platform. This ensures the user
+            message from turn_context.activity.text is registered correctly for
+            real-time threat protection.
 
         Example:
             >>> from microsoft_agents_a365.tooling.extensions.openai import (
@@ -382,11 +389,6 @@ class McpToolRegistrationService:
         if messages is None:
             raise ValueError("messages cannot be None")
 
-        # Handle empty list as no-op
-        if len(messages) == 0:
-            self._logger.info("Empty message list provided, returning success")
-            return OperationResult.success()
-
         self._logger.info(f"Sending {len(messages)} OpenAI messages as chat history")
 
         # Set default options
@@ -399,9 +401,13 @@ class McpToolRegistrationService:
             # Convert OpenAI messages to ChatHistoryMessage format
             chat_history_messages = self._convert_openai_messages_to_chat_history(messages)
 
+            # Call core service even with empty chat_history_messages to register
+            # the user message from turn_context.activity.text in the MCP platform.
             if len(chat_history_messages) == 0:
-                self._logger.warning("No messages could be converted to chat history format")
-                return OperationResult.success()
+                self._logger.info(
+                    "Empty chat history messages (either no input or all filtered), "
+                    "still sending to register user message"
+                )
 
             self._logger.debug(
                 f"Converted {len(chat_history_messages)} messages to ChatHistoryMessage format"
