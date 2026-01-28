@@ -22,28 +22,17 @@ import re
 import sys
 from pathlib import Path
 
-# Internal workspace packages (microsoft-agents-a365-*)
-INTERNAL_PACKAGES = [
-    "microsoft-agents-a365-runtime",
-    "microsoft-agents-a365-notifications",
-    "microsoft-agents-a365-observability-core",
-    "microsoft-agents-a365-observability-extensions-openai",
-    "microsoft-agents-a365-observability-extensions-langchain",
-    "microsoft-agents-a365-observability-extensions-semantickernel",
-    "microsoft-agents-a365-observability-extensions-agentframework",
-    "microsoft-agents-a365-observability-hosting",
-    "microsoft-agents-a365-tooling",
-    "microsoft-agents-a365-tooling-extensions-openai",
-    "microsoft-agents-a365-tooling-extensions-semantickernel",
-    "microsoft-agents-a365-tooling-extensions-agentframework",
-    "microsoft-agents-a365-tooling-extensions-azureaifoundry",
-]
-
 # Pattern to match version constraints like >= 1.0.0, < 2.0, == 1.2.3, ~= 1.0, etc.
 VERSION_CONSTRAINT_PATTERN = re.compile(r'^\s*"([^"]+?)(\s*[<>=!~]+\s*[\d][^"]*)"')
 
 # Pattern to extract package name from dependency line (handles with and without version)
-PACKAGE_NAME_PATTERN = re.compile(r'^\s*"([a-zA-Z0-9_-]+[a-zA-Z0-9_.-]*)')
+# Note: \- explicitly escapes dashes to make them literal characters (not range operators)
+PACKAGE_NAME_PATTERN = re.compile(r'^\s*"([a-zA-Z0-9_\-]+[a-zA-Z0-9_.\-]*)')
+
+# Pattern to detect dependency array declarations in pyproject.toml
+# Matches: dependencies = [, dev = [, test = [, azure = [, jaeger = [, etc.
+# Requires the line to start with the section name (after optional whitespace)
+DEPENDENCY_SECTION_PATTERN = re.compile(r'^(dependencies|dev|test|azure|jaeger)\s*=\s*\[')
 
 
 def is_internal_package(package_name: str) -> bool:
@@ -64,8 +53,8 @@ def parse_constraint_dependencies(root_pyproject: Path) -> set[str]:
     for line in content.splitlines():
         stripped = line.strip()
 
-        # Detect start of constraint-dependencies
-        if "constraint-dependencies" in stripped and "=" in stripped:
+        # Detect start of constraint-dependencies (line must start with the key)
+        if stripped.startswith("constraint-dependencies") and "=" in stripped:
             in_constraint_section = True
             bracket_count = stripped.count("[") - stripped.count("]")
             continue
@@ -107,9 +96,15 @@ def parse_uv_sources(root_pyproject: Path) -> set[str]:
 
         if in_sources_section:
             # Extract package name from line like: package-name = { workspace = true }
-            if "=" in stripped and "workspace" in stripped:
-                pkg_name = stripped.split("=")[0].strip().lower().replace("_", "-")
-                sources.add(pkg_name)
+            # Must have = with { workspace = true } on the right side
+            if "=" in stripped:
+                parts = stripped.split("=", 1)
+                if len(parts) == 2:
+                    value_part = parts[1].strip()
+                    # Check for workspace declaration pattern (handles spacing variations)
+                    if value_part.startswith("{") and "workspace" in value_part and "true" in value_part:
+                        pkg_name = parts[0].strip().lower().replace("_", "-")
+                        sources.add(pkg_name)
 
     return sources
 
@@ -142,19 +137,12 @@ def check_package_file(
     for line_num, line in enumerate(content.splitlines(), 1):
         stripped = line.strip()
 
-        # Detect dependency sections
-        if ("dependencies" in stripped or "dev" in stripped or "test" in stripped) and "=" in (
-            stripped
-        ):
-            if "constraint-dependencies" in stripped:
-                continue
-            if "dev-dependencies" in stripped:
-                continue
-            if "[build-system]" in stripped:
-                continue
-
+        # Detect dependency sections using precise pattern matching
+        # Matches: dependencies = [, dev = [, test = [, azure = [, jaeger = [
+        section_match = DEPENDENCY_SECTION_PATTERN.match(stripped)
+        if section_match is not None:
             in_dependencies_section = True
-            section_name = stripped.split("=")[0].strip()
+            section_name = section_match.group(1)
             bracket_count = stripped.count("[") - stripped.count("]")
             continue
 

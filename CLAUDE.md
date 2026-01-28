@@ -155,8 +155,11 @@ This monorepo uses uv's `constraint-dependencies` feature to centralize version 
 2. Run `uv lock && uv sync`
 3. All packages automatically use the new version
 
-**Important:** Internal workspace dependencies (e.g., `microsoft-agents-a365-runtime >= 0.0.0`)
-keep their version specifiers - these are build-time placeholders, not actual constraints.
+**Internal workspace dependencies:**
+- Package pyproject.toml files list internal deps by name only (e.g., `microsoft-agents-a365-runtime`)
+- Root pyproject.toml `[tool.uv.sources]` maps them to `{ workspace = true }` for local development
+- At build time, `setup.py` injects exact version matches (e.g., `== 1.2.3`) for published packages
+- This ensures all SDK packages require the exact same version of each other
 
 **CI Enforcement:** The `scripts/verify_constraints.py` script runs in CI to prevent
 accidental reintroduction of version constraints in package files.
