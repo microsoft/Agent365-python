@@ -26,7 +26,7 @@ from microsoft_agents_a365.tooling.utils.utility import (
 
 
 # Default timeout for MCP server HTTP requests (in seconds)
-MCP_HTTP_CLIENT_TIMEOUT_SECONDS = 60.0
+MCP_HTTP_CLIENT_TIMEOUT_SECONDS = 90.0
 
 
 class McpToolRegistrationService:
