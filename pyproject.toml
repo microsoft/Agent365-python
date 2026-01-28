@@ -43,6 +43,7 @@ dev-dependencies = [
     "agent-framework-azure-ai >= 1.0.0b251114",
     "azure-identity>=1.12.0",
     "openai-agents >= 0.2.6",
+    "pytest-cov>=7.0.0",
 ]
 
 # Test configuration
