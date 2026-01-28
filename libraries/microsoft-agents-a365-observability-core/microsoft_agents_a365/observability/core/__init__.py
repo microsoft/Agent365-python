@@ -14,6 +14,7 @@ from .execute_tool_scope import ExecuteToolScope
 from .execution_type import ExecutionType
 from .exporters.enriched_span import EnrichedReadableSpan
 from .exporters.enriching_span_processor import (
+    get_span_enricher,
     register_span_enricher,
     unregister_span_enricher,
 )
@@ -40,6 +41,7 @@ __all__ = [
     # Span enrichment
     "register_span_enricher",
     "unregister_span_enricher",
+    "get_span_enricher",
     "EnrichedReadableSpan",
     # Span processor
     "SpanProcessor",

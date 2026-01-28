@@ -67,7 +67,7 @@ class SemanticKernelInstrumentor(BaseInstrumentor):
             **kwargs: Optional configuration parameters.
         """
         # Unregister the enricher
-        unregister_span_enricher(enrich_semantic_kernel_span)
+        unregister_span_enricher()
 
         # Shutdown the processor
         if hasattr(self, "_processor"):

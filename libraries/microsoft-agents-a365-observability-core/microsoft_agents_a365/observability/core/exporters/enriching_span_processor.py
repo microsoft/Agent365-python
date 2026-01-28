@@ -3,69 +3,84 @@
 
 """Span enrichment support for the Agent365 exporter pipeline."""
 
+import logging
 import threading
 from collections.abc import Callable
 
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-# Registry for span enrichers - allows extensions to add attributes to spans before export
-_span_enrichers: list[Callable[[ReadableSpan], ReadableSpan]] = []
-_enrichers_lock = threading.Lock()
+logger = logging.getLogger(__name__)
+
+# Single span enricher - only one platform instrumentor should be active at a time
+_span_enricher: Callable[[ReadableSpan], ReadableSpan] | None = None
+_enricher_lock = threading.Lock()
 
 
 def register_span_enricher(enricher: Callable[[ReadableSpan], ReadableSpan]) -> None:
-    """
-    Register a function that enriches spans before export.
+    """Register the span enricher for the active platform instrumentor.
 
-    Extensions (like Semantic Kernel, LangChain, etc.) can register enrichers
-    that modify spans before they are exported by the BatchSpanProcessor.
-
-    Args:
-        enricher: A function that takes a ReadableSpan and returns an
-                  enriched ReadableSpan (or the same span if no changes).
-    """
-    with _enrichers_lock:
-        if enricher not in _span_enrichers:
-            _span_enrichers.append(enricher)
-
-
-def unregister_span_enricher(enricher: Callable[[ReadableSpan], ReadableSpan]) -> None:
-    """
-    Remove a previously registered enricher.
+    Only one enricher can be registered at a time since auto-instrumentation
+    is platform-specific (Semantic Kernel, LangChain, or OpenAI Agents).
 
     Args:
-        enricher: The enricher function to remove.
+        enricher: Function that takes a ReadableSpan and returns an enriched span.
+
+    Raises:
+        RuntimeError: If an enricher is already registered.
     """
-    with _enrichers_lock:
-        if enricher in _span_enrichers:
-            _span_enrichers.remove(enricher)
+    global _span_enricher
+    with _enricher_lock:
+        if _span_enricher is not None:
+            raise RuntimeError(
+                "A span enricher is already registered. "
+                "Only one platform instrumentor can be active at a time."
+            )
+        _span_enricher = enricher
+        logger.debug("Span enricher registered: %s", enricher.__name__)
+
+
+def unregister_span_enricher() -> None:
+    """Unregister the current span enricher.
+
+    Called during uninstrumentation to clean up.
+    """
+    global _span_enricher
+    with _enricher_lock:
+        if _span_enricher is not None:
+            logger.debug("Span enricher unregistered: %s", _span_enricher.__name__)
+            _span_enricher = None
+
+
+def get_span_enricher() -> Callable[[ReadableSpan], ReadableSpan] | None:
+    """Get the currently registered span enricher.
+
+    Returns:
+        The registered enricher function, or None if no enricher is registered.
+    """
+    with _enricher_lock:
+        return _span_enricher
 
 
 class _EnrichingBatchSpanProcessor(BatchSpanProcessor):
-    """
-    BatchSpanProcessor that applies registered enrichers before export.
-
-    This allows extensions to modify spans after they end but before
-    they are batched and exported.
-    """
+    """BatchSpanProcessor that applies the registered enricher before batching."""
 
     def on_end(self, span: ReadableSpan) -> None:
-        """
-        Apply all registered enrichers to the span before batching.
+        """Apply the span enricher and pass to parent for batching.
 
         Args:
-            span: The ReadableSpan that has ended.
+            span: The span that has ended.
         """
         enriched_span = span
-        with _enrichers_lock:
-            enrichers = list(_span_enrichers)  # Copy to avoid holding lock during enrichment
 
-        for enricher in enrichers:
+        enricher = get_span_enricher()
+        if enricher is not None:
             try:
-                enriched_span = enricher(enriched_span)
+                enriched_span = enricher(span)
             except Exception:
-                # Don't let enrichment failures break the pipeline
-                pass
+                logger.exception(
+                    "Span enricher %s raised an exception, using original span",
+                    enricher.__name__,
+                )
 
         super().on_end(enriched_span)
