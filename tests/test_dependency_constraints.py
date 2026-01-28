@@ -66,17 +66,19 @@ def parse_version_constraint(constraint: str) -> dict:
     Examples:
         ">= 0.4.0, < 0.6.0" -> {"lower": "0.4.0", "upper": "0.6.0", "upper_inclusive": False}
         ">= 0.4.0" -> {"lower": "0.4.0", "upper": None}
+
+    Note: Supports version numbers with any number of parts (e.g., "1.0", "1.0.0", "1.0.0.0").
     """
     result = {"lower": None, "upper": None, "upper_inclusive": False, "raw": constraint}
 
-    # Match upper bound patterns: < X.Y.Z or <= X.Y.Z
-    upper_match = re.search(r"<\s*=?\s*(\d+\.\d+\.\d+)", constraint)
+    # Match upper bound patterns: < X.Y or <= X.Y.Z (any dotted numeric version)
+    upper_match = re.search(r"(<\s*=?)\s*(\d+(?:\.\d+)*)", constraint)
     if upper_match:
-        result["upper"] = upper_match.group(1)
-        result["upper_inclusive"] = "<=" in constraint[: upper_match.start() + 2]
+        result["upper"] = upper_match.group(2)
+        result["upper_inclusive"] = upper_match.group(1).replace(" ", "") == "<="
 
-    # Match lower bound patterns: >= X.Y.Z or > X.Y.Z
-    lower_match = re.search(r">=?\s*(\d+\.\d+\.\d+)", constraint)
+    # Match lower bound patterns: >= X.Y or > X.Y.Z (any dotted numeric version)
+    lower_match = re.search(r">=?\s*(\d+(?:\.\d+)*)", constraint)
     if lower_match:
         result["lower"] = lower_match.group(1)
 
