@@ -26,8 +26,8 @@ from pathlib import Path
 VERSION_CONSTRAINT_PATTERN = re.compile(r'^\s*"([^"]+?)(\s*[<>=!~]+\s*[\d][^"]*)"')
 
 # Pattern to extract package name from dependency line (handles with and without version)
-# Note: \- explicitly escapes dashes to make them literal characters (not range operators)
-PACKAGE_NAME_PATTERN = re.compile(r'^\s*"([a-zA-Z0-9_\-]+[a-zA-Z0-9_.\-]*)')
+# Package names must start with a letter, followed by letters, digits, underscores, dots, or dashes
+PACKAGE_NAME_PATTERN = re.compile(r'^\s*"([a-zA-Z][a-zA-Z0-9_.\-]*)')
 
 # Pattern to detect dependency array declarations in pyproject.toml
 # Matches: dependencies = [, dev = [, test = [, azure = [, jaeger = [, etc.
