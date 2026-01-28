@@ -1795,7 +1795,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
+    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0" },
     { name = "opentelemetry-api", specifier = ">=1.36.0" },
 ]
 
@@ -1853,7 +1853,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
+    { name = "microsoft-agents-hosting-core", specifier = ">=0.7.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
@@ -1893,7 +1893,7 @@ requires-dist = [
     { name = "azure-identity", specifier = ">=1.12.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
+    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
@@ -2019,19 +2019,19 @@ provides-extras = ["dev", "test"]
 
 [[package]]
 name = "microsoft-agents-activity"
-version = "0.5.1"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/87/96/4416c5b3f13309d7503f3db3c2bfc321824366b68a240ed71e8145634c3d/microsoft_agents_activity-0.5.1.tar.gz", hash = "sha256:07be29aca58ea9d8279155cfa4c00261e3a18bdf718c8164c1d87e3e57ad527b", size = 55830, upload-time = "2025-10-28T19:27:03.938Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/e9/7f8086719f28815baca72b2f2600ce1e62b7cd53826bb406c52f28e81998/microsoft_agents_activity-0.7.0.tar.gz", hash = "sha256:77eeb6ffa9ee9e6237e1dbf5e962ea641ff60f20b0966e68e903ffbc10ebd41d", size = 60673, upload-time = "2026-01-21T18:05:24.601Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/04/47/333591538c134b5b4637ffc8ab4f5d0bf1c1b6310e3cfb5adc4002aa5940/microsoft_agents_activity-0.5.1-py3-none-any.whl", hash = "sha256:07562064125f2bc8066c2c8e9a60ff6f038f7413ccd01a9d9b0aa426e47467cd", size = 127817, upload-time = "2025-10-28T19:27:12.382Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/f3/64dc3bf13e46c6a09cc1983f66da2e42bf726586fe0f77f915977a6be7d8/microsoft_agents_activity-0.7.0-py3-none-any.whl", hash = "sha256:8d30a25dfd0f491b834be52b4a21ff90ab3b9360ec7e50770c050f1d4a39e5ce", size = 132592, upload-time = "2026-01-21T18:05:33.533Z" },
 ]
 
 [[package]]
 name = "microsoft-agents-hosting-core"
-version = "0.5.1"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "azure-core" },
@@ -2040,9 +2040,9 @@ dependencies = [
     { name = "pyjwt" },
     { name = "python-dotenv" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f2/0b/71bc8f2fd673de9f8a0d7e9bef30dd15892d8539c4557129a5aead2c5882/microsoft_agents_hosting_core-0.5.1.tar.gz", hash = "sha256:d9b64095bf7624d4fc9f1d48cea5a3c66cc2dee9e1c3fb6ea3e9b6dfc03ace8f", size = 81277, upload-time = "2025-10-28T19:27:08.623Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/da/26d461cb222ab41f38a3c72ca43900a65b8e8b6b71d6d1207fad1edc3e7b/microsoft_agents_hosting_core-0.7.0.tar.gz", hash = "sha256:31448279c47e39d63edc347c1d3b4de8043aa1b4c51a1f01d40d7d451221b202", size = 90446, upload-time = "2026-01-21T18:05:29.28Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/2c/bcb8d66ebfe59cf6093c5eac1fc19a7797b5b80ce3ceaec07f2954a21493/microsoft_agents_hosting_core-0.5.1-py3-none-any.whl", hash = "sha256:10a1f394d8e444f6e2e74ab935f5c0a04ebfa43d136be4658fbaccab1321c37e", size = 120190, upload-time = "2025-10-28T19:27:16.263Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/e4/8d9e2e3f3a3106d0c80141631385206a6946f0b414cf863db851b98533e7/microsoft_agents_hosting_core-0.7.0-py3-none-any.whl", hash = "sha256:d03549fff01f38c1a96da4f79375c33378205ee9b5c6e01b87ba576f59b7887f", size = 133749, upload-time = "2026-01-21T18:05:38.002Z" },
 ]
 
 [[package]]
