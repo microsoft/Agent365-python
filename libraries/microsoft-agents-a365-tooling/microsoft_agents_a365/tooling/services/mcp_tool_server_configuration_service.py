@@ -583,6 +583,11 @@ class McpToolServerConfigurationService:
                         turn_context.activity is None, or any of the required fields
                         (conversation.id, activity.id, activity.text) are missing or empty.
 
+        Note:
+            Even if chat_history_messages is empty, the request will still be sent to
+            the MCP platform. This ensures the user message from turn_context.activity.text
+            is registered correctly for real-time threat protection.
+
         Example:
             >>> from datetime import datetime, timezone
             >>> from microsoft_agents_a365.tooling.models import ChatHistoryMessage

@@ -120,17 +120,20 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_empty_messages_returns_success(
+    async def test_send_chat_history_messages_empty_messages_calls_core_service(
         self, service, mock_turn_context
     ):
-        """Test that empty message list returns success with warning log."""
+        """Test that empty message list still calls core service to register user message."""
         # Act
         result = await service.send_chat_history_messages([], mock_turn_context)
 
         # Assert
         assert result.succeeded is True
-        # Core service should not be called for empty messages
-        service._mcp_server_configuration_service.send_chat_history.assert_not_called()
+        # Core service SHOULD be called even for empty messages to register the user message
+        service._mcp_server_configuration_service.send_chat_history.assert_called_once()
+        # Verify empty list was passed
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        assert call_args.kwargs["chat_history_messages"] == []
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -492,10 +495,10 @@ class TestSendChatHistoryAsync:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_send_chat_history_messages_all_filtered_returns_success(
+    async def test_send_chat_history_messages_all_filtered_still_calls_core(
         self, service, mock_turn_context, mock_role
     ):
-        """Test that all messages filtered out returns success without calling core (CRM-006)."""
+        """Test that all messages filtered out still calls core service to register user message."""
         # Arrange - all messages have empty content
         msg1 = Mock()
         msg1.message_id = "msg-1"
@@ -517,8 +520,11 @@ class TestSendChatHistoryAsync:
 
         # Assert
         assert result.succeeded is True
-        # Core service should not be called when all messages are filtered out
-        service._mcp_server_configuration_service.send_chat_history.assert_not_called()
+        # Core service SHOULD be called even when all messages are filtered out to register user message
+        service._mcp_server_configuration_service.send_chat_history.assert_called_once()
+        # Verify empty list was passed (all messages filtered)
+        call_args = service._mcp_server_configuration_service.send_chat_history.call_args
+        assert call_args.kwargs["chat_history_messages"] == []
 
     @pytest.mark.asyncio
     @pytest.mark.unit
