@@ -82,23 +82,30 @@ class TestAddToolServersHttpxClientConfiguration:
         """Test that httpx.AsyncClient is created with Authorization header."""
         auth_token = "test-bearer-token-xyz"
 
-        with patch.object(
-            service._mcp_server_configuration_service,
-            "list_tool_servers",
-            new_callable=AsyncMock,
-            return_value=[mock_mcp_server_config],
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
-        ) as mock_httpx_client, patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
-            return_value="test-agent-id",
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
-            return_value="TestAgent/1.0",
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_mcp_server_config],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value="TestAgent/1.0",
+            ),
         ):
             mock_http_client_instance = MagicMock()
             mock_httpx_client.return_value = mock_http_client_instance
@@ -135,23 +142,30 @@ class TestAddToolServersHttpxClientConfiguration:
         auth_token = "test-bearer-token-xyz"
         expected_user_agent = "AgentFramework/1.0"
 
-        with patch.object(
-            service._mcp_server_configuration_service,
-            "list_tool_servers",
-            new_callable=AsyncMock,
-            return_value=[mock_mcp_server_config],
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
-        ) as mock_httpx_client, patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
-            return_value="test-agent-id",
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
-            return_value=expected_user_agent,
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_mcp_server_config],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value=expected_user_agent,
+            ),
         ):
             mock_http_client_instance = MagicMock()
             mock_httpx_client.return_value = mock_http_client_instance
@@ -186,23 +200,30 @@ class TestAddToolServersHttpxClientConfiguration:
         """Test that httpx.AsyncClient is created with the defined timeout constant."""
         auth_token = "test-bearer-token-xyz"
 
-        with patch.object(
-            service._mcp_server_configuration_service,
-            "list_tool_servers",
-            new_callable=AsyncMock,
-            return_value=[mock_mcp_server_config],
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
-        ) as mock_httpx_client, patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
-            return_value="test-agent-id",
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
-            return_value="TestAgent/1.0",
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_mcp_server_config],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value="TestAgent/1.0",
+            ),
         ):
             mock_http_client_instance = MagicMock()
             mock_httpx_client.return_value = mock_http_client_instance
@@ -242,23 +263,30 @@ class TestAddToolServersHttpxClientConfiguration:
         """
         auth_token = "test-bearer-token-xyz"
 
-        with patch.object(
-            service._mcp_server_configuration_service,
-            "list_tool_servers",
-            new_callable=AsyncMock,
-            return_value=[mock_mcp_server_config],
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
-        ) as mock_httpx_client, patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ) as mock_mcp_tool, patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
-            return_value="test-agent-id",
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
-            return_value="TestAgent/1.0",
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_mcp_server_config],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ) as mock_mcp_tool,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value="TestAgent/1.0",
+            ),
         ):
             mock_http_client_instance = MagicMock()
             mock_httpx_client.return_value = mock_http_client_instance
@@ -297,23 +325,30 @@ class TestAddToolServersHttpxClientConfiguration:
         """Test that created httpx clients are tracked in _http_clients for cleanup."""
         auth_token = "test-bearer-token-xyz"
 
-        with patch.object(
-            service._mcp_server_configuration_service,
-            "list_tool_servers",
-            new_callable=AsyncMock,
-            return_value=[mock_mcp_server_config],
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
-        ) as mock_httpx_client, patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
-            return_value="test-agent-id",
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
-            return_value="TestAgent/1.0",
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_mcp_server_config],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value="TestAgent/1.0",
+            ),
         ):
             mock_http_client_instance = MagicMock()
             mock_httpx_client.return_value = mock_http_client_instance
@@ -449,23 +484,30 @@ class TestHttpxClientLifecycle:
 
         mock_http_client_instance = MagicMock()
 
-        with patch.object(
-            service._mcp_server_configuration_service,
-            "list_tool_servers",
-            new_callable=AsyncMock,
-            return_value=[mock_server_config],
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
-        ) as mock_httpx_client, patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
-            return_value="test-agent-id",
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
-            return_value="TestAgent/1.0",
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_server_config],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value="TestAgent/1.0",
+            ),
         ):
             mock_httpx_client.return_value = mock_http_client_instance
 
@@ -526,23 +568,30 @@ class TestHttpxClientLifecycle:
         mock_clients = [MagicMock() for _ in range(3)]
         client_iter = iter(mock_clients)
 
-        with patch.object(
-            service._mcp_server_configuration_service,
-            "list_tool_servers",
-            new_callable=AsyncMock,
-            return_value=[mock_server_config1, mock_server_config2, mock_server_config3],
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
-        ) as mock_httpx_client, patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
-            return_value="test-agent-id",
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
-            return_value="TestAgent/1.0",
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_server_config1, mock_server_config2, mock_server_config3],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value="TestAgent/1.0",
+            ),
         ):
             # Return a different mock client for each call
             mock_httpx_client.side_effect = lambda **kwargs: next(client_iter)
@@ -615,23 +664,30 @@ class TestHttpxClientLifecycle:
 
         mock_http_client_instance = MagicMock()
 
-        with patch.object(
-            service._mcp_server_configuration_service,
-            "list_tool_servers",
-            new_callable=AsyncMock,
-            return_value=[mock_server_config],
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
-        ) as mock_httpx_client, patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
-            return_value="test-agent-id",
-        ), patch(
-            "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
-            return_value="TestAgent/1.0",
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_server_config],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value="TestAgent/1.0",
+            ),
         ):
             mock_httpx_client.return_value = mock_http_client_instance
 
