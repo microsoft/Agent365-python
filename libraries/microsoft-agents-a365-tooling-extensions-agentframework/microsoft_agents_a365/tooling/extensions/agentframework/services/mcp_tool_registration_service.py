@@ -25,6 +25,10 @@ from microsoft_agents_a365.tooling.utils.utility import (
 )
 
 
+# Default timeout for MCP server HTTP requests (in seconds)
+MCP_HTTP_CLIENT_TIMEOUT_SECONDS = 60.0
+
+
 class McpToolRegistrationService:
     """
     Provides MCP tool registration services for Agent Framework agents.
@@ -47,6 +51,7 @@ class McpToolRegistrationService:
             logger=self._logger
         )
         self._connected_servers = []
+        self._http_clients: List[httpx.AsyncClient] = []
 
     async def add_tool_servers_to_agent(
         self,
@@ -116,7 +121,10 @@ class McpToolRegistrationService:
                     )
 
                     # Create httpx client with auth headers configured
-                    http_client = httpx.AsyncClient(headers=headers, timeout=60.0)
+                    http_client = httpx.AsyncClient(
+                        headers=headers, timeout=MCP_HTTP_CLIENT_TIMEOUT_SECONDS
+                    )
+                    self._http_clients.append(http_client)
 
                     # Create and configure MCPStreamableHTTPTool with http_client
                     mcp_tools = MCPStreamableHTTPTool(
@@ -337,12 +345,21 @@ class McpToolRegistrationService:
     async def cleanup(self):
         """Clean up any resources used by the service."""
         try:
+            # Close MCP server connections
             for plugin in self._connected_servers:
                 try:
                     if hasattr(plugin, "close"):
                         await plugin.close()
                 except Exception as cleanup_ex:
-                    self._logger.debug(f"Error during cleanup: {cleanup_ex}")
+                    self._logger.debug(f"Error during plugin cleanup: {cleanup_ex}")
             self._connected_servers.clear()
+
+            # Close httpx clients to prevent connection/file descriptor leaks
+            for http_client in self._http_clients:
+                try:
+                    await http_client.aclose()
+                except Exception as client_ex:
+                    self._logger.debug(f"Error closing http client: {client_ex}")
+            self._http_clients.clear()
         except Exception as ex:
             self._logger.debug(f"Error during service cleanup: {ex}")
