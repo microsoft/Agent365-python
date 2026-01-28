@@ -32,7 +32,7 @@ PACKAGE_NAME_PATTERN = re.compile(r'^\s*"([a-zA-Z0-9_\-]+[a-zA-Z0-9_.\-]*)')
 # Pattern to detect dependency array declarations in pyproject.toml
 # Matches: dependencies = [, dev = [, test = [, azure = [, jaeger = [, etc.
 # Requires the line to start with the section name (after optional whitespace)
-DEPENDENCY_SECTION_PATTERN = re.compile(r'^(dependencies|dev|test|azure|jaeger)\s*=\s*\[')
+DEPENDENCY_SECTION_PATTERN = re.compile(r"^(dependencies|dev|test|azure|jaeger)\s*=\s*\[")
 
 
 def is_internal_package(package_name: str) -> bool:
@@ -102,7 +102,11 @@ def parse_uv_sources(root_pyproject: Path) -> set[str]:
                 if len(parts) == 2:
                     value_part = parts[1].strip()
                     # Check for workspace declaration pattern (handles spacing variations)
-                    if value_part.startswith("{") and "workspace" in value_part and "true" in value_part:
+                    if (
+                        value_part.startswith("{")
+                        and "workspace" in value_part
+                        and "true" in value_part
+                    ):
                         pkg_name = parts[0].strip().lower().replace("_", "-")
                         sources.add(pkg_name)
 
