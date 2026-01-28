@@ -235,12 +235,10 @@ Implement the primary public method that accepts a sequence of `ThreadMessage` o
   ```
 - [ ] Raises `ValueError` if `turn_context` is None with message "turn_context cannot be None"
 - [ ] Raises `ValueError` if `messages` is None with message "messages cannot be None"
-- [ ] Returns `OperationResult.success()` for empty message list without calling core service
 - [ ] Creates default `ToolOptions` with `orchestrator_name="AzureAIFoundry"` if not provided
 - [ ] Sets orchestrator_name to "AzureAIFoundry" if options provided but orchestrator_name is None
 - [ ] Converts messages using `_convert_thread_messages_to_chat_history()`
-- [ ] Returns `OperationResult.success()` if all messages filtered (no-op)
-- [ ] Delegates to `self._mcp_server_configuration_service.send_chat_history()` for actual sending
+- [ ] Always delegates to `self._mcp_server_configuration_service.send_chat_history()` even for empty/filtered messages (to register current user message)
 - [ ] Catches unexpected exceptions and returns `OperationResult.failed(OperationError(ex))`
 - [ ] Re-raises `ValueError` exceptions (validation errors should propagate)
 - [ ] Logs entry with message count at INFO level
@@ -264,14 +262,12 @@ async def send_chat_history_messages(
     tool_options: Optional[ToolOptions] = None,
 ) -> OperationResult:
     # 1. Input validation (raise ValueError)
-    # 2. Handle empty list (return success)
+    # 2. Log entry
     # 3. Set default options
-    # 4. Log entry
-    # 5. Convert messages
-    # 6. Handle all filtered (return success)
-    # 7. Try: delegate to core service
-    # 8. Except ValueError: re-raise
-    # 9. Except Exception: log, return failed
+    # 4. Convert messages (may result in empty list if all filtered)
+    # 5. Try: delegate to core service (always, even if empty)
+    # 6. Except ValueError: re-raise
+    # 7. Except Exception: log, return failed
 ```
 
 **Estimated Time:** 3-4 hours
@@ -438,7 +434,7 @@ Implement comprehensive unit tests for input validation in both `send_chat_histo
 - [ ] Test class: `TestInputValidation`
 - [ ] Test: `test_send_chat_history_messages_validates_turn_context_none`
 - [ ] Test: `test_send_chat_history_messages_validates_messages_none`
-- [ ] Test: `test_send_chat_history_messages_empty_list_returns_success`
+- [ ] Test: `test_send_chat_history_messages_empty_list_still_calls_core_service`
 - [ ] Test: `test_send_chat_history_validates_agents_client_none`
 - [ ] Test: `test_send_chat_history_validates_thread_id_none`
 - [ ] Test: `test_send_chat_history_validates_thread_id_empty`
@@ -508,7 +504,7 @@ Implement unit tests that verify the happy path scenarios for both API methods, 
 - [ ] Test: `test_send_chat_history_success`
 - [ ] Test: `test_send_chat_history_retrieves_from_client`
 - [ ] Test: `test_send_chat_history_delegates_to_send_chat_history_messages`
-- [ ] Test: `test_send_chat_history_all_messages_filtered_returns_success`
+- [ ] Test: `test_send_chat_history_messages_all_filtered_still_calls_core_service`
 - [ ] Tests verify correct method calls with `assert_called_once()`
 - [ ] Tests verify correct arguments passed to core service
 
