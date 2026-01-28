@@ -6,6 +6,7 @@ MCP Server Configuration model.
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -19,6 +20,10 @@ class MCPServerConfig:
 
     #: Gets or sets the unique name of the MCP server.
     mcp_server_unique_name: str
+
+    #: Gets or sets the custom URL for the MCP server. If provided, this URL will be used
+    #: instead of constructing the URL from the base URL and unique name.
+    url: Optional[str] = None
 
     def __post_init__(self):
         """Validate the configuration after initialization."""

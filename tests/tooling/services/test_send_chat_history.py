@@ -3,6 +3,7 @@
 
 """Unit tests for send_chat_history method in McpToolServerConfigurationService."""
 
+import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -142,17 +143,41 @@ class TestSendChatHistory:
     ):
         """Test that send_chat_history validates chat_history_messages parameter."""
         # Act & Assert
-        with pytest.raises(ValueError, match="chat_history_messages cannot be None or empty"):
+        with pytest.raises(ValueError, match="chat_history_messages cannot be None"):
             await service.send_chat_history(mock_turn_context, None)
 
     @pytest.mark.asyncio
-    async def test_send_chat_history_validates_empty_chat_history_list(
-        self, service, mock_turn_context
-    ):
-        """Test that send_chat_history validates empty chat_history list."""
-        # Act & Assert
-        with pytest.raises(ValueError, match="chat_history_messages cannot be None or empty"):
-            await service.send_chat_history(mock_turn_context, [])
+    async def test_send_chat_history_empty_list_sends_request(self, service, mock_turn_context):
+        """Test that send_chat_history sends request to MCP platform even with empty list."""
+        # Arrange
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.text = AsyncMock(return_value="OK")
+
+        # Mock aiohttp.ClientSession
+        with patch("aiohttp.ClientSession") as mock_session:
+            mock_session_instance = MagicMock()
+            mock_post = AsyncMock()
+            mock_post.__aenter__.return_value = mock_response
+            mock_session_instance.post.return_value = mock_post
+            mock_session.return_value.__aenter__.return_value = mock_session_instance
+
+            # Act
+            result = await service.send_chat_history(mock_turn_context, [])
+
+            # Assert - empty list should still make HTTP request and return success
+            assert result.succeeded is True
+            assert len(result.errors) == 0
+
+            # Verify HTTP request was actually made
+            assert mock_session_instance.post.called
+            call_args = mock_session_instance.post.call_args
+            assert "real-time-threat-protection/chat-message" in call_args[0][0]
+
+            # Verify the payload contains an empty chat history
+            data = call_args[1]["data"]
+            payload = json.loads(data)
+            assert payload["chatHistory"] == []
 
     @pytest.mark.asyncio
     async def test_send_chat_history_validates_activity(self, service, chat_history_messages):

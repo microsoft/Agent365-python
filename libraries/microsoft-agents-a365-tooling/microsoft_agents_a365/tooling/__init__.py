@@ -27,3 +27,6 @@ __all__ = [
     "get_mcp_base_url",
     "build_mcp_server_url",
 ]
+
+# Enable namespace package extension for tooling-extensions-* packages
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
