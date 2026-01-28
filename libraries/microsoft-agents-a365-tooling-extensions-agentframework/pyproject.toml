@@ -28,6 +28,7 @@ dependencies = [
     "agent-framework-azure-ai >= 1.0.0b251114",
     "azure-identity >= 1.12.0",
     "typing-extensions >= 4.0.0",
+    "httpx >= 0.27.0",
 ]
 
 [project.urls]
