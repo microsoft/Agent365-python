@@ -27,22 +27,77 @@ exclude = [
 [tool.uv.sources]
 microsoft-agents-a365-notifications = { workspace = true }
 microsoft-agents-a365-observability-core = { workspace = true }
+microsoft-agents-a365-observability-extensions-agentframework = { workspace = true }
+microsoft-agents-a365-observability-extensions-langchain = { workspace = true }
+microsoft-agents-a365-observability-extensions-openai = { workspace = true }
+microsoft-agents-a365-observability-extensions-semantickernel = { workspace = true }
+microsoft-agents-a365-observability-hosting = { workspace = true }
 microsoft-agents-a365-runtime = { workspace = true }
 microsoft-agents-a365-tooling = { workspace = true }
-microsoft-agents-a365-observability-hosting = { workspace = true }
+microsoft-agents-a365-tooling-extensions-agentframework = { workspace = true }
+microsoft-agents-a365-tooling-extensions-azureaifoundry = { workspace = true }
+microsoft-agents-a365-tooling-extensions-openai = { workspace = true }
+microsoft-agents-a365-tooling-extensions-semantickernel = { workspace = true }
 
 # Development dependencies for the entire workspace
 [tool.uv]
 dev-dependencies = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-mock>=3.10.0",
-    "ruff>=0.1.0",
-    "python-dotenv>=1.0.0",
-    "openai>=1.0.0",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-mock",
+    "ruff",
+    "python-dotenv",
+    "openai",
+    "agent-framework-azure-ai",
+    "azure-identity",
+    "openai-agents",
+]
+
+# Centralized version constraints for all external dependencies
+# Individual package pyproject.toml files declare dependencies by name only (no version)
+# uv applies these constraints during dependency resolution
+constraint-dependencies = [
+    # --- Observability (OpenTelemetry) ---
+    "opentelemetry-api >= 1.36.0",
+    "opentelemetry-sdk >= 1.36.0",
+    "opentelemetry-exporter-otlp >= 1.36.0",
+    "opentelemetry-exporter-otlp-proto-grpc >= 1.36.0",
+    "opentelemetry-instrumentation >= 0.47b0",
+
+    # --- Azure Services ---
+    "azure-ai-agents >= 1.0.0b251001",
+    "azure-ai-projects >= 2.0.0b1",
+    "azure-identity >= 1.12.0",
+    "azure-monitor-ingestion >= 1.0.0",
+    "azure-monitor-opentelemetry-exporter >= 1.0.0b39",
+
+    # --- AI Frameworks ---
     "agent-framework-azure-ai >= 1.0.0b251114",
-    "azure-identity>=1.12.0",
+    "langchain >= 0.1.0",
+    "langchain-core >= 0.1.0",
     "openai-agents >= 0.2.6",
+    "semantic-kernel >= 1.0.0",
+
+    # --- Microsoft Agents SDK ---
+    "microsoft-agents-activity >= 0.4.0",
+    "microsoft-agents-hosting-core >= 0.4.0",
+
+    # --- Data Validation & Utilities ---
+    "aiohttp >= 3.8.0",
+    "asyncio-throttle >= 1.0.0",
+    "pydantic >= 2.0.0",
+    "PyJWT >= 2.8.0",
+    "typing-extensions >= 4.0.0",
+
+    # --- Development & Testing ---
+    "black >= 23.0.0",
+    "mypy >= 1.0.0",
+    "openai >= 1.0.0",
+    "pytest >= 7.0.0",
+    "pytest-asyncio >= 0.21.0",
+    "pytest-mock >= 3.10.0",
+    "python-dotenv >= 1.0.0",
+    "ruff >= 0.1.0",
 ]
 
 # Test configuration

@@ -26,10 +26,10 @@ classifiers = [
 license = {text = "MIT"}
 keywords = ["notifications", "messaging", "agents", "ai", "routing", "sdk"]
 dependencies = [
-    "typing-extensions >= 4.0.0",
-    "microsoft-agents-activity>=0.4.0",
-    "microsoft-agents-hosting-core>=0.4.0",
-    "pydantic>=2.0.0",
+    "typing-extensions",
+    "microsoft-agents-activity",
+    "microsoft-agents-hosting-core",
+    "pydantic",
 ]
 
 [project.urls]
@@ -40,15 +40,15 @@ Documentation = "https://github.com/microsoft/Agent365-python/tree/main/librarie
 
 [project.optional-dependencies]
 dev = [
-    "pytest >= 7.0.0",
-    "pytest-asyncio >= 0.21.0",
-    "ruff >= 0.1.0",
-    "black >= 23.0.0",
-    "mypy >= 1.0.0",
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "black",
+    "mypy",
 ]
 test = [
-    "pytest >= 7.0.0",
-    "pytest-asyncio >= 0.21.0",
+    "pytest",
+    "pytest-asyncio",
 ]
 
 [tool.setuptools.packages.find]

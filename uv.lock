@@ -23,18 +23,50 @@ members = [
     "microsoft-agents-a365-tooling-extensions-openai",
     "microsoft-agents-a365-tooling-extensions-semantickernel",
 ]
-
-[manifest.dependency-groups]
-dev = [
+constraints = [
     { name = "agent-framework-azure-ai", specifier = ">=1.0.0b251114" },
+    { name = "aiohttp", specifier = ">=3.8.0" },
+    { name = "asyncio-throttle", specifier = ">=1.0.0" },
+    { name = "azure-ai-agents", specifier = ">=1.0.0b251001" },
+    { name = "azure-ai-projects", specifier = ">=2.0.0b1" },
     { name = "azure-identity", specifier = ">=1.12.0" },
+    { name = "azure-monitor-ingestion", specifier = ">=1.0.0" },
+    { name = "azure-monitor-opentelemetry-exporter", specifier = ">=1.0.0b39" },
+    { name = "black", specifier = ">=23.0.0" },
+    { name = "langchain", specifier = ">=0.1.0" },
+    { name = "langchain-core", specifier = ">=0.1.0" },
+    { name = "microsoft-agents-activity", specifier = ">=0.4.0" },
+    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0" },
+    { name = "mypy", specifier = ">=1.0.0" },
     { name = "openai", specifier = ">=1.0.0" },
     { name = "openai-agents", specifier = ">=0.2.6" },
+    { name = "opentelemetry-api", specifier = ">=1.36.0" },
+    { name = "opentelemetry-exporter-otlp", specifier = ">=1.36.0" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.36.0" },
+    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "pytest", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.21.0" },
     { name = "pytest-mock", specifier = ">=3.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "ruff", specifier = ">=0.1.0" },
+    { name = "semantic-kernel", specifier = ">=1.0.0" },
+    { name = "typing-extensions", specifier = ">=4.0.0" },
+]
+
+[manifest.dependency-groups]
+dev = [
+    { name = "agent-framework-azure-ai" },
+    { name = "azure-identity" },
+    { name = "openai" },
+    { name = "openai-agents" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-mock" },
+    { name = "python-dotenv" },
+    { name = "ruff" },
 ]
 
 [[package]]
@@ -1550,17 +1582,17 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "microsoft-agents-activity", specifier = ">=0.4.0" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "typing-extensions", specifier = ">=4.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "microsoft-agents-activity" },
+    { name = "microsoft-agents-hosting-core" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pydantic" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "typing-extensions" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1599,23 +1631,23 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "azure-identity", marker = "extra == 'azure'", specifier = ">=1.12.0" },
-    { name = "azure-monitor-ingestion", marker = "extra == 'azure'", specifier = ">=1.0.0" },
-    { name = "azure-monitor-opentelemetry-exporter", marker = "extra == 'azure'", specifier = ">=1.0.0b39" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "azure-identity", marker = "extra == 'azure'" },
+    { name = "azure-monitor-ingestion", marker = "extra == 'azure'" },
+    { name = "azure-monitor-opentelemetry-exporter", marker = "extra == 'azure'" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-runtime", editable = "libraries/microsoft-agents-a365-runtime" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-exporter-otlp", specifier = ">=1.36.0" },
-    { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'jaeger'", specifier = ">=1.36.0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "typing-extensions", specifier = ">=4.0.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'jaeger'" },
+    { name = "opentelemetry-sdk" },
+    { name = "pydantic" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "typing-extensions" },
 ]
 provides-extras = ["azure", "jaeger", "dev", "test"]
 
@@ -1644,17 +1676,17 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-sdk" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1685,19 +1717,19 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "langchain", specifier = ">=0.1.0" },
-    { name = "langchain-core", specifier = ">=0.1.0" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "langchain" },
+    { name = "langchain-core" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-sdk" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1727,18 +1759,18 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "openai-agents", specifier = ">=0.2.6" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "openai-agents" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-sdk" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1768,18 +1800,18 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "semantic-kernel", specifier = ">=1.0.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-sdk" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "semantic-kernel" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1795,8 +1827,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
+    { name = "microsoft-agents-hosting-core" },
+    { name = "opentelemetry-api" },
 ]
 
 [[package]]
@@ -1821,14 +1853,14 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pyjwt" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1852,14 +1884,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "typing-extensions", specifier = ">=4.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "microsoft-agents-hosting-core" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pydantic" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "typing-extensions" },
 ]
 provides-extras = ["dev"]
 
@@ -1889,18 +1921,18 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-framework-azure-ai", specifier = ">=1.0.0b251114" },
-    { name = "azure-identity", specifier = ">=1.12.0" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "agent-framework-azure-ai" },
+    { name = "azure-identity" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "typing-extensions", specifier = ">=4.0.0" },
+    { name = "microsoft-agents-hosting-core" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "typing-extensions" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1929,17 +1961,17 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "azure-ai-agents", specifier = ">=1.0.0b251001" },
-    { name = "azure-ai-projects", specifier = ">=2.0.0b1" },
-    { name = "azure-identity", specifier = ">=1.12.0" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "azure-ai-agents" },
+    { name = "azure-ai-projects" },
+    { name = "azure-identity" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1968,15 +2000,15 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "asyncio-throttle" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
     { name = "openai-agents" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -2004,16 +2036,16 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", specifier = ">=3.8.0" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "aiohttp" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "semantic-kernel", specifier = ">=1.0.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "semantic-kernel" },
 ]
 provides-extras = ["dev", "test"]
 
