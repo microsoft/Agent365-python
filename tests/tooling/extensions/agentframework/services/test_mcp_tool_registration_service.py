@@ -12,10 +12,9 @@ MCPStreamableHTTPTool via **kwargs was silently ignored, causing 400 Bad Request
 errors when calling MCP tool servers.
 """
 
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
-import pytest
-import httpx
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import pytest
 from microsoft_agents_a365.tooling.extensions.agentframework.services import (
     McpToolRegistrationService,
 )
@@ -92,7 +91,7 @@ class TestAddToolServersHttpxClientConfiguration:
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
         ) as mock_httpx_client, patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ) as mock_mcp_tool, patch(
+        ), patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
         ), patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -145,7 +144,7 @@ class TestAddToolServersHttpxClientConfiguration:
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
         ) as mock_httpx_client, patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ) as mock_mcp_tool, patch(
+        ), patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
         ), patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -196,7 +195,7 @@ class TestAddToolServersHttpxClientConfiguration:
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
         ) as mock_httpx_client, patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ) as mock_mcp_tool, patch(
+        ), patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
         ), patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -236,7 +235,7 @@ class TestAddToolServersHttpxClientConfiguration:
         mock_mcp_server_config,
     ):
         """Test that MCPStreamableHTTPTool is instantiated with http_client parameter.
-        
+
         This is the critical test that prevents regression to the bug where
         headers were passed directly to MCPStreamableHTTPTool and silently ignored.
         The fix passes an httpx.AsyncClient with pre-configured headers instead.
@@ -307,7 +306,7 @@ class TestAddToolServersHttpxClientConfiguration:
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
         ) as mock_httpx_client, patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
-        ) as mock_mcp_tool, patch(
+        ), patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
         ), patch(
             "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -388,7 +387,7 @@ class TestMcpToolRegistrationServiceCleanup:
 
 class TestHttpxClientLifecycle:
     """End-to-end tests for httpx client lifecycle management.
-    
+
     These tests verify that clients created during add_tool_servers_to_agent()
     are properly tracked and cleaned up by cleanup(), preventing connection
     and file descriptor leaks.
@@ -437,7 +436,7 @@ class TestHttpxClientLifecycle:
         mock_chat_client,
     ):
         """Test full lifecycle: create client via add_tool_servers, then cleanup.
-        
+
         This end-to-end test ensures that:
         1. add_tool_servers_to_agent() creates and tracks httpx clients
         2. cleanup() calls aclose() on each tracked client
@@ -504,7 +503,7 @@ class TestHttpxClientLifecycle:
         mock_chat_client,
     ):
         """Test lifecycle with multiple MCP servers creating multiple clients.
-        
+
         Verifies that when multiple tool servers are configured, each gets its
         own httpx client that is properly tracked and cleaned up.
         """
@@ -578,7 +577,7 @@ class TestHttpxClientLifecycle:
     @pytest.mark.unit
     async def test_cleanup_idempotent_no_clients(self, service):
         """Test that cleanup() is safe to call when no clients exist.
-        
+
         Ensures cleanup doesn't raise errors when called on a fresh service
         or called multiple times.
         """
@@ -605,7 +604,7 @@ class TestHttpxClientLifecycle:
         mock_chat_client,
     ):
         """Test that calling cleanup() twice doesn't cause issues.
-        
+
         After the first cleanup, the list is cleared, so the second cleanup
         should be a no-op without errors.
         """
