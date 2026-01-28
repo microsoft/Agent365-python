@@ -382,6 +382,28 @@ class TestTimestampExtraction:
 
         assert result == timestamp
 
+    @pytest.mark.unit
+    def test_extract_timestamp_logs_on_invalid_iso_string(self, service, caplog):
+        """Test that invalid ISO string timestamp logs debug message and generates new timestamp."""
+        import logging
+
+        invalid_iso_string = "not-a-valid-timestamp"
+        message = MockChatMessageContent(
+            role=MockAuthorRole.USER,
+            content="Hello",
+            metadata={"timestamp": invalid_iso_string},
+        )
+
+        with caplog.at_level(logging.DEBUG):
+            result = service._extract_or_generate_timestamp(message, 5)
+
+        # Should generate a new timestamp (approximately now)
+        assert isinstance(result, datetime)
+        # Verify debug log was emitted
+        assert any("Failed to parse timestamp" in record.message for record in caplog.records)
+        assert any("not-a-valid-timestamp" in record.message for record in caplog.records)
+        assert any("index 5" in record.message for record in caplog.records)
+
 
 # =============================================================================
 # SUCCESS PATH TESTS (SP-01 to SP-06)
@@ -777,17 +799,46 @@ class TestContentExtraction:
         assert result == ""
 
     @pytest.mark.unit
-    def test_extract_content_converts_to_string(self, service):
-        """Test that content is converted to string."""
-        # Create a message with non-string content
+    def test_extract_content_returns_empty_for_unexpected_type(self, service, caplog):
+        """Test that unexpected content types return empty string for security."""
+        import logging
+
+        # Create a message with non-string content (integer)
         message = MockChatMessageContent(
             role=MockAuthorRole.USER,
-            content=12345,  # Integer
+            content=12345,  # Integer - unexpected type
         )
 
-        result = service._extract_content(message)
+        with caplog.at_level(logging.WARNING):
+            result = service._extract_content(message)
 
-        assert result == "12345"
+        # Should return empty string to avoid potential data exposure
+        assert result == ""
+
+        # Should log warning about unexpected type
+        assert any("Unexpected content type" in record.message for record in caplog.records)
+        assert any("int" in record.message for record in caplog.records)
+
+    @pytest.mark.unit
+    def test_extract_content_logs_warning_for_dict_type(self, service, caplog):
+        """Test that dict content type logs warning and returns empty string."""
+        import logging
+
+        # Create a message with dict content
+        message = MockChatMessageContent(
+            role=MockAuthorRole.USER,
+            content={"key": "value"},  # Dict - unexpected type
+        )
+
+        with caplog.at_level(logging.WARNING):
+            result = service._extract_content(message)
+
+        # Should return empty string to avoid potential data exposure
+        assert result == ""
+
+        # Should log warning about unexpected type
+        assert any("Unexpected content type" in record.message for record in caplog.records)
+        assert any("dict" in record.message for record in caplog.records)
 
 
 # =============================================================================

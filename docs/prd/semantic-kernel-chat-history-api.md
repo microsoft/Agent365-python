@@ -246,8 +246,10 @@ The following fields SHALL be mapped from Semantic Kernel `ChatMessageContent` t
 |-----------------------------|----------------------------|----------------|
 | `metadata.get("id")` or generated UUID | `id` | Extract from metadata or generate UUID |
 | `role` | `role` | Convert AuthorRole enum to lowercase string |
-| `content` | `content` | Direct copy (must be non-empty string) |
+| `content` | `content` | Direct copy (must be string type and non-empty) |
 | `metadata.get("timestamp")` or current UTC | `timestamp` | Extract from metadata or use current UTC time |
+
+**Security Note**: The `content` field MUST be a string type. If `content` is an unexpected type (not `str` or `None`), the method SHALL return empty string and log a warning. This prevents unintentionally exposing sensitive data that might be present in an object's `__str__` or `__repr__` methods.
 
 ### 4.4 Message Filtering Requirements
 
@@ -257,6 +259,7 @@ Messages SHALL be filtered (skipped with warning log) if they are **invalid**:
 |-----------|--------|-------------|
 | Message is `None` | Cannot process null message | "Skipping null message at index {index}" |
 | Message `content` is None, empty, or whitespace-only | Content is required for chat history | "Skipping message at index {index} with empty content" |
+| Message `content` is unexpected type (not `str`) | Security: prevent data exposure from object stringification | "Unexpected content type '{type}' encountered. Returning empty string to avoid potential data exposure." |
 
 ### 4.5 Default Behavior
 
@@ -345,6 +348,7 @@ The implementation SHALL use the following types from the Semantic Kernel SDK:
 | Limit applied | INFO | "Applying limit of {limit} to {total} messages" |
 | Message skipped (null) | WARNING | "Skipping null message at index {index}" |
 | Message skipped (empty content) | WARNING | "Skipping message at index {index} with empty content" |
+| Unexpected content type | WARNING | "Unexpected content type '{type}' encountered. Returning empty string to avoid potential data exposure." |
 | All messages filtered | WARNING | "All messages were filtered out during conversion" |
 | ID generated | DEBUG | "Generated UUID {id} for message at index {index}" |
 | Timestamp generated | DEBUG | "Using current UTC time for message at index {index}" |

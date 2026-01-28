@@ -90,7 +90,7 @@ The implementation is scoped as a minor version bump (1.0.0 to 1.1.0) since it a
 
 **Acceptance Criteria**:
 - [ ] Implement `_map_author_role(self, role: AuthorRole) -> str` that converts AuthorRole enum to lowercase string
-- [ ] Implement `_extract_content(self, message: ChatMessageContent) -> str` that extracts text content
+- [ ] Implement `_extract_content(self, message: ChatMessageContent) -> str` that extracts text content with type validation
 - [ ] Implement `_extract_or_generate_id(self, message: ChatMessageContent, index: int) -> str` that extracts ID from metadata or generates UUID
 - [ ] Implement `_extract_or_generate_timestamp(self, message: ChatMessageContent, index: int) -> datetime` that extracts timestamp or uses current UTC
 - [ ] Implement `_convert_single_sk_message(self, message: ChatMessageContent, index: int) -> Optional[ChatHistoryMessage]` that converts a single message
@@ -98,6 +98,7 @@ The implementation is scoped as a minor version bump (1.0.0 to 1.1.0) since it a
 - [ ] All methods include appropriate debug/warning logging
 - [ ] Methods handle None messages gracefully (skip with warning)
 - [ ] Methods handle empty/whitespace content gracefully (skip with warning)
+- [ ] **Security**: `_extract_content` returns empty string for unexpected content types (non-string) to prevent sensitive data exposure
 - [ ] Copyright header is present at file top
 
 **Technical Guidance**:
@@ -106,6 +107,7 @@ The implementation is scoped as a minor version bump (1.0.0 to 1.1.0) since it a
 - Use `message.metadata.get("id")` for existing IDs, `message.metadata.get("timestamp")` for timestamps
 - Support timestamp formats: datetime objects, Unix timestamps (int/float), ISO strings
 - Place these methods in a section marked `# PRIVATE HELPER METHODS - Message Conversion`
+- **Security**: In `_extract_content`, only return content if it's a string; for unexpected types (int, dict, objects), return empty string and log warning to avoid exposing sensitive data via `__str__` or `__repr__`
 
 **Dependencies**: Task 1 (imports must be in place)
 

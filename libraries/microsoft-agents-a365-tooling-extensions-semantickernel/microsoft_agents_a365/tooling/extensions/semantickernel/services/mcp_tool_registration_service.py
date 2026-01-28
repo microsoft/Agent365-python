@@ -456,11 +456,26 @@ class McpToolRegistrationService:
             message: Semantic Kernel ChatMessageContent object.
 
         Returns:
-            Content string (may be empty).
+            Content string (may be empty). Returns empty string for unexpected
+            types to avoid unintentionally exposing sensitive data.
         """
-        if message.content is None:
+        content = message.content
+
+        if content is None:
             return ""
-        return str(message.content)
+
+        # If content is already a string, return it directly
+        if isinstance(content, str):
+            return content
+
+        # For unexpected types, log a warning and return empty string to avoid
+        # unintentionally stringifying objects that might contain sensitive data
+        content_type = type(content).__name__
+        self._logger.warning(
+            f"Unexpected content type '{content_type}' encountered. "
+            "Returning empty string to avoid potential data exposure."
+        )
+        return ""
 
     def _extract_or_generate_id(
         self,
@@ -517,8 +532,10 @@ class McpToolRegistrationService:
                 elif isinstance(existing_timestamp, str):
                     try:
                         return datetime.fromisoformat(existing_timestamp.replace("Z", "+00:00"))
-                    except ValueError:
-                        pass
+                    except (ValueError, TypeError) as ex:
+                        self._logger.debug(
+                            f"Failed to parse timestamp '{existing_timestamp}' at index {index}: {ex}"
+                        )
 
         # Use current UTC time
         self._logger.debug(f"Using current UTC time for message at index {index}")
