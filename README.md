@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/microsoft-agents-a365-observability-core?label=PyPI&logo=pypi)](https://pypi.org/search/?q=microsoft-agents-a365)
 [![PyPI Downloads](https://img.shields.io/pypi/dm/microsoft-agents-a365-observability-core?label=Downloads&logo=pypi)](https://pypi.org/search/?q=microsoft-agents-a365)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/microsoft/Agent365-python/.github/workflows/ci.yml?branch=main&label=Build&logo=github)](https://github.com/microsoft/Agent365-python/actions)
+[![CI - Build, Test, and Publish SDKs](https://github.com/microsoft/Agent365-python/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/microsoft/Agent365-python/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/microsoft/Agent365-python?label=License)](LICENSE.md)
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python)](https://www.python.org/)
 [![Contributors](https://img.shields.io/github/contributors/microsoft/Agent365-python?label=Contributors&logo=github)](https://github.com/microsoft/Agent365-python/graphs/contributors)
