@@ -267,7 +267,8 @@ class McpToolRegistrationService:
             # Re-raise validation errors
             raise
         except Exception as ex:
-            self._logger.error(f"Failed to send chat history: {ex}")
+            self._logger.error("Failed to send chat history")
+            self._logger.debug(f"Exception details: {ex}")
             return OperationResult.failed(OperationError(ex))
 
     async def send_chat_history_messages(
@@ -351,7 +352,8 @@ class McpToolRegistrationService:
             # Re-raise validation errors from the core service
             raise
         except Exception as ex:
-            self._logger.error(f"Failed to send chat history messages: {ex}")
+            self._logger.error("Failed to send chat history messages")
+            self._logger.debug(f"Exception details: {ex}")
             return OperationResult.failed(OperationError(ex))
 
     # ============================================================================
