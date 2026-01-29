@@ -185,12 +185,6 @@ def sample_system_message():
 
 
 @pytest.fixture
-def sample_tool_message():
-    """Create a sample tool message."""
-    return MockChatMessageContent(role=MockAuthorRole.TOOL, content="Tool result here")
-
-
-@pytest.fixture
 def sample_sk_messages():
     """Create a list of sample Semantic Kernel messages."""
     return [
