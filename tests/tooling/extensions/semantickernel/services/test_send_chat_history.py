@@ -621,6 +621,28 @@ class TestLimitFunctionality:
         # limit=0 should be treated as "no limit" per the condition `limit > 0`
         assert len(chat_history_messages) == 5
 
+    # LF-05
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_negative_limit_sends_all(
+        self, service, mock_turn_context, mock_config_service
+    ):
+        """Test that negative limit is treated as no limit (sends all messages)."""
+        messages = [
+            MockChatMessageContent(role=MockAuthorRole.USER, content=f"Message {i}")
+            for i in range(5)
+        ]
+        chat_history = MockChatHistory(messages=messages)
+
+        mock_config_service.send_chat_history.return_value = OperationResult.success()
+
+        await service.send_chat_history(mock_turn_context, chat_history, limit=-1)
+
+        call_args = mock_config_service.send_chat_history.call_args
+        chat_history_messages = call_args.kwargs["chat_history_messages"]
+        # Negative limit should be treated as "no limit" per the condition `limit > 0`
+        assert len(chat_history_messages) == 5
+
 
 # =============================================================================
 # ERROR HANDLING TESTS (EH-01 to EH-06)
