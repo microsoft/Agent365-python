@@ -9,10 +9,13 @@ from typing import Any, Optional
 from opentelemetry import trace
 from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_NAMESPACE, Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
 from .exporters.agent365_exporter import _Agent365Exporter
 from .exporters.agent365_exporter_options import Agent365ExporterOptions
+from .exporters.enriching_span_processor import (
+    _EnrichingBatchSpanProcessor,
+)
 from .exporters.utils import is_agent365_exporter_enabled
 from .trace_processor.span_processor import SpanProcessor
 
@@ -166,8 +169,9 @@ class TelemetryManager:
 
         # Add span processors
 
-        # Create BatchSpanProcessor with optimized settings
-        batch_processor = BatchSpanProcessor(exporter, **batch_processor_kwargs)
+        # Create _EnrichingBatchSpanProcessor with optimized settings
+        # This allows extensions to enrich spans before export
+        batch_processor = _EnrichingBatchSpanProcessor(exporter, **batch_processor_kwargs)
         agent_processor = SpanProcessor()
 
         tracer_provider.add_span_processor(batch_processor)
