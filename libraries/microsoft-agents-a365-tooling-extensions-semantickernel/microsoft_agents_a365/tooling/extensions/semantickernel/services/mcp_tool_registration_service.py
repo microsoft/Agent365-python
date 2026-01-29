@@ -15,7 +15,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, List, Optional, Sequence
+from typing import List, Optional, Sequence
 
 # Third-party imports
 from semantic_kernel import kernel as sk
@@ -175,7 +175,7 @@ class McpToolRegistrationService:
     # Private Methods - Input Validation & Processing
     # ============================================================================
 
-    def _validate_inputs(self, kernel: Any, agentic_app_id: str, auth_token: str) -> None:
+    def _validate_inputs(self, kernel: sk.Kernel, agentic_app_id: str, auth_token: str) -> None:
         """Validate all required inputs."""
         if kernel is None:
             raise ValueError("kernel cannot be None")
