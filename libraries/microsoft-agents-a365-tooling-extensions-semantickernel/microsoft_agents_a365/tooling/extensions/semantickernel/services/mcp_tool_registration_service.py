@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import List, Optional, Sequence
 
@@ -321,11 +322,11 @@ class McpToolRegistrationService:
 
         self._logger.info(f"Sending {len(messages)} Semantic Kernel messages as chat history")
 
-        # Set default options
+        # Set default options (create new instance to avoid mutating caller's object)
         if options is None:
             options = ToolOptions(orchestrator_name=self._orchestrator_name)
         elif options.orchestrator_name is None:
-            options.orchestrator_name = self._orchestrator_name
+            options = replace(options, orchestrator_name=self._orchestrator_name)
 
         try:
             # Convert Semantic Kernel messages to ChatHistoryMessage format
