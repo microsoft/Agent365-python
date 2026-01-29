@@ -104,6 +104,29 @@ class TestInputValidation:
         assert len(chat_history_messages) == 1
         assert chat_history_messages[0].content == "Valid message"
 
+    # UV-07
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_send_chat_history_all_messages_filtered_still_calls_core_service(
+        self, service, mock_turn_context, mock_config_service
+    ):
+        """Test that when all messages are filtered, core service is still called with empty list."""
+        messages = [
+            MockChatMessageContent(role=MockAuthorRole.USER, content=""),  # Empty - filtered
+            MockChatMessageContent(role=MockAuthorRole.USER, content="   "),  # Whitespace - filtered
+            MockChatMessageContent(role=MockAuthorRole.USER, content=None),  # None - filtered
+        ]
+
+        mock_config_service.send_chat_history.return_value = OperationResult.success()
+
+        result = await service.send_chat_history_messages(mock_turn_context, messages)
+
+        assert result.succeeded is True
+        mock_config_service.send_chat_history.assert_called_once()
+        call_args = mock_config_service.send_chat_history.call_args
+        # Verify empty list was passed to core service
+        assert call_args.kwargs["chat_history_messages"] == []
+
 
 # =============================================================================
 # ROLE MAPPING TESTS (RM-01)
