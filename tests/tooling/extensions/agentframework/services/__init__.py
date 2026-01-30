@@ -1,4 +1,4 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Tests for tooling components."""
+"""Test package for Agent Framework tooling extension services."""

@@ -1,4 +1,4 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Tests for tooling components."""
+"""Tests for OpenAI tooling extensions."""
