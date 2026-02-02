@@ -15,6 +15,10 @@ from uuid import UUID
 
 from langchain_core.tracers import BaseTracer, LangChainTracer
 from langchain_core.tracers.schemas import Run
+from microsoft_agents_a365.observability.core.constants import (
+    GEN_AI_AGENT_NAME_KEY,
+    INVOKE_AGENT_OPERATION_NAME,
+)
 from microsoft_agents_a365.observability.core.inference_operation_type import InferenceOperationType
 from microsoft_agents_a365.observability.core.utils import (
     DictWithLock,
@@ -37,11 +41,14 @@ from microsoft_agents_a365.observability.extensions.langchain.utils import (
     function_calls,
     input_messages,
     invocation_parameters,
+    invoke_agent_input_message,
+    invoke_agent_output_message,
     llm_provider,
     metadata,
     model_name,
     output_messages,
     prompts,
+    set_execution_type,
     token_counts,
     tools,
 )
@@ -111,8 +118,17 @@ class CustomLangChainTracer(BaseTracer):
         # We can't use real time because the handler may be
         # called in a background thread.
         start_time_utc_nano = as_utc_nano(run.start_time)
+
+        # Determine span name based on run type
+        if run.run_type == "chain" and run.name == "LangGraph":
+            span_name = f"invoke_agent {run.name}"
+        elif run.run_type.lower() == "tool":
+            span_name = f"execute_tool {run.name}"
+        else:
+            span_name = run.name
+
         span = self._tracer.start_span(
-            name=run.name,
+            name=span_name,
             context=parent_context,
             start_time=start_time_utc_nano,
         )
@@ -197,27 +213,52 @@ def _update_span(span: Span, run: Run) -> None:
     else:
         span.set_status(trace_api.Status(trace_api.StatusCode.ERROR, run.error))
 
+    span.set_attributes(dict(get_attributes_from_context()))
+
     if run.run_type == "llm" and run.outputs.get("llm_output").get("id").startswith("chat"):
         span.update_name(f"{InferenceOperationType.CHAT.value.lower()} {span.name}")
-    elif run.run_type.lower() == "tool":
-        span.update_name(f"execute_tool {span.name}")
-    span.set_attributes(dict(get_attributes_from_context()))
-    span.set_attributes(
-        dict(
-            flatten(
-                chain(
-                    add_operation_type(run),
-                    prompts(run.inputs),
-                    input_messages(run.inputs),
-                    output_messages(run.outputs),
-                    invocation_parameters(run),
-                    llm_provider(run.extra),
-                    model_name(run.outputs, run.extra),
-                    token_counts(run.outputs),
-                    function_calls(run.outputs),
-                    tools(run),
-                    metadata(run),
+    is_invoke_agent = span.name.startswith(INVOKE_AGENT_OPERATION_NAME)
+
+    # If this is an invoke_agent span, update span name with agent name
+    if is_invoke_agent:
+        agent_name = None
+        if hasattr(span, "_attributes") and span._attributes:
+            agent_name = span._attributes.get(GEN_AI_AGENT_NAME_KEY)
+        if agent_name:
+            span.update_name(f"{INVOKE_AGENT_OPERATION_NAME} {agent_name}")
+
+    # For invoke_agent spans, add input/output messages
+    if is_invoke_agent:
+        span.set_attributes(
+            dict(
+                flatten(
+                    chain(
+                        set_execution_type(),
+                        add_operation_type(run),
+                        invoke_agent_input_message(run.inputs),
+                        invoke_agent_output_message(run.outputs),
+                        metadata(run),
+                    )
                 )
             )
         )
-    )
+    else:
+        span.set_attributes(
+            dict(
+                flatten(
+                    chain(
+                        add_operation_type(run),
+                        prompts(run.inputs),
+                        input_messages(run.inputs),
+                        output_messages(run.outputs),
+                        invocation_parameters(run),
+                        llm_provider(run.extra),
+                        model_name(run.outputs, run.extra),
+                        token_counts(run.outputs),
+                        function_calls(run.outputs),
+                        tools(run),
+                        metadata(run),
+                    )
+                )
+            )
+        )
