@@ -85,7 +85,7 @@ constraint-dependencies = [
     # --- Data Validation & Utilities ---
     "aiohttp >= 3.8.0",
     "asyncio-throttle >= 1.0.0",
-    "httpx >= 0.27.0"
+    "httpx >= 0.27.0",
     "pydantic >= 2.0.0",
     "PyJWT >= 2.8.0",
     "typing-extensions >= 4.0.0",
