@@ -28,6 +28,7 @@ dependencies = [
     "agent-framework-azure-ai",
     "azure-identity",
     "typing-extensions",
+    "httpx",
 ]
 
 [project.urls]
