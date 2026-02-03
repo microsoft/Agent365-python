@@ -115,9 +115,7 @@ class McpToolRegistrationService:
 
             except Exception as tool_ex:
                 server_name = getattr(server_config, "mcp_server_name", "Unknown")
-                self._logger.warning(
-                    f"Failed to create MCP toolset for {server_name}: {tool_ex}"
-                )
+                self._logger.warning(f"Failed to create MCP toolset for {server_name}: {tool_ex}")
                 continue
 
         # Combine existing tools with new MCP servers

@@ -95,15 +95,20 @@ class TestAddToolServersToAgent:
         self, mock_agent, mock_authorization, mock_turn_context
     ):
         """Test that token is exchanged when not provided."""
-        with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
-        ) as mock_config_service_class, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
-        ) as mock_utility, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.get_mcp_platform_authentication_scope"
-        ) as mock_get_scope, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
-        ) as mock_agent_class:
+        with (
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            ) as mock_config_service_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+            ) as mock_utility,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.get_mcp_platform_authentication_scope"
+            ) as mock_get_scope,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
+            ) as mock_agent_class,
+        ):
             # Setup mocks
             mock_get_scope.return_value = ["https://test.scope/.default"]
             mock_utility.resolve_agent_identity.return_value = "agent-123"
@@ -135,13 +140,17 @@ class TestAddToolServersToAgent:
         self, mock_agent, mock_authorization, mock_turn_context
     ):
         """Test that provided token is used instead of exchanging."""
-        with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
-        ) as mock_config_service_class, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
-        ) as mock_utility, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
-        ) as mock_agent_class:
+        with (
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            ) as mock_config_service_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+            ) as mock_utility,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
+            ) as mock_agent_class,
+        ):
             # Setup mocks
             mock_utility.resolve_agent_identity.return_value = "agent-123"
             mock_utility.get_user_agent_header.return_value = "Agent365SDK/1.0"
@@ -173,15 +182,20 @@ class TestAddToolServersToAgent:
         self, mock_agent, mock_authorization, mock_turn_context, mock_server_config
     ):
         """Test that MCP toolsets are created for each server config."""
-        with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
-        ) as mock_config_service_class, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
-        ) as mock_utility, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolset"
-        ) as mock_toolset_class, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
-        ) as mock_agent_class:
+        with (
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            ) as mock_config_service_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+            ) as mock_utility,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolset"
+            ) as mock_toolset_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
+            ) as mock_agent_class,
+        ):
             # Setup mocks
             mock_utility.resolve_agent_identity.return_value = "agent-123"
             mock_utility.get_user_agent_header.return_value = "Agent365SDK/1.0"
@@ -217,13 +231,17 @@ class TestAddToolServersToAgent:
         self, mock_agent, mock_authorization, mock_turn_context
     ):
         """Test that a new Agent instance is returned."""
-        with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
-        ) as mock_config_service_class, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
-        ) as mock_utility, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
-        ) as mock_agent_class:
+        with (
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            ) as mock_config_service_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+            ) as mock_utility,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
+            ) as mock_agent_class,
+        ):
             # Setup mocks
             mock_utility.resolve_agent_identity.return_value = "agent-123"
             mock_utility.get_user_agent_header.return_value = "Agent365SDK/1.0"
@@ -262,15 +280,20 @@ class TestAddToolServersToAgent:
         self, mock_agent, mock_authorization, mock_turn_context, mock_server_config
     ):
         """Test that errors during toolset creation are handled gracefully."""
-        with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
-        ) as mock_config_service_class, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
-        ) as mock_utility, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolset"
-        ) as mock_toolset_class, patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
-        ) as mock_agent_class:
+        with (
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            ) as mock_config_service_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+            ) as mock_utility,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolset"
+            ) as mock_toolset_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
+            ) as mock_agent_class,
+        ):
             # Setup mocks
             mock_utility.resolve_agent_identity.return_value = "agent-123"
             mock_utility.get_user_agent_header.return_value = "Agent365SDK/1.0"

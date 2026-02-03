@@ -78,6 +78,7 @@ constraint-dependencies = [
     "langchain-core >= 0.1.0",
     "openai-agents >= 0.2.6",
     "semantic-kernel >= 1.0.0",
+    "google-adk >= 1.0.0",
 
     # --- Microsoft Agents SDK ---
     "microsoft-agents-activity >= 0.4.0",
