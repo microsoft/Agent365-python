@@ -136,6 +136,34 @@ libraries/
    - MCP (Model Context Protocol) integration
    - Framework-specific adapters for tool execution
 
+### Centralized Dependency Version Management
+
+This monorepo uses uv's `constraint-dependencies` feature to centralize version constraints:
+
+**How it works:**
+1. **Root pyproject.toml** defines version constraints for all external packages
+2. **Package pyproject.toml** files declare dependencies by name only (no version)
+3. **uv** applies root constraints during dependency resolution
+
+**Adding a new dependency:**
+1. Add the package name to your package's `dependencies` array
+2. Add the version constraint to root `pyproject.toml` `constraint-dependencies`
+3. Run `uv lock && uv sync`
+
+**Updating a dependency version:**
+1. Edit the constraint in root `pyproject.toml` only
+2. Run `uv lock && uv sync`
+3. All packages automatically use the new version
+
+**Internal workspace dependencies:**
+- Package pyproject.toml files list internal deps by name only (e.g., `microsoft-agents-a365-runtime`)
+- Root pyproject.toml `[tool.uv.sources]` maps them to `{ workspace = true }` for local development
+- At build time, `setup.py` injects exact version matches (e.g., `== 1.2.3`) for published packages
+- This ensures all SDK packages require the exact same version of each other
+
+**CI Enforcement:** The `scripts/verify_constraints.py` script runs in CI to prevent
+accidental reintroduction of version constraints in package files.
+
 ### Test Organization
 
 Tests mirror the library structure:
@@ -168,11 +196,45 @@ Place it before imports with one blank line after.
 
 ### Python Conventions
 
-- Type hints preferred (Pydantic models heavily used)
+- Type hints required on all function parameters and return types
 - Async/await patterns for I/O operations
 - Use explicit `None` checks: `if x is not None:` not `if x:`
 - Local imports should be moved to top of file
 - Return defensive copies of mutable data to protect singletons
+- **Async method naming**: Do NOT use `_async` suffix on async methods. The `_async` suffix is only appropriate when providing both sync and async versions of the same method. Since this SDK is async-only, use plain method names (e.g., `send_chat_history_messages` not `send_chat_history_messages_async`)
+
+### Type Hints - NEVER Use `Any`
+
+**CRITICAL: Never use `typing.Any` in this codebase.** Using `Any` defeats the purpose of type checking and can hide bugs. Instead:
+
+1. **Use actual types from external SDKs** - When integrating with external libraries (OpenAI, LangChain, etc.), import and use their actual types:
+   ```python
+   from agents.memory import Session
+   from agents.items import TResponseInputItem
+
+   async def send_chat_history(self, session: Session) -> OperationResult:
+       ...
+   ```
+
+2. **Use `Union` for known possible types**:
+   ```python
+   from typing import Union
+   MessageType = Union[UserMessage, AssistantMessage, SystemMessage, Dict[str, object]]
+   ```
+
+3. **Use `object` for truly unknown types** that you only pass through:
+   ```python
+   def log_item(item: object) -> None: ...
+   ```
+
+4. **Use `Protocol` only as a last resort** - If external types cannot be found or imported, define a Protocol. However, **confirm with the developer first** before proceeding with this approach, as it may indicate a missing dependency or incorrect understanding of the external API.
+
+**Why this matters:**
+- `Any` disables all type checking for that variable
+- Bugs that type checkers would catch go unnoticed
+- Code readability suffers - developers don't know what types to expect
+- Using actual SDK types provides better IDE support and ensures compatibility
+- This applies to both production code AND test files
 
 ## CI/CD
 

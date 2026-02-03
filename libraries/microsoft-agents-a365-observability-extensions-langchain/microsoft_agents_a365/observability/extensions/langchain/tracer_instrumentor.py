@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from wrapt import wrap_function_wrapper
 
 from microsoft_agents_a365.observability.extensions.langchain.tracer import CustomLangChainTracer
 
-_INSTRUMENTS: str = "langchain_core >= 0.1.0"
+_INSTRUMENTS: str = "langchain_core >= 1.2.0"
 
 
 class CustomLangChainInstrumentor(BaseInstrumentor):
