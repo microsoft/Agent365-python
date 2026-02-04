@@ -20,7 +20,6 @@ service = McpToolRegistrationService()
 # Create agent with MCP tools
 agent = await service.add_tool_servers_to_agent(
     agent=existing_agent,
-    agentic_app_id="your-agent-id",
     auth=auth_context,
     auth_handler_name="graph",
     context=turn_context,
@@ -51,7 +50,6 @@ Google ADK Agent with MCP tools
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `agent` | `Agent` | The existing Google ADK agent |
-| `agentic_app_id` | `str` | Agentic App ID for the agent |
 | `auth` | `Authorization` | Auth context for token exchange |
 | `auth_handler_name` | `str` | Name of auth handler |
 | `context` | `TurnContext` | Conversation context |

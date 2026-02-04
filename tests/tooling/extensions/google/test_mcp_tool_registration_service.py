@@ -11,6 +11,7 @@ import pytest
 class TestMcpToolRegistrationServiceInit:
     """Tests for McpToolRegistrationService initialization."""
 
+    @pytest.mark.unit
     def test_init_default_logger(self):
         """Test initialization with default logger."""
         with patch(
@@ -24,6 +25,7 @@ class TestMcpToolRegistrationServiceInit:
             assert service.config_service is not None
             assert service._connected_servers == []
 
+    @pytest.mark.unit
     def test_init_custom_logger(self):
         """Test initialization with custom logger."""
         import logging
@@ -39,6 +41,7 @@ class TestMcpToolRegistrationServiceInit:
 
             assert service._logger is custom_logger
 
+    @pytest.mark.unit
     def test_orchestrator_name(self):
         """Test that orchestrator name is set correctly."""
         with patch(
@@ -91,6 +94,7 @@ class TestAddToolServersToAgent:
         return mock
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_add_tool_servers_exchanges_token_when_not_provided(
         self, mock_agent, mock_authorization, mock_turn_context
     ):
@@ -136,6 +140,7 @@ class TestAddToolServersToAgent:
             mock_authorization.exchange_token.assert_called_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_add_tool_servers_uses_provided_token(
         self, mock_agent, mock_authorization, mock_turn_context
     ):
@@ -178,6 +183,7 @@ class TestAddToolServersToAgent:
             mock_authorization.exchange_token.assert_not_called()
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_add_tool_servers_creates_mcp_toolsets(
         self, mock_agent, mock_authorization, mock_turn_context, mock_server_config
     ):
@@ -229,6 +235,7 @@ class TestAddToolServersToAgent:
             assert mock_toolset in mock_agent.tools
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_add_tool_servers_modifies_agent_in_place(
         self, mock_agent, mock_authorization, mock_turn_context
     ):
@@ -271,6 +278,7 @@ class TestAddToolServersToAgent:
             assert existing_tool in mock_agent.tools
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_add_tool_servers_handles_toolset_creation_error(
         self, mock_agent, mock_authorization, mock_turn_context, mock_server_config
     ):
@@ -325,6 +333,7 @@ class TestCleanup:
     """Tests for cleanup method."""
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_cleanup_closes_connected_servers(self):
         """Test that cleanup closes all connected servers."""
         with patch(
@@ -351,6 +360,7 @@ class TestCleanup:
             assert service._connected_servers == []
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_cleanup_handles_close_errors(self):
         """Test that cleanup handles errors during close gracefully."""
         with patch(
@@ -373,6 +383,7 @@ class TestCleanup:
             assert service._connected_servers == []
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_cleanup_handles_servers_without_close(self):
         """Test that cleanup handles servers without close method."""
         with patch(
