@@ -24,7 +24,6 @@ await service.add_tool_servers_to_agent(
     auth_handler_name="graph",
     context=turn_context,
 )
-# existing_agent is now modified in place
 ```
 
 ### Integration Flow
