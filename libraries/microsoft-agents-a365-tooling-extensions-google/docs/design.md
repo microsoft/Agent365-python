@@ -17,13 +17,14 @@ from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationS
 
 service = McpToolRegistrationService()
 
-# Create agent with MCP tools
-agent = await service.add_tool_servers_to_agent(
+# Add MCP tools to existing agent (modified in place)
+await service.add_tool_servers_to_agent(
     agent=existing_agent,
     auth=auth_context,
     auth_handler_name="graph",
     context=turn_context,
 )
+# existing_agent is now modified in place
 ```
 
 ### Integration Flow
@@ -39,7 +40,7 @@ McpToolRegistrationService.add_tool_servers_to_agent()
        │
        ├── Exchange token for MCP scope
        ├── Create McpToolset for each server
-       └── Create new Agent with all tools
+       └── Modify agent in place to add all tools
        │
        ▼
 Google ADK Agent with MCP tools

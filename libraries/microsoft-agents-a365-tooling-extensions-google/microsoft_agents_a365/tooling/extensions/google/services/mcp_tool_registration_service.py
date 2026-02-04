@@ -121,7 +121,8 @@ class McpToolRegistrationService:
         all_tools = list(agent.tools) + mcp_servers_info
 
         self._logger.info(
-            f"Successfully configured {len(all_tools)} total MCP tool servers for agent"
+            f"Successfully configured agent with {len(mcp_servers_info)} MCP tool servers "
+            f"(total tools: {len(all_tools)})"
         )
 
         agent.tools = all_tools
