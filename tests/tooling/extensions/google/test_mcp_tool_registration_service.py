@@ -192,9 +192,6 @@ class TestAddToolServersToAgent:
             patch(
                 "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolset"
             ) as mock_toolset_class,
-            patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
-            ) as mock_agent_class,
         ):
             # Setup mocks
             mock_utility.resolve_agent_identity.return_value = "agent-123"
@@ -207,11 +204,13 @@ class TestAddToolServersToAgent:
             mock_toolset = MagicMock()
             mock_toolset_class.return_value = mock_toolset
 
-            mock_agent_class.return_value = mock_agent
-
             from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
 
             service = McpToolRegistrationService()
+
+            # Set up existing tools on the agent
+            existing_tool = MagicMock()
+            mock_agent.tools = [existing_tool]
 
             # Act
             await service.add_tool_servers_to_agent(
@@ -225,12 +224,15 @@ class TestAddToolServersToAgent:
             # Assert
             mock_toolset_class.assert_called_once()
             assert mock_toolset in service._connected_servers
+            # Verify agent tools were updated in place with both existing and new tools
+            assert existing_tool in mock_agent.tools
+            assert mock_toolset in mock_agent.tools
 
     @pytest.mark.asyncio
-    async def test_add_tool_servers_returns_new_agent(
+    async def test_add_tool_servers_modifies_agent_in_place(
         self, mock_agent, mock_authorization, mock_turn_context
     ):
-        """Test that a new Agent instance is returned."""
+        """Test that the agent is modified in place and method returns None."""
         with (
             patch(
                 "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
@@ -238,9 +240,6 @@ class TestAddToolServersToAgent:
             patch(
                 "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
             ) as mock_utility,
-            patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
-            ) as mock_agent_class,
         ):
             # Setup mocks
             mock_utility.resolve_agent_identity.return_value = "agent-123"
@@ -250,12 +249,13 @@ class TestAddToolServersToAgent:
             mock_config_service.list_tool_servers = AsyncMock(return_value=[])
             mock_config_service_class.return_value = mock_config_service
 
-            new_agent = MagicMock()
-            mock_agent_class.return_value = new_agent
-
             from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
 
             service = McpToolRegistrationService()
+
+            # Set up existing tools on the agent
+            existing_tool = MagicMock()
+            mock_agent.tools = [existing_tool]
 
             # Act
             result = await service.add_tool_servers_to_agent(
@@ -266,14 +266,9 @@ class TestAddToolServersToAgent:
                 auth_token="test-token",
             )
 
-            # Assert
-            assert result == new_agent
-            mock_agent_class.assert_called_once_with(
-                name=mock_agent.name,
-                model=mock_agent.model,
-                description=mock_agent.description,
-                tools=[],
-            )
+            # Assert - method returns None and modifies agent in place
+            assert result is None
+            assert existing_tool in mock_agent.tools
 
     @pytest.mark.asyncio
     async def test_add_tool_servers_handles_toolset_creation_error(
@@ -290,9 +285,6 @@ class TestAddToolServersToAgent:
             patch(
                 "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolset"
             ) as mock_toolset_class,
-            patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
-            ) as mock_agent_class,
         ):
             # Setup mocks
             mock_utility.resolve_agent_identity.return_value = "agent-123"
@@ -305,11 +297,13 @@ class TestAddToolServersToAgent:
             # Make toolset creation fail
             mock_toolset_class.side_effect = Exception("Connection failed")
 
-            mock_agent_class.return_value = mock_agent
-
             from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
 
             service = McpToolRegistrationService()
+
+            # Set up existing tools on the agent
+            existing_tool = MagicMock()
+            mock_agent.tools = [existing_tool]
 
             # Act - should not raise
             result = await service.add_tool_servers_to_agent(
@@ -320,9 +314,11 @@ class TestAddToolServersToAgent:
                 auth_token="test-token",
             )
 
-            # Assert - should still return an agent, just without the failed toolset
-            assert result is not None
+            # Assert - returns None, agent modified in place, no failed toolsets added
+            assert result is None
             assert len(service._connected_servers) == 0
+            # Existing tools should still be present
+            assert existing_tool in mock_agent.tools
 
 
 class TestCleanup:

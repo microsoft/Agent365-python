@@ -55,12 +55,11 @@ class McpToolRegistrationService:
         auth_handler_name: str,
         context: TurnContext,
         auth_token: Optional[str] = None,
-    ) -> Agent:
+    ) -> None:
         """
-        Add new MCP servers to the agent by creating a new Agent instance.
+        Add new MCP servers to the agent from MCP Platform.
 
-        Note: Due to Google ADK Agent design, this method creates a new Agent
-        instance with all MCP servers (existing + new) properly initialized.
+        Note: Modifies the provided agent in place to add new MCP tool servers.
 
         Args:
             agent: The existing agent to add servers to.
@@ -71,7 +70,7 @@ class McpToolRegistrationService:
                        If not provided, will be obtained using `auth` and `context`.
 
         Returns:
-            New Agent instance with all MCP servers configured.
+            None
         """
         if not auth_token:
             scopes = get_mcp_platform_authentication_scope()
@@ -121,14 +120,11 @@ class McpToolRegistrationService:
         # Combine existing tools with new MCP servers
         all_tools = list(agent.tools) + mcp_servers_info
 
-        self._logger.info(f"Creating new agent with {len(all_tools)} total tools")
-
-        return Agent(
-            name=agent.name,
-            model=agent.model,
-            description=agent.description,
-            tools=all_tools,
+        self._logger.info(
+            f"Successfully configured {len(all_tools)} total MCP tool servers for agent"
         )
+
+        agent.tools = all_tools
 
     async def cleanup(self):
         """Clean up any resources used by the service."""
