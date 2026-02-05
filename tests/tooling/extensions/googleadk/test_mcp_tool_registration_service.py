@@ -15,9 +15,9 @@ class TestMcpToolRegistrationServiceInit:
     def test_init_default_logger(self):
         """Test initialization with default logger."""
         with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService()
 
@@ -33,9 +33,9 @@ class TestMcpToolRegistrationServiceInit:
         custom_logger = logging.getLogger("custom_test_logger")
 
         with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService(logger=custom_logger)
 
@@ -45,9 +45,9 @@ class TestMcpToolRegistrationServiceInit:
     def test_orchestrator_name(self):
         """Test that orchestrator name is set correctly."""
         with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             assert McpToolRegistrationService._orchestrator_name == "GoogleADK"
 
@@ -101,16 +101,16 @@ class TestAddToolServersToAgent:
         """Test that token is exchanged when not provided."""
         with (
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
             ) as mock_config_service_class,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
             ) as mock_utility,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.get_mcp_platform_authentication_scope"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.get_mcp_platform_authentication_scope"
             ) as mock_get_scope,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Agent"
             ) as mock_agent_class,
         ):
             # Setup mocks
@@ -124,7 +124,7 @@ class TestAddToolServersToAgent:
 
             mock_agent_class.return_value = mock_agent
 
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService()
 
@@ -147,13 +147,13 @@ class TestAddToolServersToAgent:
         """Test that provided token is used instead of exchanging."""
         with (
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
             ) as mock_config_service_class,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
             ) as mock_utility,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Agent"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Agent"
             ) as mock_agent_class,
         ):
             # Setup mocks
@@ -166,7 +166,7 @@ class TestAddToolServersToAgent:
 
             mock_agent_class.return_value = mock_agent
 
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService()
 
@@ -190,13 +190,13 @@ class TestAddToolServersToAgent:
         """Test that MCP toolsets are created for each server config."""
         with (
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
             ) as mock_config_service_class,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
             ) as mock_utility,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolset"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolset"
             ) as mock_toolset_class,
         ):
             # Setup mocks
@@ -210,7 +210,7 @@ class TestAddToolServersToAgent:
             mock_toolset = MagicMock()
             mock_toolset_class.return_value = mock_toolset
 
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService()
 
@@ -242,10 +242,10 @@ class TestAddToolServersToAgent:
         """Test that the agent is modified in place and method returns None."""
         with (
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
             ) as mock_config_service_class,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
             ) as mock_utility,
         ):
             # Setup mocks
@@ -256,7 +256,7 @@ class TestAddToolServersToAgent:
             mock_config_service.list_tool_servers = AsyncMock(return_value=[])
             mock_config_service_class.return_value = mock_config_service
 
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService()
 
@@ -285,13 +285,13 @@ class TestAddToolServersToAgent:
         """Test that errors during toolset creation are handled gracefully."""
         with (
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
             ) as mock_config_service_class,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.Utility"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
             ) as mock_utility,
             patch(
-                "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolset"
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolset"
             ) as mock_toolset_class,
         ):
             # Setup mocks
@@ -305,7 +305,7 @@ class TestAddToolServersToAgent:
             # Make toolset creation fail
             mock_toolset_class.side_effect = Exception("Connection failed")
 
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService()
 
@@ -337,9 +337,9 @@ class TestCleanup:
     async def test_cleanup_closes_connected_servers(self):
         """Test that cleanup closes all connected servers."""
         with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService()
 
@@ -364,9 +364,9 @@ class TestCleanup:
     async def test_cleanup_handles_close_errors(self):
         """Test that cleanup handles errors during close gracefully."""
         with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService()
 
@@ -387,9 +387,9 @@ class TestCleanup:
     async def test_cleanup_handles_servers_without_close(self):
         """Test that cleanup handles servers without close method."""
         with patch(
-            "microsoft_agents_a365.tooling.extensions.google.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
             service = McpToolRegistrationService()
 

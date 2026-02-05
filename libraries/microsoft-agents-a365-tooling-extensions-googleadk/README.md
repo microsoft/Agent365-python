@@ -1,14 +1,14 @@
-# microsoft-agents-a365-tooling-extensions-google
+# microsoft-agents-a365-tooling-extensions-googleadk
 
-[![PyPI](https://img.shields.io/pypi/v/microsoft-agents-a365-tooling-extensions-google?label=PyPI&logo=pypi)](https://pypi.org/project/microsoft-agents-a365-tooling-extensions-google)
-[![PyPI Downloads](https://img.shields.io/pypi/dm/microsoft-agents-a365-tooling-extensions-google?label=Downloads&logo=pypi)](https://pypi.org/project/microsoft-agents-a365-tooling-extensions-google)
+[![PyPI](https://img.shields.io/pypi/v/microsoft-agents-a365-tooling-extensions-googleadk?label=PyPI&logo=pypi)](https://pypi.org/project/microsoft-agents-a365-tooling-extensions-googleadk)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/microsoft-agents-a365-tooling-extensions-googleadk?label=Downloads&logo=pypi)](https://pypi.org/project/microsoft-agents-a365-tooling-extensions-googleadk)
 
 Google ADK (Agent Development Kit) specific tools and services for AI agent development. Provides MCP (Model Context Protocol) tool registration service for dynamically adding MCP servers to Google ADK-based agents.
 
 ## Installation
 
 ```bash
-pip install microsoft-agents-a365-tooling-extensions-google
+pip install microsoft-agents-a365-tooling-extensions-googleadk
 ```
 
 ## Usage

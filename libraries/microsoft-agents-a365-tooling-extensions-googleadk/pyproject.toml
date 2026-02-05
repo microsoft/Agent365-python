@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel", "tzdata"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "microsoft-agents-a365-tooling-extensions-google"
+name = "microsoft-agents-a365-tooling-extensions-googleadk"
 dynamic = ["version"]
 authors = [
     { name = "Microsoft", email = "support@microsoft.com" },
@@ -32,7 +32,7 @@ dependencies = [
 Homepage = "https://github.com/microsoft/Agent365-python"
 Repository = "https://github.com/microsoft/Agent365-python"
 Issues = "https://github.com/microsoft/Agent365-python/issues"
-Documentation = "https://github.com/microsoft/Agent365-python/tree/main/libraries/microsoft-agents-a365-tooling-extensions-google"
+Documentation = "https://github.com/microsoft/Agent365-python/tree/main/libraries/microsoft-agents-a365-tooling-extensions-googleadk"
 
 [project.optional-dependencies]
 dev = [

@@ -1,6 +1,6 @@
 # Tooling Extensions - Google ADK - Design Document
 
-This document describes the architecture and design of the `microsoft-agents-a365-tooling-extensions-google` package.
+This document describes the architecture and design of the `microsoft-agents-a365-tooling-extensions-googleadk` package.
 
 ## Overview
 
@@ -13,7 +13,7 @@ This extension adapts MCP tool server configurations to Google's Agent Developme
 The main service for registering MCP tools with Google ADK agents.
 
 ```python
-from microsoft_agents_a365.tooling.extensions.google import McpToolRegistrationService
+from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
 
 service = McpToolRegistrationService()
 
