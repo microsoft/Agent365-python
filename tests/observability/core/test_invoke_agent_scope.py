@@ -246,26 +246,27 @@ class TestInvokeAgentScope(unittest.TestCase):
         scope = InvokeAgentScope.start(
             invoke_agent_details=self.invoke_details,
             tenant_details=self.tenant_details,
-            caller_agent_details=self.caller_agent_details,  # Contains agent_type=AgentType.DECLARATIVE_AGENT
+            caller_agent_details=self.caller_agent_details,
         )
 
-        if scope is not None:
-            # Verify the caller agent details contain the expected type
-            self.assertEqual(self.caller_agent_details.agent_type, AgentType.DECLARATIVE_AGENT)
-            scope.dispose()
+        # Verify scope was created and caller agent details contain the expected type
+        self.assertIsNotNone(scope)
+        self.assertEqual(self.caller_agent_details.agent_type, AgentType.DECLARATIVE_AGENT)
+        scope.dispose()
 
         # Verify the agent type is set as a span attribute
         finished_spans = span_exporter.get_finished_spans()
-        if finished_spans:
-            span = finished_spans[-1]
-            span_attributes = getattr(span, "attributes", {}) or {}
+        self.assertTrue(len(finished_spans) > 0, "Expected at least one span to be created")
 
-            # Verify the caller agent type is set as a span attribute
-            if GEN_AI_CALLER_AGENT_TYPE_KEY in span_attributes:
-                self.assertEqual(
-                    span_attributes[GEN_AI_CALLER_AGENT_TYPE_KEY],
-                    AgentType.DECLARATIVE_AGENT.value,
-                )
+        span = finished_spans[-1]
+        span_attributes = getattr(span, "attributes", {}) or {}
+
+        # Verify the caller agent type is set as a span attribute
+        self.assertIn(GEN_AI_CALLER_AGENT_TYPE_KEY, span_attributes)
+        self.assertEqual(
+            span_attributes[GEN_AI_CALLER_AGENT_TYPE_KEY],
+            AgentType.DECLARATIVE_AGENT.value,
+        )
 
 
 if __name__ == "__main__":
