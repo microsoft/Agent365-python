@@ -17,7 +17,9 @@ class TestMcpToolRegistrationServiceInit:
         with patch(
             "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService()
 
@@ -35,7 +37,9 @@ class TestMcpToolRegistrationServiceInit:
         with patch(
             "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService(logger=custom_logger)
 
@@ -47,7 +51,9 @@ class TestMcpToolRegistrationServiceInit:
         with patch(
             "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             assert McpToolRegistrationService._orchestrator_name == "GoogleADK"
 
@@ -124,7 +130,9 @@ class TestAddToolServersToAgent:
 
             mock_agent_class.return_value = mock_agent
 
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService()
 
@@ -166,7 +174,9 @@ class TestAddToolServersToAgent:
 
             mock_agent_class.return_value = mock_agent
 
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService()
 
@@ -210,7 +220,9 @@ class TestAddToolServersToAgent:
             mock_toolset = MagicMock()
             mock_toolset_class.return_value = mock_toolset
 
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService()
 
@@ -256,7 +268,9 @@ class TestAddToolServersToAgent:
             mock_config_service.list_tool_servers = AsyncMock(return_value=[])
             mock_config_service_class.return_value = mock_config_service
 
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService()
 
@@ -305,7 +319,9 @@ class TestAddToolServersToAgent:
             # Make toolset creation fail
             mock_toolset_class.side_effect = Exception("Connection failed")
 
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService()
 
@@ -339,7 +355,9 @@ class TestCleanup:
         with patch(
             "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService()
 
@@ -366,7 +384,9 @@ class TestCleanup:
         with patch(
             "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService()
 
@@ -389,7 +409,9 @@ class TestCleanup:
         with patch(
             "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
         ):
-            from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
 
             service = McpToolRegistrationService()
 
