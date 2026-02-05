@@ -8,19 +8,21 @@ This service provides MCP (Model Context Protocol) tool registration
 capabilities for Google ADK-based agents.
 """
 
-from typing import List, Optional
+# Standard library imports
 import logging
+from typing import List, Optional
 
+# Third-party imports
 from google.adk.agents import Agent
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StreamableHTTPConnectionParams
 
+# Local imports
 from microsoft_agents.hosting.core import Authorization, TurnContext
-
 from microsoft_agents_a365.runtime.utility import Utility
+from microsoft_agents_a365.tooling.models import ToolOptions
 from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_service import (
     McpToolServerConfigurationService,
 )
-from microsoft_agents_a365.tooling.models import ToolOptions
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,

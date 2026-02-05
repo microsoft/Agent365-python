@@ -37,6 +37,7 @@ microsoft-agents-a365-runtime = { workspace = true }
 microsoft-agents-a365-tooling = { workspace = true }
 microsoft-agents-a365-tooling-extensions-agentframework = { workspace = true }
 microsoft-agents-a365-tooling-extensions-azureaifoundry = { workspace = true }
+microsoft-agents-a365-tooling-extensions-google = { workspace = true }
 microsoft-agents-a365-tooling-extensions-openai = { workspace = true }
 microsoft-agents-a365-tooling-extensions-semantickernel = { workspace = true }
 
