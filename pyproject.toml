@@ -16,7 +16,7 @@ members = [
     "libraries/microsoft-agents-a365-tooling-extensions-openai",
     "libraries/microsoft-agents-a365-tooling-extensions-semantickernel",
     "libraries/microsoft-agents-a365-tooling-extensions-agentframework",
-    "libraries/microsoft-agents-a365-tooling-extensions-google",
+    "libraries/microsoft-agents-a365-tooling-extensions-googleadk",
     "libraries/microsoft-agents-a365-observability-hosting",
 ]
 exclude = [
@@ -37,7 +37,7 @@ microsoft-agents-a365-runtime = { workspace = true }
 microsoft-agents-a365-tooling = { workspace = true }
 microsoft-agents-a365-tooling-extensions-agentframework = { workspace = true }
 microsoft-agents-a365-tooling-extensions-azureaifoundry = { workspace = true }
-microsoft-agents-a365-tooling-extensions-google = { workspace = true }
+microsoft-agents-a365-tooling-extensions-googleadk = { workspace = true }
 microsoft-agents-a365-tooling-extensions-openai = { workspace = true }
 microsoft-agents-a365-tooling-extensions-semantickernel = { workspace = true }
 
