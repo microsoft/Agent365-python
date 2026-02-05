@@ -352,23 +352,73 @@ class McpToolServerConfigurationService:
 
         return mcp_servers
 
-    def _prepare_gateway_headers(self, auth_token: str, options: ToolOptions) -> Dict[str, str]:
+    def _prepare_gateway_headers(
+        self, auth_token: str, options: ToolOptions, turn_context: Optional[TurnContext] = None
+    ) -> Dict[str, str]:
         """
         Prepares headers for tooling gateway requests.
 
         Args:
             auth_token: Authentication token.
             options: ToolOptions instance containing optional parameters.
+            turn_context: Optional TurnContext for extracting agent blueprint ID for request headers.
 
         Returns:
             Dictionary of HTTP headers.
         """
-        return {
+        headers: Dict[str, str] = {
             Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
             Constants.Headers.USER_AGENT: RuntimeUtility.get_user_agent_header(
                 options.orchestrator_name
             ),
         }
+
+        # Add x-ms-agentid header with priority fallback
+        agent_id = self._resolve_agent_id_for_header(auth_token, turn_context)
+        if agent_id:
+            headers[Constants.Headers.AGENT_ID] = agent_id
+
+        return headers
+
+    def _resolve_agent_id_for_header(
+        self, auth_token: str, turn_context: Optional[TurnContext] = None
+    ) -> Optional[str]:
+        """
+        Resolves the best available agent identifier for the x-ms-agentid header.
+        Priority: TurnContext.agenticAppBlueprintId > token claims (xms_par_app_azp > appid > azp)
+                  > application name
+
+        Note: This differs from RuntimeUtility.resolve_agent_identity() which resolves the agenticAppId
+        for URL construction. This method resolves the identifier specifically for the x-ms-agentid header.
+
+        Args:
+            auth_token: The authentication token to extract claims from.
+            turn_context: Optional TurnContext to extract agent blueprint ID from.
+
+        Returns:
+            Agent ID string or None if not available.
+        """
+        # Priority 1: Agent Blueprint ID from TurnContext
+        # The 'from_' property may include agentic_app_blueprint_id when the request originates
+        # from an agentic app
+        try:
+            if turn_context and turn_context.activity and turn_context.activity.from_:
+                blueprint_id = getattr(
+                    turn_context.activity.from_, "agentic_app_blueprint_id", None
+                )
+                if blueprint_id:
+                    return blueprint_id
+        except (AttributeError, TypeError):
+            pass
+
+        # Priority 2 & 3: Agent ID from token (xms_par_app_azp > appid > azp)
+        # Single decode, checks claims in priority order
+        agent_id = RuntimeUtility.get_agent_id_from_token(auth_token)
+        if agent_id:
+            return agent_id
+
+        # Priority 4: Application name from AGENT365_APPLICATION_NAME env or pyproject.toml
+        return RuntimeUtility.get_application_name()
 
     async def _parse_gateway_response(
         self, response: aiohttp.ClientResponse
