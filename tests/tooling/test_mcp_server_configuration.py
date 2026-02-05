@@ -254,10 +254,10 @@ class TestPrepareGatewayHeaders:
     @pytest.fixture
     def create_test_jwt(self):
         """Fixture to create test JWT tokens."""
-        import jwt as pyjwt
+        import jwt
 
         def _create(claims: dict) -> str:
-            return pyjwt.encode(claims, key="", algorithm="none")
+            return jwt.encode(claims, key="", algorithm="none")
 
         return _create
 
