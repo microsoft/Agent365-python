@@ -68,7 +68,14 @@ Git worktree allows you to work on a different branch without changing your curr
 
 5. Create a worktree with the new branch based on the PR branch:
    ```bash
-   git worktree add .worktrees/pr-<PR_NUMBER>-fixes -b <FIX_BRANCH_NAME> origin/<PR_HEAD_BRANCH>
+   PR_HEAD_BRANCH="$(gh pr view "$PR_NUMBER" --json headRefName --jq '.headRefName')"
+   # Validate branch name to avoid command injection; allow only typical branch-name characters
+   if ! printf '%s\n' "$PR_HEAD_BRANCH" | grep -Eq '^[A-Za-z0-9._/\-]+$'; then
+       echo "Error: Unsafe PR head branch name: $PR_HEAD_BRANCH" >&2
+       exit 1
+   fi
+
+   git worktree add ".worktrees/pr-$PR_NUMBER-fixes" -b "$FIX_BRANCH_NAME" "origin/$PR_HEAD_BRANCH"
    ```
 
 6. **CRITICAL**: All subsequent file reads, edits, and git operations for fixes must happen in the worktree directory (`.worktrees/pr-<PR_NUMBER>-fixes/`), NOT the main repository.
