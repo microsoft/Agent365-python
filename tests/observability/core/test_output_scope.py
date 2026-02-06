@@ -23,19 +23,18 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 
 class TestOutputScope(unittest.TestCase):
-    """Unit tests for OutputScope and its methods."""
+    """Unit tests for OutputScope."""
 
     @classmethod
     def setUpClass(cls):
         """Set up test environment once for all tests."""
-        # Configure Microsoft Agent 365 for testing
         os.environ["ENABLE_A365_OBSERVABILITY"] = "true"
 
         configure(
             service_name="test-output-scope-service",
             service_namespace="test-namespace",
         )
-        # Create test data
+
         cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
         cls.agent_details = AgentDetails(
             agent_id="test-agent-123",
@@ -46,18 +45,16 @@ class TestOutputScope(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        # Reset TelemetryManager state to ensure fresh configuration
+        # Reset TelemetryManager state
         _telemetry_manager._tracer_provider = None
         _telemetry_manager._span_processors = {}
         OpenTelemetryScope._tracer = None
 
-        # Reconfigure to get a fresh TracerProvider
         configure(
             service_name="test-output-scope-service",
             service_namespace="test-namespace",
         )
 
-        # Set up tracer to capture spans
         self.span_exporter = InMemorySpanExporter()
         tracer_provider = get_tracer_provider()
         tracer_provider.add_span_processor(SimpleSpanProcessor(self.span_exporter))
@@ -66,219 +63,86 @@ class TestOutputScope(unittest.TestCase):
         super().tearDown()
         self.span_exporter.clear()
 
-    def test_output_scope_creation(self):
-        """Test that OutputScope can be created successfully."""
-        response = Response(messages=["Hello, how can I help you?"])
-
-        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
-
-        self.assertIsNotNone(scope)
-        scope.dispose()
-
-    def test_record_output_messages_method_exists(self):
-        """Test that record_output_messages method exists on OutputScope."""
-        response = Response(messages=["Initial message"])
-        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
-
-        if scope is not None:
-            # Test that the method exists
-            self.assertTrue(hasattr(scope, "record_output_messages"))
-            self.assertTrue(callable(scope.record_output_messages))
-            scope.dispose()
-
-    def test_output_messages_set_on_span(self):
-        """Test that output messages are set on span attributes."""
-        response = Response(messages=["This is the agent response"])
-
-        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
-
-        if scope is not None:
-            scope.dispose()
-
+    def _get_last_span(self):
+        """Helper to get the last finished span and its attributes."""
         finished_spans = self.span_exporter.get_finished_spans()
         self.assertTrue(finished_spans, "Expected at least one span to be created")
-
         span = finished_spans[-1]
-        span_attributes = getattr(span, "attributes", {}) or {}
+        attributes = getattr(span, "attributes", {}) or {}
+        return span, attributes
 
-        self.assertIn(
-            GEN_AI_OUTPUT_MESSAGES_KEY,
-            span_attributes,
-            "Expected output messages key to be set on span",
-        )
+    def test_output_scope_creates_span_with_messages(self):
+        """Test OutputScope creates span with output messages attribute."""
+        response = Response(messages=["First message", "Second message"])
 
-        # Verify the message content is in the serialized output
-        output_value = span_attributes[GEN_AI_OUTPUT_MESSAGES_KEY]
-        self.assertIn("This is the agent response", output_value)
+        with OutputScope.start(self.agent_details, self.tenant_details, response):
+            pass
 
-    def test_multiple_output_messages(self):
-        """Test that multiple output messages are properly recorded."""
-        response = Response(messages=["First response", "Second response", "Third response"])
+        span, attributes = self._get_last_span()
 
-        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
-
-        if scope is not None:
-            scope.dispose()
-
-        finished_spans = self.span_exporter.get_finished_spans()
-        self.assertTrue(finished_spans, "Expected at least one span to be created")
-
-        span = finished_spans[-1]
-        span_attributes = getattr(span, "attributes", {}) or {}
-
-        self.assertIn(
-            GEN_AI_OUTPUT_MESSAGES_KEY,
-            span_attributes,
-            "Expected output messages key to be set on span",
-        )
-
-        output_value = span_attributes[GEN_AI_OUTPUT_MESSAGES_KEY]
-        self.assertIn("First response", output_value)
-        self.assertIn("Second response", output_value)
-        self.assertIn("Third response", output_value)
-
-    def test_record_output_messages_updates_span(self):
-        """Test that record_output_messages appends messages to the span."""
-        response = Response(messages=["Initial message"])
-
-        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
-
-        if scope is not None:
-            # Record additional messages (should append, not replace)
-            scope.record_output_messages(["Appended message 1", "Appended message 2"])
-            scope.dispose()
-
-        finished_spans = self.span_exporter.get_finished_spans()
-        self.assertTrue(finished_spans, "Expected at least one span to be created")
-
-        span = finished_spans[-1]
-        span_attributes = getattr(span, "attributes", {}) or {}
-
-        self.assertIn(
-            GEN_AI_OUTPUT_MESSAGES_KEY,
-            span_attributes,
-            "Expected output messages key to be set on span",
-        )
-
-        # The span should have all messages (initial + appended)
-        output_value = span_attributes[GEN_AI_OUTPUT_MESSAGES_KEY]
-        self.assertIn("Initial message", output_value)
-        self.assertIn("Appended message 1", output_value)
-        self.assertIn("Appended message 2", output_value)
-
-    def test_record_output_messages_multiple_appends(self):
-        """Test that multiple calls to record_output_messages accumulate messages."""
-        response = Response(messages=["First message"])
-
-        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
-
-        if scope is not None:
-            # First append
-            scope.record_output_messages(["Second message"])
-            # Second append
-            scope.record_output_messages(["Third message", "Fourth message"])
-            scope.dispose()
-
-        finished_spans = self.span_exporter.get_finished_spans()
-        self.assertTrue(finished_spans, "Expected at least one span to be created")
-
-        span = finished_spans[-1]
-        span_attributes = getattr(span, "attributes", {}) or {}
-
-        output_value = span_attributes[GEN_AI_OUTPUT_MESSAGES_KEY]
-        # All four messages should be present
-        self.assertIn("First message", output_value)
-        self.assertIn("Second message", output_value)
-        self.assertIn("Third message", output_value)
-        self.assertIn("Fourth message", output_value)
-
-    def test_output_scope_context_manager(self):
-        """Test that OutputScope works as a context manager."""
-        response = Response(messages=["Context manager test"])
-
-        with OutputScope.start(self.agent_details, self.tenant_details, response) as scope:
-            self.assertIsNotNone(scope)
-
-        finished_spans = self.span_exporter.get_finished_spans()
-        self.assertTrue(finished_spans, "Expected at least one span to be created")
-
-    def test_output_scope_span_name(self):
-        """Test that OutputScope creates spans with correct operation name."""
-        response = Response(messages=["Test message"])
-
-        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
-
-        if scope is not None:
-            scope.dispose()
-
-        finished_spans = self.span_exporter.get_finished_spans()
-        self.assertTrue(finished_spans, "Expected at least one span to be created")
-
-        span = finished_spans[-1]
-        # The activity name should contain "output_messages" and the agent id
+        # Verify span name contains operation name and agent id
         self.assertIn("output_messages", span.name)
         self.assertIn(self.agent_details.agent_id, span.name)
 
+        # Verify output messages are set
+        self.assertIn(GEN_AI_OUTPUT_MESSAGES_KEY, attributes)
+        output_value = attributes[GEN_AI_OUTPUT_MESSAGES_KEY]
+        self.assertIn("First message", output_value)
+        self.assertIn("Second message", output_value)
+
+    def test_record_output_messages_appends(self):
+        """Test record_output_messages appends to accumulated messages."""
+        response = Response(messages=["Initial"])
+
+        with OutputScope.start(self.agent_details, self.tenant_details, response) as scope:
+            scope.record_output_messages(["Appended 1"])
+            scope.record_output_messages(["Appended 2", "Appended 3"])
+
+        _, attributes = self._get_last_span()
+
+        output_value = attributes[GEN_AI_OUTPUT_MESSAGES_KEY]
+        # All messages should be present (initial + all appended)
+        self.assertIn("Initial", output_value)
+        self.assertIn("Appended 1", output_value)
+        self.assertIn("Appended 2", output_value)
+        self.assertIn("Appended 3", output_value)
+
     def test_output_scope_with_parent_id(self):
-        """Test that OutputScope uses parent_id to link span to parent."""
-        response = Response(messages=["Test message with parent"])
-        # W3C Trace Context format: "00-{trace_id}-{span_id}-{trace_flags}"
-        # trace_id: 32 hex chars, span_id: 16 hex chars
+        """Test OutputScope uses parent_id to link span to parent context."""
+        response = Response(messages=["Test"])
         parent_trace_id = "1234567890abcdef1234567890abcdef"
         parent_span_id = "abcdefabcdef1234"
         parent_id = f"00-{parent_trace_id}-{parent_span_id}-01"
 
-        scope = OutputScope.start(
+        with OutputScope.start(
             self.agent_details, self.tenant_details, response, parent_id=parent_id
-        )
+        ):
+            pass
 
-        if scope is not None:
-            scope.dispose()
+        span, _ = self._get_last_span()
 
-        finished_spans = self.span_exporter.get_finished_spans()
-        self.assertTrue(finished_spans, "Expected at least one span to be created")
-
-        span = finished_spans[-1]
-
-        # Verify the span has the correct parent trace context
-        # The span's trace_id should match the parent's trace_id
+        # Verify span inherits parent's trace_id
         span_trace_id = f"{span.context.trace_id:032x}"
-        self.assertEqual(
-            span_trace_id,
-            parent_trace_id,
-            "Expected span's trace_id to match parent's trace_id",
-        )
+        self.assertEqual(span_trace_id, parent_trace_id)
 
-        # The span's parent_span_id should match the parent's span_id
-        span_parent_id = None
-        if span.parent and hasattr(span.parent, "span_id"):
-            span_parent_id = f"{span.parent.span_id:016x}"
-        self.assertEqual(
-            span_parent_id,
-            parent_span_id,
-            "Expected span's parent_span_id to match parent's span_id",
-        )
+        # Verify span's parent_span_id matches
+        self.assertIsNotNone(span.parent, "Expected span to have a parent")
+        self.assertTrue(hasattr(span.parent, "span_id"), "Expected parent to have span_id")
+        span_parent_id = f"{span.parent.span_id:016x}"
+        self.assertEqual(span_parent_id, parent_span_id)
 
-    def test_output_scope_without_parent_id(self):
-        """Test that OutputScope creates a span without forced parent when not provided."""
-        response = Response(messages=["Test message without parent"])
+    def test_output_scope_dispose(self):
+        """Test OutputScope dispose method ends the span."""
+        response = Response(messages=["Test"])
 
         scope = OutputScope.start(self.agent_details, self.tenant_details, response)
+        self.assertIsNotNone(scope)
+        scope.dispose()
 
-        if scope is not None:
-            scope.dispose()
-
+        # Verify span was created and ended
         finished_spans = self.span_exporter.get_finished_spans()
-        self.assertTrue(finished_spans, "Expected at least one span to be created")
-
-        span = finished_spans[-1]
-
-        # When no parent_id is provided, the span should either have no parent
-        # or inherit from the current context (which in tests is typically empty)
-        # We just verify the span was created successfully
-        self.assertIsNotNone(span.context.span_id)
+        self.assertEqual(len(finished_spans), 1)
 
 
 if __name__ == "__main__":
-    # Run pytest only on the current file
     sys.exit(pytest.main([str(Path(__file__))] + sys.argv[1:]))
