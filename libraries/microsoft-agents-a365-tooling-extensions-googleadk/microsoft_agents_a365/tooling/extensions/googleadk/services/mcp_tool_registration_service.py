@@ -91,12 +91,12 @@ class McpToolRegistrationService:
 
         self._logger.info(f"Loaded {len(mcp_server_configs)} MCP server configurations")
 
-        # Collect existing server URLs to prevent duplicates
-        existing_server_urls = []
+        # Collect existing server URLs to prevent duplicates (use set for O(1) lookup)
+        existing_server_urls = set()
         for tool in agent.tools:
             # Check if the tool is an McpToolset and has a connection_params.url
             if hasattr(tool, "connection_params") and hasattr(tool.connection_params, "url"):
-                existing_server_urls.append(tool.connection_params.url)
+                existing_server_urls.add(tool.connection_params.url)
 
         self._logger.debug(f"Found {len(existing_server_urls)} existing MCP servers in agent")
 
@@ -126,7 +126,7 @@ class McpToolRegistrationService:
 
                 mcp_servers_info.append(server_info)
                 self._connected_servers.append(server_info)
-                existing_server_urls.append(server_config.url)
+                existing_server_urls.add(server_config.url)
                 self._logger.info(
                     f"Created MCP toolset for '{server_config.mcp_server_name}' "
                     f"at {server_config.url}"
