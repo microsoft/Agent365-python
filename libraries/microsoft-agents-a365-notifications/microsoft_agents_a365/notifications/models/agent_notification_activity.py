@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, TypeVar
 from microsoft_agents.activity import Activity
 
 from .email_reference import EmailReference
