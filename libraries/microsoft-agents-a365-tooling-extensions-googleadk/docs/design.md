@@ -73,7 +73,7 @@ server_info = McpToolset(
 ## File Structure
 
 ```
-microsoft_agents_a365/tooling/extensions/google/
+microsoft_agents_a365/tooling/extensions/googleadk/
 ├── __init__.py
 └── services/
     ├── __init__.py
