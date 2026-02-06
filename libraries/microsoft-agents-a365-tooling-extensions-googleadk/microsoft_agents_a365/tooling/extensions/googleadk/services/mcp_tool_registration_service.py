@@ -47,7 +47,7 @@ class McpToolRegistrationService:
             logger: Logger instance for logging operations.
         """
         self._logger = logger or logging.getLogger(self.__class__.__name__)
-        self.config_service = McpToolServerConfigurationService(logger=self._logger)
+        self._mcp_server_configuration_service = McpToolServerConfigurationService(logger=self._logger)
         self._connected_servers: List[McpToolset] = []
 
     async def add_tool_servers_to_agent(
@@ -83,7 +83,7 @@ class McpToolRegistrationService:
         self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
         options = ToolOptions(orchestrator_name=self._orchestrator_name)
-        mcp_server_configs = await self.config_service.list_tool_servers(
+        mcp_server_configs = await self._mcp_server_configuration_service.list_tool_servers(
             agentic_app_id=agentic_app_id,
             auth_token=auth_token,
             options=options,
@@ -132,9 +132,18 @@ class McpToolRegistrationService:
                     f"at {server_config.url}"
                 )
 
+            except (ConnectionError, TimeoutError, ValueError) as tool_ex:
+                # Expected connection/configuration errors
+                self._logger.warning(
+                    f"Failed to create MCP toolset for '{server_config.mcp_server_name}': {tool_ex}"
+                )
+                continue
             except Exception as tool_ex:
-                server_name = getattr(server_config, "mcp_server_name", "Unknown")
-                self._logger.warning(f"Failed to create MCP toolset for {server_name}: {tool_ex}")
+                # Unexpected errors - log at ERROR level with full traceback
+                self._logger.error(
+                    f"Unexpected error creating MCP toolset for '{server_config.mcp_server_name}': {tool_ex}",
+                    exc_info=True
+                )
                 continue
 
         # Only modify agent.tools if we have new servers to add
