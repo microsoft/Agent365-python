@@ -47,7 +47,9 @@ class McpToolRegistrationService:
             logger: Logger instance for logging operations.
         """
         self._logger = logger or logging.getLogger(self.__class__.__name__)
-        self._mcp_server_configuration_service = McpToolServerConfigurationService(logger=self._logger)
+        self._mcp_server_configuration_service = McpToolServerConfigurationService(
+            logger=self._logger
+        )
         self._connected_servers: List[McpToolset] = []
 
     async def add_tool_servers_to_agent(
@@ -142,7 +144,7 @@ class McpToolRegistrationService:
                 # Unexpected errors - log at ERROR level with full traceback
                 self._logger.error(
                     f"Unexpected error creating MCP toolset for '{server_config.mcp_server_name}': {tool_ex}",
-                    exc_info=True
+                    exc_info=True,
                 )
                 continue
 
