@@ -345,6 +345,130 @@ class TestAddToolServersToAgent:
             # Existing tools should still be present
             assert existing_tool in mock_agent.tools
 
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_add_tool_servers_skips_duplicate_server_urls(
+        self, mock_agent, mock_authorization, mock_turn_context
+    ):
+        """Test that duplicate server URLs are not added multiple times."""
+        with (
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            ) as mock_config_service_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
+            ) as mock_utility,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolset"
+            ) as mock_toolset_class,
+        ):
+            # Setup mocks
+            mock_utility.resolve_agent_identity.return_value = "agent-123"
+            mock_utility.get_user_agent_header.return_value = "Agent365SDK/1.0"
+
+            # Create two server configs with the same URL
+            mock_server_config1 = MagicMock()
+            mock_server_config1.mcp_server_name = "server-1"
+            mock_server_config1.url = "https://test-server.example.com/mcp"
+
+            mock_server_config2 = MagicMock()
+            mock_server_config2.mcp_server_name = "server-2"
+            mock_server_config2.url = "https://test-server.example.com/mcp"  # Same URL
+
+            mock_config_service = AsyncMock()
+            mock_config_service.list_tool_servers = AsyncMock(
+                return_value=[mock_server_config1, mock_server_config2]
+            )
+            mock_config_service_class.return_value = mock_config_service
+
+            # Create mock toolsets
+            mock_toolset1 = MagicMock()
+            mock_toolset1.connection_params = MagicMock()
+            mock_toolset1.connection_params.url = "https://test-server.example.com/mcp"
+
+            mock_toolset_class.return_value = mock_toolset1
+
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
+
+            service = McpToolRegistrationService()
+
+            # Set up agent with no existing tools
+            mock_agent.tools = []
+
+            # Act
+            await service.add_tool_servers_to_agent(
+                agent=mock_agent,
+                auth=mock_authorization,
+                auth_handler_name="graph",
+                context=mock_turn_context,
+                auth_token="test-token",
+            )
+
+            # Assert - toolset should be created only once despite two configs
+            assert mock_toolset_class.call_count == 1
+            assert len(service._connected_servers) == 1
+            assert len(mock_agent.tools) == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_add_tool_servers_skips_existing_servers_in_agent(
+        self, mock_agent, mock_authorization, mock_turn_context
+    ):
+        """Test that servers already in the agent are not added again."""
+        with (
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            ) as mock_config_service_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
+            ) as mock_utility,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolset"
+            ) as mock_toolset_class,
+        ):
+            # Setup mocks
+            mock_utility.resolve_agent_identity.return_value = "agent-123"
+            mock_utility.get_user_agent_header.return_value = "Agent365SDK/1.0"
+
+            # Create server config
+            mock_server_config = MagicMock()
+            mock_server_config.mcp_server_name = "existing-server"
+            mock_server_config.url = "https://existing-server.example.com/mcp"
+
+            mock_config_service = AsyncMock()
+            mock_config_service.list_tool_servers = AsyncMock(return_value=[mock_server_config])
+            mock_config_service_class.return_value = mock_config_service
+
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
+
+            service = McpToolRegistrationService()
+
+            # Set up agent with existing toolset that has the same URL
+            existing_toolset = MagicMock()
+            existing_toolset.connection_params = MagicMock()
+            existing_toolset.connection_params.url = "https://existing-server.example.com/mcp"
+            mock_agent.tools = [existing_toolset]
+
+            # Act
+            await service.add_tool_servers_to_agent(
+                agent=mock_agent,
+                auth=mock_authorization,
+                auth_handler_name="graph",
+                context=mock_turn_context,
+                auth_token="test-token",
+            )
+
+            # Assert - no new toolset should be created
+            mock_toolset_class.assert_not_called()
+            assert len(service._connected_servers) == 0
+            # Agent should still have the one existing tool
+            assert len(mock_agent.tools) == 1
+            assert mock_agent.tools[0] == existing_toolset
+
 
 class TestCleanup:
     """Tests for cleanup method."""

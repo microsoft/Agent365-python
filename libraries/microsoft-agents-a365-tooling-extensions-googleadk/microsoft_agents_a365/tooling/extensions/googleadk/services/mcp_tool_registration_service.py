@@ -91,7 +91,16 @@ class McpToolRegistrationService:
 
         self._logger.info(f"Loaded {len(mcp_server_configs)} MCP server configurations")
 
-        # Convert MCP server configs to McpToolset objects
+        # Collect existing server URLs to prevent duplicates (use set for O(1) lookup)
+        existing_server_urls = set()
+        for tool in agent.tools:
+            # Check if the tool is an McpToolset and has a connection_params.url
+            if hasattr(tool, "connection_params") and hasattr(tool.connection_params, "url"):
+                existing_server_urls.add(tool.connection_params.url)
+
+        self._logger.debug(f"Found {len(existing_server_urls)} existing MCP servers in agent")
+
+        # Convert MCP server configs to McpToolset objects (only new ones)
         mcp_servers_info = []
         mcp_server_headers = {
             Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
@@ -99,6 +108,14 @@ class McpToolRegistrationService:
         }
 
         for server_config in mcp_server_configs:
+            # Skip if server URL already exists
+            if server_config.url in existing_server_urls:
+                self._logger.debug(
+                    f"Skipping MCP server '{server_config.mcp_server_name}' "
+                    f"at {server_config.url} - already exists in agent"
+                )
+                continue
+
             try:
                 server_info = McpToolset(
                     connection_params=StreamableHTTPConnectionParams(
@@ -109,6 +126,7 @@ class McpToolRegistrationService:
 
                 mcp_servers_info.append(server_info)
                 self._connected_servers.append(server_info)
+                existing_server_urls.add(server_config.url)
                 self._logger.info(
                     f"Created MCP toolset for '{server_config.mcp_server_name}' "
                     f"at {server_config.url}"
@@ -119,15 +137,16 @@ class McpToolRegistrationService:
                 self._logger.warning(f"Failed to create MCP toolset for {server_name}: {tool_ex}")
                 continue
 
-        # Combine existing tools with new MCP servers
-        all_tools = list(agent.tools) + mcp_servers_info
-
-        self._logger.info(
-            f"Successfully configured agent with {len(mcp_servers_info)} MCP tool servers "
-            f"(total tools: {len(all_tools)})"
-        )
-
-        agent.tools = all_tools
+        # Only modify agent.tools if we have new servers to add
+        if mcp_servers_info:
+            all_tools = list(agent.tools) + mcp_servers_info
+            agent.tools = all_tools
+            self._logger.info(
+                f"Successfully configured agent with {len(mcp_servers_info)} new MCP tool servers "
+                f"(total tools: {len(all_tools)})"
+            )
+        else:
+            self._logger.info("No new MCP servers to add to agent")
 
     async def cleanup(self):
         """Clean up any resources used by the service."""
