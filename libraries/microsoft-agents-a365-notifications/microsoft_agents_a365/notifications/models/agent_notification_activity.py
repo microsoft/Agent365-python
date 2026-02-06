@@ -1,11 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from typing import Any, TypeVar
+from typing import Any, Optional, Type, TypeVar
 from microsoft_agents.activity import Activity
-
-from .email_reference import EmailReference
 from .notification_types import NotificationTypes
+from .email_reference import EmailReference
 from .wpx_comment import WpxComment
 
 TModel = TypeVar("TModel")
@@ -42,9 +41,9 @@ class AgentNotificationActivity:
         if not activity:
             raise ValueError("activity parameter is required and cannot be None")
         self.activity = activity
-        self._email: EmailReference | None = None
-        self._wpx_comment: WpxComment | None = None
-        self._notification_type: NotificationTypes | None = None
+        self._email: Optional[EmailReference] = None
+        self._wpx_comment: Optional[WpxComment] = None
+        self._notification_type: Optional[NotificationTypes] = None
 
         entities = self.activity.entities or []
         for ent in entities:
@@ -75,7 +74,7 @@ class AgentNotificationActivity:
 
     # ---- passthroughs ----
     @property
-    def channel(self) -> str | None:
+    def channel(self) -> Optional[str]:
         """The channel identifier from the activity's channel_id.
 
         Returns:
@@ -85,7 +84,7 @@ class AgentNotificationActivity:
         return ch.channel if ch else None
 
     @property
-    def sub_channel(self) -> str | None:
+    def sub_channel(self) -> Optional[str]:
         """The subchannel identifier from the activity's channel_id.
 
         Returns:
@@ -104,7 +103,7 @@ class AgentNotificationActivity:
         return self.activity.value
 
     @property
-    def type(self) -> str | None:
+    def type(self) -> Optional[str]:
         """The activity type.
 
         Returns:
@@ -114,7 +113,7 @@ class AgentNotificationActivity:
 
     # --- typed entities available directly on the activity ---
     @property
-    def email(self) -> EmailReference | None:
+    def email(self) -> Optional[EmailReference]:
         """The parsed email reference entity, if present.
 
         Returns:
@@ -124,7 +123,7 @@ class AgentNotificationActivity:
         return self._email
 
     @property
-    def wpx_comment(self) -> WpxComment | None:
+    def wpx_comment(self) -> Optional[WpxComment]:
         """The parsed Word/PowerPoint/Excel comment entity, if present.
 
         Returns:
@@ -134,7 +133,7 @@ class AgentNotificationActivity:
         return self._wpx_comment
 
     @property
-    def notification_type(self) -> NotificationTypes | None:
+    def notification_type(self) -> Optional[NotificationTypes]:
         """The detected notification type.
 
         Returns:
@@ -145,7 +144,7 @@ class AgentNotificationActivity:
         return self._notification_type
 
     # Generic escape hatch
-    def as_model(self, model: type[TModel]) -> TModel | None:
+    def as_model(self, model: Type[TModel]) -> Optional[TModel]:
         """Parse the activity value as a custom model type.
 
         This method provides a generic way to validate and parse the activity's value
