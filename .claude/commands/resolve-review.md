@@ -157,12 +157,27 @@ For each issue marked "Agent Resolvable: Yes":
 1. Push the fix branch to origin:
    ```bash
    cd .worktrees/pr-<PR_NUMBER>-fixes
-   git push -u origin <FIX_BRANCH_NAME>
+   git push -u origin "$FIX_BRANCH_NAME"
    ```
 
 2. Create a PR to merge fixes into the original PR branch:
    ```bash
-   gh pr create --base <ORIGINAL_PR_HEAD_BRANCH> --head <FIX_BRANCH_NAME> --title "fix: address code review comments for PR #<PR_NUMBER>" --body "$(cat <<'EOF'
+   # Validate that branch names are safe (alphanumerics, dot, slash, dash, underscore)
+   case "$ORIGINAL_PR_HEAD_BRANCH" in
+     (*[!A-Za-z0-9._/-]*|'')
+       echo "Error: ORIGINAL_PR_HEAD_BRANCH contains unsafe characters: $ORIGINAL_PR_HEAD_BRANCH" >&2
+       exit 1
+       ;;
+   esac
+
+   case "$FIX_BRANCH_NAME" in
+     (*[!A-Za-z0-9._/-]*|'')
+       echo "Error: FIX_BRANCH_NAME contains unsafe characters: $FIX_BRANCH_NAME" >&2
+       exit 1
+       ;;
+   esac
+
+   gh pr create --base "$ORIGINAL_PR_HEAD_BRANCH" --head "$FIX_BRANCH_NAME" --title "fix: address code review comments for PR #<PR_NUMBER>" --body "$(cat <<'EOF'
    ## Summary
    Addresses agent-resolvable code review comments from PR #<PR_NUMBER>.
 
