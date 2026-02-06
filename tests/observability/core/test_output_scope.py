@@ -14,7 +14,10 @@ from microsoft_agents_a365.observability.core import (
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
-from microsoft_agents_a365.observability.core.constants import GEN_AI_OUTPUT_MESSAGES_KEY
+from microsoft_agents_a365.observability.core.constants import (
+    CUSTOM_PARENT_SPAN_ID_KEY,
+    GEN_AI_OUTPUT_MESSAGES_KEY,
+)
 from microsoft_agents_a365.observability.core.models.response import Response
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from microsoft_agents_a365.observability.core.spans_scopes.output_scope import OutputScope
@@ -191,6 +194,54 @@ class TestOutputScope(unittest.TestCase):
         # The activity name should contain "output_messages" and the agent id
         self.assertIn("output_messages", span.name)
         self.assertIn(self.agent_details.agent_id, span.name)
+
+    def test_output_scope_with_parent_id(self):
+        """Test that OutputScope records parent_id when provided."""
+        response = Response(messages=["Test message with parent"])
+        parent_id = "00-1234567890abcdef1234567890abcdef-abcdefabcdef1234-01"
+
+        scope = OutputScope.start(
+            self.agent_details, self.tenant_details, response, parent_id=parent_id
+        )
+
+        if scope is not None:
+            scope.dispose()
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+
+        span = finished_spans[-1]
+        span_attributes = getattr(span, "attributes", {}) or {}
+
+        # Verify the parent ID is set as a span attribute
+        self.assertIn(
+            CUSTOM_PARENT_SPAN_ID_KEY,
+            span_attributes,
+            "Expected custom parent span ID to be set on span",
+        )
+        self.assertEqual(span_attributes[CUSTOM_PARENT_SPAN_ID_KEY], parent_id)
+
+    def test_output_scope_without_parent_id(self):
+        """Test that OutputScope doesn't set parent_id attribute when not provided."""
+        response = Response(messages=["Test message without parent"])
+
+        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
+
+        if scope is not None:
+            scope.dispose()
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+
+        span = finished_spans[-1]
+        span_attributes = getattr(span, "attributes", {}) or {}
+
+        # Verify the parent ID attribute is NOT set when not provided
+        self.assertNotIn(
+            CUSTOM_PARENT_SPAN_ID_KEY,
+            span_attributes,
+            "Expected custom parent span ID NOT to be set when not provided",
+        )
 
 
 if __name__ == "__main__":

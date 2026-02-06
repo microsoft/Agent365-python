@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 from ..agent_details import AgentDetails
-from ..constants import GEN_AI_OUTPUT_MESSAGES_KEY
+from ..constants import CUSTOM_PARENT_SPAN_ID_KEY, GEN_AI_OUTPUT_MESSAGES_KEY
 from ..models.response import Response
 from ..opentelemetry_scope import OpenTelemetryScope
 from ..tenant_details import TenantDetails
@@ -19,6 +19,7 @@ class OutputScope(OpenTelemetryScope):
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         response: Response,
+        parent_id: str | None = None,
     ) -> "OutputScope":
         """Creates and starts a new scope for output tracing.
 
@@ -26,17 +27,20 @@ class OutputScope(OpenTelemetryScope):
             agent_details: The details of the agent
             tenant_details: The details of the tenant
             response: The response details from the agent
+            parent_id: Optional parent Activity ID used to link this span to an upstream
+                operation
 
         Returns:
             A new OutputScope instance
         """
-        return OutputScope(agent_details, tenant_details, response)
+        return OutputScope(agent_details, tenant_details, response, parent_id)
 
     def __init__(
         self,
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         response: Response,
+        parent_id: str | None = None,
     ):
         """Initialize the output scope.
 
@@ -44,6 +48,8 @@ class OutputScope(OpenTelemetryScope):
             agent_details: The details of the agent
             tenant_details: The details of the tenant
             response: The response details from the agent
+            parent_id: Optional parent Activity ID used to link this span to an upstream
+                operation
         """
         super().__init__(
             kind="Client",
@@ -52,6 +58,9 @@ class OutputScope(OpenTelemetryScope):
             agent_details=agent_details,
             tenant_details=tenant_details,
         )
+
+        # Set parent ID if provided
+        self.set_tag_maybe(CUSTOM_PARENT_SPAN_ID_KEY, parent_id)
 
         # Set response messages
         self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(response.messages))
