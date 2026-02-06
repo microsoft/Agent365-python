@@ -102,7 +102,7 @@ class McpToolRegistrationService:
             try:
                 server_info = McpToolset(
                     connection_params=StreamableHTTPConnectionParams(
-                        url=server_config.mcp_server_unique_name,
+                        url=server_config.url,
                         headers=mcp_server_headers,
                     )
                 )
@@ -111,7 +111,7 @@ class McpToolRegistrationService:
                 self._connected_servers.append(server_info)
                 self._logger.info(
                     f"Created MCP toolset for '{server_config.mcp_server_name}' "
-                    f"at {server_config.mcp_server_unique_name}"
+                    f"at {server_config.url}"
                 )
 
             except Exception as tool_ex:

@@ -62,7 +62,7 @@ For each MCP server configuration:
 ```python
 server_info = McpToolset(
     connection_params=StreamableHTTPConnectionParams(
-        url=config.mcp_server_unique_name,
+        url=config.url,
         headers={
             "Authorization": f"Bearer {token}"
         }
