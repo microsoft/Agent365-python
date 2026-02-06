@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 from ..agent_details import AgentDetails
-from ..constants import CUSTOM_PARENT_SPAN_ID_KEY, GEN_AI_OUTPUT_MESSAGES_KEY
+from ..constants import GEN_AI_OUTPUT_MESSAGES_KEY
 from ..models.response import Response
 from ..opentelemetry_scope import OpenTelemetryScope
 from ..tenant_details import TenantDetails
@@ -57,10 +57,8 @@ class OutputScope(OpenTelemetryScope):
             activity_name=(f"{OUTPUT_OPERATION_NAME} {agent_details.agent_id}"),
             agent_details=agent_details,
             tenant_details=tenant_details,
+            parent_id=parent_id,
         )
-
-        # Set parent ID if provided
-        self.set_tag_maybe(CUSTOM_PARENT_SPAN_ID_KEY, parent_id)
 
         # Set response messages
         self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(response.messages))

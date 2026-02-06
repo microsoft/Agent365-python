@@ -13,6 +13,7 @@ from opentelemetry import baggage, context, trace
 from opentelemetry.trace import Span, SpanKind, Status, StatusCode, Tracer, set_span_in_context
 
 from .constants import (
+    CUSTOM_PARENT_SPAN_ID_KEY,
     ENABLE_A365_OBSERVABILITY,
     ENABLE_OBSERVABILITY,
     ERROR_TYPE_KEY,
@@ -71,6 +72,7 @@ class OpenTelemetryScope:
         activity_name: str,
         agent_details: "AgentDetails | None" = None,
         tenant_details: "TenantDetails | None" = None,
+        parent_id: str | None = None,
     ):
         """Initialize the OpenTelemetry scope.
 
@@ -80,6 +82,8 @@ class OpenTelemetryScope:
             activity_name: The name of the activity for display purposes
             agent_details: Optional agent details
             tenant_details: Optional tenant details
+            parent_id: Optional parent Activity ID used to link this span to an upstream
+                operation
         """
         self._span: Span | None = None
         self._start_time = time.time()
@@ -144,6 +148,9 @@ class OpenTelemetryScope:
                 # Set tenant details if provided
                 if tenant_details:
                     self.set_tag_maybe(TENANT_ID_KEY, str(tenant_details.tenant_id))
+
+                # Set parent ID if provided
+                self.set_tag_maybe(CUSTOM_PARENT_SPAN_ID_KEY, parent_id)
 
     def record_error(self, exception: Exception) -> None:
         """Record an error in the span.
