@@ -96,7 +96,8 @@ class TestAddToolServersToAgent:
         """Create a mock MCP server configuration."""
         mock = MagicMock()
         mock.mcp_server_name = "test-server"
-        mock.mcp_server_unique_name = "https://test-server.example.com/mcp"
+        mock.mcp_server_unique_name = "test-server"
+        mock.url = "https://test-server.example.com/mcp"
         return mock
 
     @pytest.mark.asyncio
