@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "tzdata"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "microsoft-agents-a365-tooling-extensions-googleadk"
+dynamic = ["version"]
+authors = [
+    { name = "Microsoft", email = "support@microsoft.com" },
+]
+description = "Google ADK integration for Agent 365 Tooling SDK"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+license = {text = "MIT"}
+dependencies = [
+    "microsoft-agents-a365-tooling",
+    "microsoft-agents-hosting-core",
+    "google-adk",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/Agent365-python"
+Repository = "https://github.com/microsoft/Agent365-python"
+Issues = "https://github.com/microsoft/Agent365-python/issues"
+Documentation = "https://github.com/microsoft/Agent365-python/tree/main/libraries/microsoft-agents-a365-tooling-extensions-googleadk"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "black",
+    "mypy",
+]
+test = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools]
+license-files = ["../../LICENSE"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["../../LICENSE"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "# Copyright \\(c\\) Microsoft Corporation\\.\\r?\\n# Licensed under the MIT License\\."
+min-file-size = 1
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true

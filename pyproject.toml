@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 [tool.uv.workspace]
 members = [
     "libraries/microsoft-agents-a365-notifications",
-    "libraries/microsoft-agents-a365-observability-core", 
+    "libraries/microsoft-agents-a365-observability-core",
     "libraries/microsoft-agents-a365-observability-extensions-langchain",
     "libraries/microsoft-agents-a365-observability-extensions-openai",
-    "libraries/microsoft-agents-a365-observability-extensions-semantickernel", 
+    "libraries/microsoft-agents-a365-observability-extensions-semantickernel",
     "libraries/microsoft-agents-a365-observability-extensions-agentframework",
     "libraries/microsoft-agents-a365-runtime",
     "libraries/microsoft-agents-a365-tooling",
@@ -16,6 +16,7 @@ members = [
     "libraries/microsoft-agents-a365-tooling-extensions-openai",
     "libraries/microsoft-agents-a365-tooling-extensions-semantickernel",
     "libraries/microsoft-agents-a365-tooling-extensions-agentframework",
+    "libraries/microsoft-agents-a365-tooling-extensions-googleadk",
     "libraries/microsoft-agents-a365-observability-hosting",
 ]
 exclude = [
@@ -36,6 +37,7 @@ microsoft-agents-a365-runtime = { workspace = true }
 microsoft-agents-a365-tooling = { workspace = true }
 microsoft-agents-a365-tooling-extensions-agentframework = { workspace = true }
 microsoft-agents-a365-tooling-extensions-azureaifoundry = { workspace = true }
+microsoft-agents-a365-tooling-extensions-googleadk = { workspace = true }
 microsoft-agents-a365-tooling-extensions-openai = { workspace = true }
 microsoft-agents-a365-tooling-extensions-semantickernel = { workspace = true }
 
@@ -77,6 +79,7 @@ constraint-dependencies = [
     "langchain-core >= 0.1.0",
     "openai-agents >= 0.2.6",
     "semantic-kernel >= 1.0.0",
+    "google-adk >= 1.0.0",
 
     # --- Microsoft Agents SDK ---
     "microsoft-agents-activity >= 0.4.0",
@@ -107,7 +110,7 @@ constraint-dependencies = [
 minversion = "7.0"
 addopts = [
     "-v",
-    "--tb=short", 
+    "--tb=short",
     "--strict-markers",
     "--strict-config",
 ]
@@ -129,7 +132,7 @@ preview = true
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
 select = [
     "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings  
+    "W",  # pycodestyle warnings
     "F",  # Pyflakes
     "I",  # isort
     "B",  # flake8-bugbear
@@ -149,7 +152,7 @@ unfixable = []
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
-    ".direnv", 
+    ".direnv",
     ".eggs",
     ".git",
     ".git-rewrite",
