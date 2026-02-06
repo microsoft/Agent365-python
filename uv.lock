@@ -54,9 +54,10 @@ constraints = [
     { name = "pytest-mock", specifier = ">=3.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "ruff", specifier = ">=0.1.0" },
-    { name = "semantic-kernel", specifier = ">=1.0.0" },
+    { name = "semantic-kernel", specifier = ">=1.39.3" },
     { name = "typing-extensions", specifier = ">=4.0.0" },
 ]
+overrides = [{ name = "azure-ai-projects", specifier = ">=2.0.0b1" }]
 
 [manifest.dependency-groups]
 dev = [
@@ -3776,7 +3777,7 @@ wheels = [
 
 [[package]]
 name = "semantic-kernel"
-version = "1.37.1"
+version = "1.39.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -3802,9 +3803,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/d8/91f99b6f932201110e6f99c2f026ce0d7f5ee090e2e8bbe9964498ea26fe/semantic_kernel-1.37.1.tar.gz", hash = "sha256:99fe2b257f53c1073ea3125e564959e577dd41eb198f40525ec78bc46bdd04d8", size = 583782, upload-time = "2025-10-30T06:41:27.463Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/40/75/ace6cc290bbfec20def659df8dcc76fa1dc059ecbe7a13a65877a3d9ef42/semantic_kernel-1.39.3.tar.gz", hash = "sha256:c67265817cd0e4af8f49059ac46421a911158c8bbe9629b1092a632a2bc1f404", size = 601695, upload-time = "2026-02-02T01:32:42.727Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/6a/9210a5429fc37a399eff7085b353af4b08559b9046fe078218223b741d70/semantic_kernel-1.37.1-py3-none-any.whl", hash = "sha256:9b0f9ce4268f592458f0f9f1ab8fa2bf07020f6cd9871c365b913ab74db66f82", size = 893797, upload-time = "2025-10-30T06:41:24.955Z" },
+    { url = "https://files.pythonhosted.org/packages/80/ee/a8f12b1d32f3a528f1fa5dfb4afb1f74eac2191c9efca300f17a177af539/semantic_kernel-1.39.3-py3-none-any.whl", hash = "sha256:0540547bc60b24caaf8b8ddff57d995dbabdd343448c434f939be8891fb52624", size = 913654, upload-time = "2026-02-02T01:32:40.525Z" },
 ]
 
 [[package]]
