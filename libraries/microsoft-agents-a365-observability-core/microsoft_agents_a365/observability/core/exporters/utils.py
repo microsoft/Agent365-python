@@ -1,10 +1,12 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 import json
 import logging
 import os
 from collections.abc import Sequence
 from typing import Any
+from urllib.parse import urlparse
 
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.trace import SpanKind, StatusCode
@@ -140,6 +142,59 @@ def partition_by_identity(
         key = (tenant, agent)
         groups.setdefault(key, []).append(sp)
     return groups
+
+
+def get_validated_domain_override() -> str | None:
+    """
+    Get and validate the domain override from environment variable.
+
+    Returns:
+        The validated domain override, or None if not set or invalid.
+    """
+    domain_override = os.getenv("A365_OBSERVABILITY_DOMAIN_OVERRIDE", "").strip()
+    if not domain_override:
+        return None
+
+    # Validate that it's a valid URL
+    try:
+        parsed = urlparse(domain_override)
+
+        # If scheme is present and looks like a protocol (contains //)
+        # Note: We check for "://" because urlparse treats "example.com:8080" as having
+        # scheme="example.com", but this is actually a domain with port, not a protocol.
+        if parsed.scheme and "://" in domain_override:
+            # Validate it's http or https
+            if parsed.scheme not in ("http", "https"):
+                logger.warning(
+                    f"Invalid domain override '{domain_override}': "
+                    f"scheme must be http or https, got '{parsed.scheme}'"
+                )
+                return None
+            # Must have a netloc (hostname) when scheme is present
+            if not parsed.netloc:
+                logger.warning(f"Invalid domain override '{domain_override}': missing hostname")
+                return None
+        else:
+            # If no scheme with ://, it should be a domain with optional port (no path)
+            # Note: domain can contain : for port (e.g., example.com:8080)
+            # Reject malformed URLs like "http:8080" that look like protocols but aren't
+            if domain_override.startswith(("http:", "https:")) and "://" not in domain_override:
+                logger.warning(
+                    f"Invalid domain override '{domain_override}': "
+                    "malformed URL - protocol requires '://'"
+                )
+                return None
+            if "/" in domain_override:
+                logger.warning(
+                    f"Invalid domain override '{domain_override}': "
+                    "domain without protocol should not contain path separators (/)"
+                )
+                return None
+    except Exception as e:
+        logger.warning(f"Invalid domain override '{domain_override}': {e}")
+        return None
+
+    return domain_override
 
 
 def is_agent365_exporter_enabled() -> bool:

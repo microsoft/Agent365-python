@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 """
 MCP Tool Server Configuration Service.
@@ -17,23 +18,42 @@ The service supports both development and production scenarios:
 # ==============================================================================
 
 # Standard library imports
+import asyncio
 import json
 import logging
 import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 # Third-party imports
 import aiohttp
+from microsoft_agents.hosting.core import TurnContext
 
 # Local imports
-from ..models import MCPServerConfig, ToolOptions
+from ..models import ChatHistoryMessage, ChatMessageRequest, MCPServerConfig, ToolOptions
 from ..utils import Constants
-from ..utils.utility import get_tooling_gateway_for_digital_worker, build_mcp_server_url
+from ..utils.utility import (
+    get_tooling_gateway_for_digital_worker,
+    build_mcp_server_url,
+    get_chat_history_endpoint,
+)
 
 # Runtime Imports
+from microsoft_agents_a365.runtime import OperationError, OperationResult
 from microsoft_agents_a365.runtime.utility import Utility as RuntimeUtility
+
+
+# ==============================================================================
+# CONSTANTS
+# ==============================================================================
+
+# HTTP timeout in seconds for request operations
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
+
+# HTTP status code for successful response
+HTTP_STATUS_OK = 200
 
 
 # ==============================================================================
@@ -332,23 +352,73 @@ class McpToolServerConfigurationService:
 
         return mcp_servers
 
-    def _prepare_gateway_headers(self, auth_token: str, options: ToolOptions) -> Dict[str, str]:
+    def _prepare_gateway_headers(
+        self, auth_token: str, options: ToolOptions, turn_context: Optional[TurnContext] = None
+    ) -> Dict[str, str]:
         """
         Prepares headers for tooling gateway requests.
 
         Args:
             auth_token: Authentication token.
             options: ToolOptions instance containing optional parameters.
+            turn_context: Optional TurnContext for extracting agent blueprint ID for request headers.
 
         Returns:
             Dictionary of HTTP headers.
         """
-        return {
+        headers: Dict[str, str] = {
             Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
             Constants.Headers.USER_AGENT: RuntimeUtility.get_user_agent_header(
                 options.orchestrator_name
             ),
         }
+
+        # Add x-ms-agentid header with priority fallback
+        agent_id = self._resolve_agent_id_for_header(auth_token, turn_context)
+        if agent_id:
+            headers[Constants.Headers.AGENT_ID] = agent_id
+
+        return headers
+
+    def _resolve_agent_id_for_header(
+        self, auth_token: str, turn_context: Optional[TurnContext] = None
+    ) -> Optional[str]:
+        """
+        Resolves the best available agent identifier for the x-ms-agentid header.
+        Priority: TurnContext.agenticAppBlueprintId > token claims (xms_par_app_azp > appid > azp)
+                  > application name
+
+        Note: This differs from RuntimeUtility.resolve_agent_identity() which resolves the agenticAppId
+        for URL construction. This method resolves the identifier specifically for the x-ms-agentid header.
+
+        Args:
+            auth_token: The authentication token to extract claims from.
+            turn_context: Optional TurnContext to extract agent blueprint ID from.
+
+        Returns:
+            Agent ID string or None if not available.
+        """
+        # Priority 1: Agent Blueprint ID from TurnContext
+        # The 'from_' property may include agentic_app_blueprint_id when the request originates
+        # from an agentic app
+        try:
+            if turn_context and turn_context.activity and turn_context.activity.from_:
+                blueprint_id = getattr(
+                    turn_context.activity.from_, "agentic_app_blueprint_id", None
+                )
+                if blueprint_id:
+                    return blueprint_id
+        except (AttributeError, TypeError):
+            pass
+
+        # Priority 2 & 3: Agent ID from token (xms_par_app_azp > appid > azp)
+        # Single decode, checks claims in priority order
+        agent_id = RuntimeUtility.get_agent_id_from_token(auth_token)
+        if agent_id:
+            return agent_id
+
+        # Priority 4: Application name from AGENT365_APPLICATION_NAME env or pyproject.toml
+        return RuntimeUtility.get_application_name()
 
     async def _parse_gateway_response(
         self, response: aiohttp.ClientResponse
@@ -392,16 +462,26 @@ class McpToolServerConfigurationService:
             MCPServerConfig object or None if parsing fails.
         """
         try:
-            name = self._extract_server_name(server_element)
-            server_name = self._extract_server_unique_name(server_element)
+            mcp_server_name = self._extract_server_name(server_element)
+            mcp_server_unique_name = self._extract_server_unique_name(server_element)
 
-            if not self._validate_server_strings(name, server_name):
+            if not self._validate_server_strings(mcp_server_name, mcp_server_unique_name):
                 return None
 
-            # Construct full URL using environment utilities
-            full_url = build_mcp_server_url(server_name)
+            # Check if a URL is provided
+            endpoint = self._extract_server_url(server_element)
 
-            return MCPServerConfig(mcp_server_name=name, mcp_server_unique_name=full_url)
+            # Use mcp_server_name if available, otherwise fall back to mcp_server_unique_name for URL construction
+            server_name = mcp_server_name or mcp_server_unique_name
+
+            # Determine the final URL: use custom URL if provided, otherwise construct it
+            final_url = endpoint if endpoint else build_mcp_server_url(server_name)
+
+            return MCPServerConfig(
+                mcp_server_name=mcp_server_name,
+                mcp_server_unique_name=mcp_server_unique_name,
+                url=final_url,
+            )
 
         except Exception:
             return None
@@ -419,13 +499,26 @@ class McpToolServerConfigurationService:
             MCPServerConfig object or None if parsing fails.
         """
         try:
-            name = self._extract_server_name(server_element)
-            endpoint = self._extract_server_unique_name(server_element)
+            mcp_server_name = self._extract_server_name(server_element)
+            mcp_server_unique_name = self._extract_server_unique_name(server_element)
 
-            if not self._validate_server_strings(name, endpoint):
+            if not self._validate_server_strings(mcp_server_name, mcp_server_unique_name):
                 return None
 
-            return MCPServerConfig(mcp_server_name=name, mcp_server_unique_name=endpoint)
+            # Check if a URL is provided by the gateway
+            endpoint = self._extract_server_url(server_element)
+
+            # Use mcp_server_name if available, otherwise fall back to mcp_server_unique_name for URL construction
+            server_name = mcp_server_name or mcp_server_unique_name
+
+            # Determine the final URL: use custom URL if provided, otherwise construct it
+            final_url = endpoint if endpoint else build_mcp_server_url(server_name)
+
+            return MCPServerConfig(
+                mcp_server_name=mcp_server_name,
+                mcp_server_unique_name=mcp_server_unique_name,
+                url=final_url,
+            )
 
         except Exception:
             return None
@@ -480,6 +573,21 @@ class McpToolServerConfigurationService:
             return server_element["mcpServerUniqueName"]
         return None
 
+    def _extract_server_url(self, server_element: Dict[str, Any]) -> Optional[str]:
+        """
+        Extracts custom server URL from configuration element.
+
+        Args:
+            server_element: Configuration dictionary.
+
+        Returns:
+            Server URL string or None.
+        """
+        # Check for 'url' field in both manifest and gateway responses
+        if "url" in server_element and isinstance(server_element["url"], str):
+            return server_element["url"]
+        return None
+
     def _validate_server_strings(self, name: Optional[str], unique_name: Optional[str]) -> bool:
         """
         Validates that server name and unique name are valid strings.
@@ -492,3 +600,154 @@ class McpToolServerConfigurationService:
             True if both strings are valid, False otherwise.
         """
         return name is not None and name.strip() and unique_name is not None and unique_name.strip()
+
+    # --------------------------------------------------------------------------
+    # SEND CHAT HISTORY
+    # --------------------------------------------------------------------------
+
+    async def send_chat_history(
+        self,
+        turn_context: TurnContext,
+        chat_history_messages: List[ChatHistoryMessage],
+        options: Optional[ToolOptions] = None,
+    ) -> OperationResult:
+        """
+        Sends chat history to the MCP platform for real-time threat protection.
+
+        Args:
+            turn_context: TurnContext from the Agents SDK containing conversation information.
+                          Must have a valid activity with conversation.id, activity.id, and
+                          activity.text.
+            chat_history_messages: List of ChatHistoryMessage objects representing the chat
+                                   history. May be empty - an empty list will still send a
+                                   request to the MCP platform with empty chat history.
+            options: Optional ToolOptions instance containing optional parameters.
+
+        Returns:
+            OperationResult: An OperationResult indicating success or failure.
+                             On success, returns OperationResult.success().
+                             On failure, returns OperationResult.failed() with error details.
+
+        Raises:
+            ValueError: If turn_context is None, chat_history_messages is None,
+                        turn_context.activity is None, or any of the required fields
+                        (conversation.id, activity.id, activity.text) are missing or empty.
+
+        Note:
+            Even if chat_history_messages is empty, the request will still be sent to
+            the MCP platform. This ensures the user message from turn_context.activity.text
+            is registered correctly for real-time threat protection.
+
+        Example:
+            >>> from datetime import datetime, timezone
+            >>> from microsoft_agents_a365.tooling.models import ChatHistoryMessage
+            >>>
+            >>> history = [
+            ...     ChatHistoryMessage("msg-1", "user", "Hello", datetime.now(timezone.utc)),
+            ...     ChatHistoryMessage("msg-2", "assistant", "Hi!", datetime.now(timezone.utc))
+            ... ]
+            >>>
+            >>> service = McpToolServerConfigurationService()
+            >>> result = await service.send_chat_history(turn_context, history)
+            >>> if result.succeeded:
+            ...     print("Chat history sent successfully")
+        """
+        # Validate input parameters
+        if turn_context is None:
+            raise ValueError("turn_context cannot be None")
+        if chat_history_messages is None:
+            raise ValueError("chat_history_messages cannot be None")
+
+        # Note: Empty chat_history_messages is allowed - we still send the request to MCP platform
+        # The platform needs to receive the request even with empty chat history
+
+        # Extract required information from turn context
+        if not turn_context.activity:
+            raise ValueError("turn_context.activity cannot be None")
+
+        conversation_id: Optional[str] = (
+            turn_context.activity.conversation.id if turn_context.activity.conversation else None
+        )
+        message_id: Optional[str] = turn_context.activity.id
+        user_message: Optional[str] = turn_context.activity.text
+
+        if conversation_id is None or (
+            isinstance(conversation_id, str) and not conversation_id.strip()
+        ):
+            raise ValueError(
+                "conversation_id cannot be empty or None (from turn_context.activity.conversation.id)"
+            )
+        if message_id is None or (isinstance(message_id, str) and not message_id.strip()):
+            raise ValueError("message_id cannot be empty or None (from turn_context.activity.id)")
+        if user_message is None or (isinstance(user_message, str) and not user_message.strip()):
+            raise ValueError(
+                "user_message cannot be empty or None (from turn_context.activity.text)"
+            )
+
+        # Use default options if none provided
+        if options is None:
+            options = ToolOptions(orchestrator_name=None)
+
+        # Get the endpoint URL
+        endpoint = get_chat_history_endpoint()
+
+        # Log only the URL path to avoid accidentally exposing sensitive data in query strings
+        parsed_url = urlparse(endpoint)
+        self._logger.debug(f"Sending chat history to endpoint path: {parsed_url.path}")
+
+        # Create the request payload
+        request = ChatMessageRequest(
+            conversation_id=conversation_id,
+            message_id=message_id,
+            user_message=user_message,
+            chat_history=chat_history_messages,
+        )
+
+        try:
+            # Prepare headers (no authentication required)
+            headers = {
+                Constants.Headers.USER_AGENT: RuntimeUtility.get_user_agent_header(
+                    options.orchestrator_name
+                ),
+                "Content-Type": "application/json",
+            }
+
+            # Convert request to JSON (using Pydantic's model_dump with aliases for camelCase)
+            json_data = json.dumps(request.model_dump(by_alias=True, mode="json"))
+
+            # Send POST request with timeout to prevent indefinite hangs
+            timeout = aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT_SECONDS)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(endpoint, headers=headers, data=json_data) as response:
+                    if response.status == HTTP_STATUS_OK:
+                        self._logger.info("Successfully sent chat history to MCP platform")
+                        return OperationResult.success()
+                    else:
+                        error_text = await response.text()
+                        self._logger.error(
+                            f"HTTP error sending chat history: HTTP {response.status}. "
+                            f"Response: {error_text[:500]}"
+                        )
+                        # Use ClientResponseError for consistent error handling
+                        http_error = aiohttp.ClientResponseError(
+                            request_info=response.request_info,
+                            history=response.history,
+                            status=response.status,
+                            message=error_text,
+                            headers=response.headers,
+                        )
+                        return OperationResult.failed(OperationError(http_error))
+
+        except asyncio.TimeoutError as timeout_ex:
+            # Catch TimeoutError before ClientError since aiohttp.ServerTimeoutError
+            # inherits from both asyncio.TimeoutError and aiohttp.ClientError
+            self._logger.error(
+                f"Request timeout sending chat history to '{endpoint}': {str(timeout_ex)}"
+            )
+            return OperationResult.failed(OperationError(timeout_ex))
+        except aiohttp.ClientError as http_ex:
+            self._logger.error(f"HTTP error sending chat history to '{endpoint}': {str(http_ex)}")
+            return OperationResult.failed(OperationError(http_ex))
+        except Exception as ex:
+            self._logger.error(f"Failed to send chat history to '{endpoint}': {str(ex)}")
+            return OperationResult.failed(OperationError(ex))

@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 """
 Utility logic for environment-related operations.
@@ -21,10 +22,14 @@ def get_observability_authentication_scope() -> list[str]:
     """
     Returns the scope for authenticating to the observability service based on the current environment.
 
+    The scope can be overridden via the A365_OBSERVABILITY_SCOPE_OVERRIDE environment variable
+    to enable testing against pre-production environments.
+
     Returns:
         list[str]: The authentication scope for the current environment.
     """
-    return [PROD_OBSERVABILITY_SCOPE]
+    override_scope = os.getenv("A365_OBSERVABILITY_SCOPE_OVERRIDE", "").strip()
+    return [override_scope] if override_scope else [PROD_OBSERVABILITY_SCOPE]
 
 
 def is_development_environment() -> bool:

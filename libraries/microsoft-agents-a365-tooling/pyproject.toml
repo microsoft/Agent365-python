@@ -23,8 +23,9 @@ classifiers = [
 ]
 license = {text = "MIT"}
 dependencies = [
-    "pydantic >= 2.0.0",
-    "typing-extensions >= 4.0.0",
+    "pydantic",
+    "typing-extensions",
+    "microsoft-agents-hosting-core",
 ]
 
 [project.urls]
@@ -35,11 +36,11 @@ Documentation = "https://github.com/microsoft/Agent365-python/tree/main/librarie
 
 [project.optional-dependencies]
 dev = [
-    "pytest >= 7.0.0",
-    "pytest-asyncio >= 0.21.0",
-    "black >= 23.0.0",
-    "ruff >= 0.1.0",
-    "mypy >= 1.0.0",
+    "pytest",
+    "pytest-asyncio",
+    "black",
+    "ruff",
+    "mypy",
 ]
 
 [tool.setuptools.packages.find]
@@ -51,6 +52,7 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 "*" = ["../../LICENSE"]
+"microsoft_agents_a365.tooling" = ["py.typed"]
 
 [tool.black]
 line-length = 100
@@ -59,6 +61,10 @@ target-version = ['py311']
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "# Copyright \\(c\\) Microsoft Corporation\\.\\r?\\n# Licensed under the MIT License\\."
+min-file-size = 1
 
 [tool.mypy]
 python_version = "3.11"

@@ -7,12 +7,17 @@ import pytest
 from microsoft_agents_a365.observability.core import configure, get_tracer_provider
 from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_ID_KEY,
+    GEN_AI_AGENT_NAME_KEY,
+    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
+    GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
     GEN_AI_REQUEST_MODEL_KEY,
     GEN_AI_SYSTEM_KEY,
+    INVOKE_AGENT_OPERATION_NAME,
     TENANT_ID_KEY,
 )
+from microsoft_agents_a365.observability.core.middleware.baggage_builder import BaggageBuilder
 from microsoft_agents_a365.observability.extensions.openai.trace_instrumentor import (
     OpenAIAgentsTraceInstrumentor,
 )
@@ -182,6 +187,122 @@ class TestOpenAITraceProcessorIntegration:
 
         finally:
             # Clean up
+            instrumentor.uninstrument()
+
+    def test_invoke_agent_span_required_attributes(self, azure_openai_config, agent365_config):
+        """Test that invoke_agent span has all required attributes per schema."""
+
+        # Configure observability
+        configure(
+            service_name="integration-test-invoke-agent",
+            service_namespace="agent365-tests",
+            logger_name="test-logger",
+        )
+
+        # Get the tracer provider and add our mock exporter
+        provider = get_tracer_provider()
+        provider.add_span_processor(self.mock_exporter)
+
+        # Initialize the instrumentor
+        instrumentor = OpenAIAgentsTraceInstrumentor()
+        instrumentor.instrument()
+
+        try:
+            # Create Azure OpenAI client
+            openai_client = AsyncAzureOpenAI(
+                api_key=azure_openai_config["api_key"],
+                api_version=azure_openai_config["api_version"],
+                azure_endpoint=azure_openai_config["endpoint"],
+            )
+
+            # Create agent
+            agent = Agent(
+                name="TestAgent",
+                instructions="You are a helpful assistant. Answer briefly.",
+                model=OpenAIChatCompletionsModel(
+                    model=azure_openai_config["deployment"], openai_client=openai_client
+                ),
+            )
+
+            # Execute agent wrapped with BaggageBuilder to provide required attributes
+            import asyncio
+
+            async def run_agent():
+                with (
+                    BaggageBuilder()
+                    .agent_id("test-agent-id")
+                    .agent_name("TestAgent")
+                    .agent_auid("test-agent-auid")
+                    .agent_upn("test-agent@test.com")
+                    .agent_blueprint_id("test-blueprint-id")
+                    .tenant_id("test-tenant-id")
+                    .caller_id("test-caller-id")
+                    .caller_name("Test Caller")
+                    .caller_upn("test-caller@test.com")
+                    .caller_client_ip("127.0.0.1")
+                    .conversation_id("test-conversation-id")
+                    .channel_name("test-channel")
+                    .correlation_id("test-correlation-id")
+                    .build()
+                ):
+                    result = await Runner.run(agent, "Say hello")
+                    return result.final_output
+
+            response = asyncio.run(run_agent())
+
+            # Give time for spans to be processed
+            time.sleep(1)
+
+            # Find the invoke_agent span
+            invoke_agent_span = None
+            for span in self.captured_spans:
+                if span.name.startswith(INVOKE_AGENT_OPERATION_NAME):
+                    invoke_agent_span = span
+                    break
+
+            assert invoke_agent_span is not None, "invoke_agent span not found"
+            attributes = dict(invoke_agent_span.attributes or {})
+
+            print(f"invoke_agent span attributes: {list(attributes.keys())}")
+
+            # Validate REQUIRED attributes (must be present)
+            required_attributes = [
+                GEN_AI_OPERATION_NAME_KEY,  # "gen_ai.operation.name" - Set by SDK
+                GEN_AI_AGENT_ID_KEY,  # "gen_ai.agent.id"
+                GEN_AI_AGENT_NAME_KEY,  # "gen_ai.agent.name"
+                GEN_AI_EXECUTION_TYPE_KEY,  # "gen_ai.execution.type"
+                GEN_AI_INPUT_MESSAGES_KEY,  # "gen_ai.input.messages"
+                GEN_AI_OUTPUT_MESSAGES_KEY,  # "gen_ai.output.messages"
+            ]
+
+            missing_required = []
+            for attr in required_attributes:
+                if attr not in attributes:
+                    missing_required.append(attr)
+                else:
+                    print(f"✓ Required attribute present: {attr} = {str(attributes[attr])[:50]}...")
+
+            assert len(missing_required) == 0, f"Missing required attributes: {missing_required}"
+
+            # Validate operation name value
+            assert attributes[GEN_AI_OPERATION_NAME_KEY] == INVOKE_AGENT_OPERATION_NAME, (
+                f"Expected operation name '{INVOKE_AGENT_OPERATION_NAME}', "
+                f"got '{attributes[GEN_AI_OPERATION_NAME_KEY]}'"
+            )
+
+            # Validate agent name matches
+            assert attributes[GEN_AI_AGENT_NAME_KEY] == "TestAgent", (
+                f"Expected agent name 'TestAgent', got '{attributes[GEN_AI_AGENT_NAME_KEY]}'"
+            )
+
+            # Validate input/output messages are non-empty
+            assert attributes[GEN_AI_INPUT_MESSAGES_KEY], "Input messages should not be empty"
+            assert attributes[GEN_AI_OUTPUT_MESSAGES_KEY], "Output messages should not be empty"
+
+            print("✓ All required invoke_agent span attributes validated")
+            print(f"Agent response: {response}")
+
+        finally:
             instrumentor.uninstrument()
 
     def _validate_span_attributes(self, agent365_config):

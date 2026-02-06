@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 # -------------------------------------------------- #
 # HELPER FUNCTIONS ###
@@ -22,6 +23,7 @@ from agents.tracing.span_data import (
 )
 from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_CHOICE,
+    GEN_AI_EVENT_CONTENT,
     GEN_AI_EXECUTION_PAYLOAD_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -364,9 +366,9 @@ def get_attributes_from_function_span_data(
 ) -> Iterator[tuple[str, AttributeValue]]:
     yield GEN_AI_TOOL_NAME_KEY, obj.name
     if obj.input:
-        yield GEN_AI_INPUT_MESSAGES_KEY, obj.input
+        yield GEN_AI_TOOL_ARGS_KEY, obj.input
     if obj.output is not None:
-        yield GEN_AI_OUTPUT_MESSAGES_KEY, _convert_to_primitive(obj.output)
+        yield GEN_AI_EVENT_CONTENT, _convert_to_primitive(obj.output)
 
 
 def get_attributes_from_message_content_list(
@@ -534,3 +536,100 @@ def get_span_status(obj: Span[Any]) -> Status:
         )
     else:
         return Status(StatusCode.OK)
+
+
+def capture_tool_call_ids(
+    output_list: Any, pending_tool_calls: dict[str, str], max_size: int = 1000
+) -> None:
+    """Extract and store tool_call_ids from generation output for later use by FunctionSpan.
+
+    Args:
+        output_list: The generation output containing tool calls
+        pending_tool_calls: OrderedDict to store pending tool calls
+        max_size: Maximum number of pending tool calls to keep in memory
+    """
+    if not output_list:
+        return
+    try:
+        for msg in output_list:
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                tool_calls = msg.get("tool_calls")
+                if tool_calls:
+                    for tc in tool_calls:
+                        if isinstance(tc, dict):
+                            call_id = tc.get("id")
+                            func = tc.get("function", {})
+                            func_name = func.get("name") if isinstance(func, dict) else None
+                            func_args = func.get("arguments", "") if isinstance(func, dict) else ""
+                            if call_id and func_name:
+                                # Key by (function_name, arguments) to uniquely identify each call
+                                key = f"{func_name}:{func_args}"
+                                pending_tool_calls[key] = call_id
+                                # Cap the size of the dict to prevent unbounded growth
+                                while len(pending_tool_calls) > max_size:
+                                    pending_tool_calls.popitem(last=False)
+    except Exception:
+        pass
+
+
+def get_tool_call_id(
+    function_name: str, function_args: str, pending_tool_calls: dict[str, str]
+) -> str | None:
+    """Get and remove the tool_call_id for a function with specific arguments."""
+    key = f"{function_name}:{function_args}"
+    return pending_tool_calls.pop(key, None)
+
+
+def capture_input_message(
+    parent_span_id: str, input_list: Any, agent_inputs: dict[str, str]
+) -> None:
+    """Extract and store the first user message from input list for parent agent span."""
+    if parent_span_id in agent_inputs:
+        return  # Already captured
+    if not input_list:
+        return
+    try:
+        for msg in input_list:
+            if isinstance(msg, dict) and msg.get("role") == "user":
+                content = msg.get("content", "")
+                if content:
+                    agent_inputs[parent_span_id] = str(content)
+                    return
+    except Exception:
+        pass
+
+
+def capture_output_message(
+    parent_span_id: str, output_list: Any, agent_outputs: dict[str, str]
+) -> None:
+    """Extract and store the last assistant message with actual content (no tool calls) for parent agent span."""
+    if not output_list:
+        return
+    try:
+        # Iterate in reverse to get the last assistant message with content (not a tool call)
+        output_items = list(output_list) if not isinstance(output_list, list) else output_list
+        for msg in reversed(output_items):
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                content = msg.get("content")
+                tool_calls = msg.get("tool_calls")
+                # Only capture if there's actual content and no tool_calls
+                # (tool_calls means this is an intermediate step, not the final response)
+                if content and not tool_calls:
+                    agent_outputs[parent_span_id] = str(content)
+                    return
+    except Exception:
+        pass
+
+
+def find_ancestor_agent_span_id(
+    span_id: str | None, agent_span_ids: set[str], span_parents: dict[str, str]
+) -> str | None:
+    """Walk up the parent chain to find the nearest ancestor AgentSpan."""
+    current = span_id
+    visited: set[str] = set()  # Prevent infinite loops
+    while current and current not in visited:
+        if current in agent_span_ids:
+            return current
+        visited.add(current)
+        current = span_parents.get(current)
+    return None

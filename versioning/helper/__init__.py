@@ -4,10 +4,10 @@
 """Microsoft Agent 365 Python SDK setup utilities."""
 
 from .setup_utils import (
-    get_package_version,
-    get_dynamic_dependencies,
     get_base_version,
+    get_dynamic_dependencies,
     get_next_major_version,
+    get_package_version,
 )
 
 __all__ = [

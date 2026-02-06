@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 import logging
 import threading
@@ -8,10 +9,13 @@ from typing import Any, Optional
 from opentelemetry import trace
 from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_NAMESPACE, Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
-from .exporters.agent365_exporter import Agent365Exporter
+from .exporters.agent365_exporter import _Agent365Exporter
 from .exporters.agent365_exporter_options import Agent365ExporterOptions
+from .exporters.enriching_span_processor import (
+    _EnrichingBatchSpanProcessor,
+)
 from .exporters.utils import is_agent365_exporter_enabled
 from .trace_processor.span_processor import SpanProcessor
 
@@ -53,6 +57,7 @@ class TelemetryManager:
         token_resolver: Callable[[str, str], str | None] | None = None,
         cluster_category: str = "prod",
         exporter_options: Optional[Agent365ExporterOptions] = None,
+        suppress_invoke_agent_input: bool = False,
         **kwargs: Any,
     ) -> bool:
         """
@@ -67,6 +72,7 @@ class TelemetryManager:
             Use exporter_options instead.
         :param exporter_options: Agent365ExporterOptions instance for configuring the exporter.
             If provided, exporter_options takes precedence. If exporter_options is None, the token_resolver and cluster_category parameters are used as fallback/legacy support to construct a default Agent365ExporterOptions instance.
+        :param suppress_invoke_agent_input: If True, suppress input messages for spans that are children of InvokeAgent spans.
         :return: True if configuration succeeded, False otherwise.
         """
         try:
@@ -78,6 +84,7 @@ class TelemetryManager:
                     token_resolver,
                     cluster_category,
                     exporter_options,
+                    suppress_invoke_agent_input,
                     **kwargs,
                 )
         except Exception as e:
@@ -92,9 +99,17 @@ class TelemetryManager:
         token_resolver: Callable[[str, str], str | None] | None = None,
         cluster_category: str = "prod",
         exporter_options: Optional[Agent365ExporterOptions] = None,
+        suppress_invoke_agent_input: bool = False,
         **kwargs: Any,
     ) -> bool:
         """Internal configuration method - not thread-safe, must be called with lock."""
+
+        # Check if a365 observability is already configured
+        if self._tracer_provider is not None:
+            self._logger.warning(
+                "a365 observability already configured. Ignoring repeated configure() call."
+            )
+            return True
 
         # Create resource with service information
         resource = Resource.create(
@@ -104,23 +119,24 @@ class TelemetryManager:
             }
         )
 
-        # Get existing tracer provider or create new one
-        try:
-            tracer_provider = trace.get_tracer_provider()
-            # Check if it's already configured
-            if hasattr(tracer_provider, "resource") and tracer_provider.resource:
-                # Already configured, just add our span processor
-                agent_processor = SpanProcessor()
-                tracer_provider.add_span_processor(agent_processor)
-                self._tracer_provider = tracer_provider
-                self._span_processors["agent"] = agent_processor
-                return True
-        except Exception:
-            pass
+        # Check if there's an existing TracerProvider (from app's OTEL setup)
+        tracer_provider = trace.get_tracer_provider()
 
-        # Configure tracer provider
-        tracer_provider = TracerProvider(resource=resource)
-        trace.set_tracer_provider(tracer_provider)
+        # Determine if we should use existing provider or create new one
+        # Check if it's a real TracerProvider with a resource (not a proxy/no-op)
+        if getattr(tracer_provider, "resource", None):
+            # Use existing provider from application's OTEL setup
+            self._logger.info(
+                "Detected existing TracerProvider with resource. "
+                "Adding a365 observability processors to it."
+            )
+        else:
+            # Create new TracerProvider with our resource
+            self._logger.info("Creating new TracerProvider for a365 observability.")
+            tracer_provider = TracerProvider(resource=resource)
+            trace.set_tracer_provider(tracer_provider)
+
+        # Store reference
         self._tracer_provider = tracer_provider
 
         # Use exporter_options if provided, otherwise create default options with legacy parameters
@@ -139,10 +155,11 @@ class TelemetryManager:
         }
 
         if is_agent365_exporter_enabled() and exporter_options.token_resolver is not None:
-            exporter = Agent365Exporter(
+            exporter = _Agent365Exporter(
                 token_resolver=exporter_options.token_resolver,
                 cluster_category=exporter_options.cluster_category,
                 use_s2s_endpoint=exporter_options.use_s2s_endpoint,
+                suppress_invoke_agent_input=suppress_invoke_agent_input,
             )
         else:
             exporter = ConsoleSpanExporter()
@@ -152,8 +169,9 @@ class TelemetryManager:
 
         # Add span processors
 
-        # Create BatchSpanProcessor with optimized settings
-        batch_processor = BatchSpanProcessor(exporter, **batch_processor_kwargs)
+        # Create _EnrichingBatchSpanProcessor with optimized settings
+        # This allows extensions to enrich spans before export
+        batch_processor = _EnrichingBatchSpanProcessor(exporter, **batch_processor_kwargs)
         agent_processor = SpanProcessor()
 
         tracer_provider.add_span_processor(batch_processor)

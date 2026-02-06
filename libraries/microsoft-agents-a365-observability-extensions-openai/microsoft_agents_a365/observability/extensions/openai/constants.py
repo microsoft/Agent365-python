@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 # Span Attribute Types
 from microsoft_agents_a365.observability.core.constants import (

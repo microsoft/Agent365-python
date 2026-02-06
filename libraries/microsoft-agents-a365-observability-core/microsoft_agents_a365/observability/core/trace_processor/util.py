@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 from .. import constants as consts
 
@@ -23,6 +24,7 @@ COMMON_ATTRIBUTES = [
     consts.SESSION_ID_KEY,
     consts.SESSION_DESCRIPTION_KEY,
     consts.HIRING_MANAGER_ID_KEY,
+    consts.GEN_AI_CALLER_CLIENT_IP_KEY,  # gen_ai.caller.client.ip
     # Execution context
     consts.GEN_AI_EXECUTION_SOURCE_NAME_KEY,  # gen_ai.channel.name
     consts.GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,  # gen_ai.channel.link
@@ -39,6 +41,7 @@ INVOKE_AGENT_ATTRIBUTES = [
     # Caller Agent (A2A) attributes
     consts.GEN_AI_CALLER_AGENT_ID_KEY,  # gen_ai.caller.agent.id
     consts.GEN_AI_CALLER_AGENT_NAME_KEY,  # gen_ai.caller.agent.name
+    consts.GEN_AI_CALLER_AGENT_TYPE_KEY,  # gen_ai.caller.agent.type
     consts.GEN_AI_CALLER_AGENT_USER_ID_KEY,  # gen_ai.caller.agent.userid
     consts.GEN_AI_CALLER_AGENT_UPN_KEY,  # gen_ai.caller.agent.upn
     consts.GEN_AI_CALLER_AGENT_TENANT_ID_KEY,  # gen_ai.caller.agent.tenantid

@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
-
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 import os
 import unittest
@@ -7,6 +7,7 @@ import unittest.mock
 from unittest.mock import Mock, patch
 
 from microsoft_agents_a365.observability.core import AgentDetails, TenantDetails
+from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -53,6 +54,15 @@ class TestRecordAttributes(unittest.TestCase):
 
     def setUp(self):
         """Clear spans before each test."""
+        # Reset TelemetryManager state to ensure fresh configuration
+        _telemetry_manager._tracer_provider = None
+        _telemetry_manager._span_processors = {}
+
+        # Create a fresh TracerProvider for this test
+        provider = TracerProvider()
+        trace.set_tracer_provider(provider)
+        provider.add_span_processor(SimpleSpanProcessor(self.exporter))
+
         # Force OpenTelemetryScope to refresh its tracer reference
         OpenTelemetryScope._tracer = None
         self.exporter.clear()

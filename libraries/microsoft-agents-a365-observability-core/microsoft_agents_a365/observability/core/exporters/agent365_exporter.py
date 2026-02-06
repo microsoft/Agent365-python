@@ -1,4 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 # pip install opentelemetry-sdk opentelemetry-api requests
 
@@ -9,7 +10,8 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, final
+from urllib.parse import urlparse
 
 import requests
 from microsoft_agents_a365.runtime.power_platform_api_discovery import PowerPlatformApiDiscovery
@@ -17,7 +19,13 @@ from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
 
+from ..constants import (
+    GEN_AI_INPUT_MESSAGES_KEY,
+    GEN_AI_OPERATION_NAME_KEY,
+    INVOKE_AGENT_OPERATION_NAME,
+)
 from .utils import (
+    get_validated_domain_override,
     hex_span_id,
     hex_trace_id,
     kind_name,
@@ -36,7 +44,8 @@ DEFAULT_MAX_RETRIES = 3
 logger = logging.getLogger(__name__)
 
 
-class Agent365Exporter(SpanExporter):
+@final
+class _Agent365Exporter(SpanExporter):
     """
     Agent 365 span exporter for Agent 365:
       * Partitions spans by (tenantId, agentId)
@@ -50,6 +59,7 @@ class Agent365Exporter(SpanExporter):
         token_resolver: Callable[[str, str], str | None],
         cluster_category: str = "prod",
         use_s2s_endpoint: bool = False,
+        suppress_invoke_agent_input: bool = False,
     ):
         if token_resolver is None:
             raise ValueError("token_resolver must be provided.")
@@ -59,6 +69,9 @@ class Agent365Exporter(SpanExporter):
         self._token_resolver = token_resolver
         self._cluster_category = cluster_category
         self._use_s2s_endpoint = use_s2s_endpoint
+        self._suppress_invoke_agent_input = suppress_invoke_agent_input
+        # Read domain override once at initialization
+        self._domain_override = get_validated_domain_override()
 
     # ------------- SpanExporter API -----------------
 
@@ -85,14 +98,29 @@ class Agent365Exporter(SpanExporter):
                 body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
                 # Resolve endpoint + token
-                discovery = PowerPlatformApiDiscovery(self._cluster_category)
-                endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
+                if self._domain_override:
+                    endpoint = self._domain_override
+                else:
+                    discovery = PowerPlatformApiDiscovery(self._cluster_category)
+                    endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
+
                 endpoint_path = (
                     f"/maven/agent365/service/agents/{agent_id}/traces"
                     if self._use_s2s_endpoint
                     else f"/maven/agent365/agents/{agent_id}/traces"
                 )
-                url = f"https://{endpoint}{endpoint_path}?api-version=1"
+
+                # Construct URL - if endpoint has a scheme (http:// or https://), use it as-is
+                # Otherwise, prepend https://
+                # Note: Check for "://" to distinguish between real protocols and domain:port format
+                # (urlparse treats "example.com:8080" as having scheme="example.com")
+                parsed = urlparse(endpoint)
+                if parsed.scheme and "://" in endpoint:
+                    # Endpoint is a full URL, append path
+                    url = f"{endpoint}{endpoint_path}?api-version=1"
+                else:
+                    # Endpoint is just a domain (possibly with port), prepend https://
+                    url = f"https://{endpoint}{endpoint_path}?api-version=1"
 
                 # Debug: Log endpoint being used
                 logger.info(
@@ -140,6 +168,8 @@ class Agent365Exporter(SpanExporter):
 
     def force_flush(self, timeout_millis: int = 30000) -> bool:
         return True
+
+    # ------------- Helper methods -------------------
 
     # ------------- HTTP helper ----------------------
 
@@ -257,6 +287,20 @@ class Agent365Exporter(SpanExporter):
 
         # attributes
         attrs = dict(sp.attributes or {})
+
+        # Suppress input messages if configured and current span is an InvokeAgent span
+        if self._suppress_invoke_agent_input:
+            # Check if current span is an InvokeAgent span by:
+            # 1. Span name starts with "invoke_agent"
+            # 2. Has attribute gen_ai.operation.name set to INVOKE_AGENT_OPERATION_NAME
+            operation_name = attrs.get(GEN_AI_OPERATION_NAME_KEY)
+            if (
+                sp.name.startswith(INVOKE_AGENT_OPERATION_NAME)
+                and operation_name == INVOKE_AGENT_OPERATION_NAME
+            ):
+                # Remove input messages attribute
+                attrs.pop(GEN_AI_INPUT_MESSAGES_KEY, None)
+
         # events
         events = []
         for ev in sp.events:
