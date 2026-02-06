@@ -14,10 +14,7 @@ from microsoft_agents_a365.observability.core import (
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
-from microsoft_agents_a365.observability.core.constants import (
-    CUSTOM_PARENT_SPAN_ID_KEY,
-    GEN_AI_OUTPUT_MESSAGES_KEY,
-)
+from microsoft_agents_a365.observability.core.constants import GEN_AI_OUTPUT_MESSAGES_KEY
 from microsoft_agents_a365.observability.core.models.response import Response
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from microsoft_agents_a365.observability.core.spans_scopes.output_scope import OutputScope
@@ -223,9 +220,13 @@ class TestOutputScope(unittest.TestCase):
         self.assertIn(self.agent_details.agent_id, span.name)
 
     def test_output_scope_with_parent_id(self):
-        """Test that OutputScope records parent_id when provided."""
+        """Test that OutputScope uses parent_id to link span to parent."""
         response = Response(messages=["Test message with parent"])
-        parent_id = "00-1234567890abcdef1234567890abcdef-abcdefabcdef1234-01"
+        # W3C Trace Context format: "00-{trace_id}-{span_id}-{trace_flags}"
+        # trace_id: 32 hex chars, span_id: 16 hex chars
+        parent_trace_id = "1234567890abcdef1234567890abcdef"
+        parent_span_id = "abcdefabcdef1234"
+        parent_id = f"00-{parent_trace_id}-{parent_span_id}-01"
 
         scope = OutputScope.start(
             self.agent_details, self.tenant_details, response, parent_id=parent_id
@@ -238,18 +239,28 @@ class TestOutputScope(unittest.TestCase):
         self.assertTrue(finished_spans, "Expected at least one span to be created")
 
         span = finished_spans[-1]
-        span_attributes = getattr(span, "attributes", {}) or {}
 
-        # Verify the parent ID is set as a span attribute
-        self.assertIn(
-            CUSTOM_PARENT_SPAN_ID_KEY,
-            span_attributes,
-            "Expected custom parent span ID to be set on span",
+        # Verify the span has the correct parent trace context
+        # The span's trace_id should match the parent's trace_id
+        span_trace_id = f"{span.context.trace_id:032x}"
+        self.assertEqual(
+            span_trace_id,
+            parent_trace_id,
+            "Expected span's trace_id to match parent's trace_id",
         )
-        self.assertEqual(span_attributes[CUSTOM_PARENT_SPAN_ID_KEY], parent_id)
+
+        # The span's parent_span_id should match the parent's span_id
+        span_parent_id = None
+        if span.parent and hasattr(span.parent, "span_id"):
+            span_parent_id = f"{span.parent.span_id:016x}"
+        self.assertEqual(
+            span_parent_id,
+            parent_span_id,
+            "Expected span's parent_span_id to match parent's span_id",
+        )
 
     def test_output_scope_without_parent_id(self):
-        """Test that OutputScope doesn't set parent_id attribute when not provided."""
+        """Test that OutputScope creates a span without forced parent when not provided."""
         response = Response(messages=["Test message without parent"])
 
         scope = OutputScope.start(self.agent_details, self.tenant_details, response)
@@ -261,14 +272,11 @@ class TestOutputScope(unittest.TestCase):
         self.assertTrue(finished_spans, "Expected at least one span to be created")
 
         span = finished_spans[-1]
-        span_attributes = getattr(span, "attributes", {}) or {}
 
-        # Verify the parent ID attribute is NOT set when not provided
-        self.assertNotIn(
-            CUSTOM_PARENT_SPAN_ID_KEY,
-            span_attributes,
-            "Expected custom parent span ID NOT to be set when not provided",
-        )
+        # When no parent_id is provided, the span should either have no parent
+        # or inherit from the current context (which in tests is typically empty)
+        # We just verify the span was created successfully
+        self.assertIsNotNone(span.context.span_id)
 
 
 if __name__ == "__main__":

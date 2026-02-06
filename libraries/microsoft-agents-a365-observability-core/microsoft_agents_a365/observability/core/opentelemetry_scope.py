@@ -10,10 +10,19 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import baggage, context, trace
-from opentelemetry.trace import Span, SpanKind, Status, StatusCode, Tracer, set_span_in_context
+from opentelemetry.trace import (
+    NonRecordingSpan,
+    Span,
+    SpanContext,
+    SpanKind,
+    Status,
+    StatusCode,
+    TraceFlags,
+    Tracer,
+    set_span_in_context,
+)
 
 from .constants import (
-    CUSTOM_PARENT_SPAN_ID_KEY,
     ENABLE_A365_OBSERVABILITY,
     ENABLE_OBSERVABILITY,
     ERROR_TYPE_KEY,
@@ -40,6 +49,70 @@ if TYPE_CHECKING:
 
 # Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
 logger = logging.getLogger(__name__)
+
+
+def _parse_parent_id_to_context(parent_id: str | None) -> context.Context | None:
+    """Parse a W3C trace context parent ID and return a context with the parent span.
+
+    The parent_id format is expected to be W3C Trace Context format:
+    "00-{trace_id}-{span_id}-{trace_flags}"
+    Example: "00-1234567890abcdef1234567890abcdef-abcdefabcdef1234-01"
+
+    Args:
+        parent_id: The W3C Trace Context format parent ID string
+
+    Returns:
+        A context containing the parent span, or None if parent_id is invalid
+    """
+    if not parent_id:
+        return None
+
+    try:
+        # W3C Trace Context format: "00-{trace_id}-{span_id}-{trace_flags}"
+        parts = parent_id.split("-")
+        if len(parts) != 4:
+            logger.warning(f"Invalid parent_id format (expected 4 parts): {parent_id}")
+            return None
+
+        version, trace_id_hex, span_id_hex, trace_flags_hex = parts
+
+        # Validate W3C Trace Context version
+        if version != "00":
+            logger.warning(f"Unsupported W3C Trace Context version: {version}")
+            return None
+
+        # Validate trace_id length (must be 32 hex chars)
+        if len(trace_id_hex) != 32:
+            logger.warning(f"Invalid trace_id length (expected 32 chars): {len(trace_id_hex)}")
+            return None
+
+        # Validate span_id length (must be 16 hex chars)
+        if len(span_id_hex) != 16:
+            logger.warning(f"Invalid span_id length (expected 16 chars): {len(span_id_hex)}")
+            return None
+
+        # Parse the hex values
+        trace_id = int(trace_id_hex, 16)
+        span_id = int(span_id_hex, 16)
+        trace_flags = TraceFlags(int(trace_flags_hex, 16))
+
+        # Create a SpanContext from the parsed values
+        parent_span_context = SpanContext(
+            trace_id=trace_id,
+            span_id=span_id,
+            is_remote=True,
+            trace_flags=trace_flags,
+        )
+
+        # Create a NonRecordingSpan with the parent context
+        parent_span = NonRecordingSpan(parent_span_context)
+
+        # Create a context with the parent span
+        return set_span_in_context(parent_span)
+
+    except (ValueError, IndexError) as e:
+        logger.warning(f"Failed to parse parent_id '{parent_id}': {e}")
+        return None
 
 
 class OpenTelemetryScope:
@@ -106,12 +179,13 @@ class OpenTelemetryScope:
             elif kind.lower() == "consumer":
                 activity_kind = SpanKind.CONSUMER
 
-            # Get current context for parent relationship
-            current_context = context.get_current()
+            # Get context for parent relationship
+            # If parent_id is provided, parse it and use it as the parent context
+            # Otherwise, use the current context
+            parent_context = _parse_parent_id_to_context(parent_id)
+            span_context = parent_context if parent_context else context.get_current()
 
-            self._span = tracer.start_span(
-                activity_name, kind=activity_kind, context=current_context
-            )
+            self._span = tracer.start_span(activity_name, kind=activity_kind, context=span_context)
 
             # Log span creation
             if self._span:
@@ -148,9 +222,6 @@ class OpenTelemetryScope:
                 # Set tenant details if provided
                 if tenant_details:
                     self.set_tag_maybe(TENANT_ID_KEY, str(tenant_details.tenant_id))
-
-                # Set parent ID if provided
-                self.set_tag_maybe(CUSTOM_PARENT_SPAN_ID_KEY, parent_id)
 
     def record_error(self, exception: Exception) -> None:
         """Record an error in the span.
