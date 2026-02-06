@@ -32,7 +32,7 @@ uv pip install pytest pytest-asyncio pytest-mock pytest-cov pytest-html wrapt
 uv pip install -e libraries/microsoft-agents-a365-runtime -e libraries/microsoft-agents-a365-notifications -e libraries/microsoft-agents-a365-observability-core -e libraries/microsoft-agents-a365-tooling
 
 # Framework extension libraries
-uv pip install -e libraries/microsoft-agents-a365-observability-extensions-langchain -e libraries/microsoft-agents-a365-observability-extensions-openai -e libraries/microsoft-agents-a365-observability-extensions-semantickernel -e libraries/microsoft-agents-a365-observability-extensions-agentframework -e libraries/microsoft-agents-a365-tooling-extensions-agentframework -e libraries/microsoft-agents-a365-tooling-extensions-azureaifoundry -e libraries/microsoft-agents-a365-tooling-extensions-openai -e libraries/microsoft-agents-a365-tooling-extensions-semantickernel
+uv pip install -e libraries/microsoft-agents-a365-observability-extensions-langchain -e libraries/microsoft-agents-a365-observability-extensions-openai -e libraries/microsoft-agents-a365-observability-extensions-semantickernel -e libraries/microsoft-agents-a365-observability-extensions-agentframework -e libraries/microsoft-agents-a365-tooling-extensions-agentframework -e libraries/microsoft-agents-a365-tooling-extensions-azureaifoundry -e libraries/microsoft-agents-a365-tooling-extensions-openai -e libraries/microsoft-agents-a365-tooling-extensions-semantickernel -e libraries/microsoft-agents-a365-tooling-extensions-googleadk
 ```
 
 ---
