@@ -116,9 +116,6 @@ class TestAddToolServersToAgent:
             patch(
                 "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.get_mcp_platform_authentication_scope"
             ) as mock_get_scope,
-            patch(
-                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Agent"
-            ) as mock_agent_class,
         ):
             # Setup mocks
             mock_get_scope.return_value = ["https://test.scope/.default"]
@@ -128,8 +125,6 @@ class TestAddToolServersToAgent:
             mock_config_service = AsyncMock()
             mock_config_service.list_tool_servers = AsyncMock(return_value=[])
             mock_config_service_class.return_value = mock_config_service
-
-            mock_agent_class.return_value = mock_agent
 
             from microsoft_agents_a365.tooling.extensions.googleadk import (
                 McpToolRegistrationService,
@@ -161,9 +156,6 @@ class TestAddToolServersToAgent:
             patch(
                 "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
             ) as mock_utility,
-            patch(
-                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Agent"
-            ) as mock_agent_class,
         ):
             # Setup mocks
             mock_utility.resolve_agent_identity.return_value = "agent-123"
@@ -172,8 +164,6 @@ class TestAddToolServersToAgent:
             mock_config_service = AsyncMock()
             mock_config_service.list_tool_servers = AsyncMock(return_value=[])
             mock_config_service_class.return_value = mock_config_service
-
-            mock_agent_class.return_value = mock_agent
 
             from microsoft_agents_a365.tooling.extensions.googleadk import (
                 McpToolRegistrationService,
