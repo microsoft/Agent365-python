@@ -141,14 +141,14 @@ class TestOutputScope(unittest.TestCase):
         self.assertIn("Third response", output_value)
 
     def test_record_output_messages_updates_span(self):
-        """Test that record_output_messages updates the span with new messages."""
+        """Test that record_output_messages appends messages to the span."""
         response = Response(messages=["Initial message"])
 
         scope = OutputScope.start(self.agent_details, self.tenant_details, response)
 
         if scope is not None:
-            # Record updated messages
-            scope.record_output_messages(["Updated message 1", "Updated message 2"])
+            # Record additional messages (should append, not replace)
+            scope.record_output_messages(["Appended message 1", "Appended message 2"])
             scope.dispose()
 
         finished_spans = self.span_exporter.get_finished_spans()
@@ -163,10 +163,37 @@ class TestOutputScope(unittest.TestCase):
             "Expected output messages key to be set on span",
         )
 
-        # The span should have the updated messages
+        # The span should have all messages (initial + appended)
         output_value = span_attributes[GEN_AI_OUTPUT_MESSAGES_KEY]
-        self.assertIn("Updated message 1", output_value)
-        self.assertIn("Updated message 2", output_value)
+        self.assertIn("Initial message", output_value)
+        self.assertIn("Appended message 1", output_value)
+        self.assertIn("Appended message 2", output_value)
+
+    def test_record_output_messages_multiple_appends(self):
+        """Test that multiple calls to record_output_messages accumulate messages."""
+        response = Response(messages=["First message"])
+
+        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
+
+        if scope is not None:
+            # First append
+            scope.record_output_messages(["Second message"])
+            # Second append
+            scope.record_output_messages(["Third message", "Fourth message"])
+            scope.dispose()
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+
+        span = finished_spans[-1]
+        span_attributes = getattr(span, "attributes", {}) or {}
+
+        output_value = span_attributes[GEN_AI_OUTPUT_MESSAGES_KEY]
+        # All four messages should be present
+        self.assertIn("First message", output_value)
+        self.assertIn("Second message", output_value)
+        self.assertIn("Third message", output_value)
+        self.assertIn("Fourth message", output_value)
 
     def test_output_scope_context_manager(self):
         """Test that OutputScope works as a context manager."""

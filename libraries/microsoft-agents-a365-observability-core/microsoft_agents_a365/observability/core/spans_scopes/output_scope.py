@@ -60,13 +60,19 @@ class OutputScope(OpenTelemetryScope):
             parent_id=parent_id,
         )
 
+        # Initialize accumulated messages list
+        self._output_messages: list[str] = list(response.messages)
+
         # Set response messages
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(response.messages))
+        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(self._output_messages))
 
     def record_output_messages(self, messages: list[str]) -> None:
         """Records the output messages for telemetry tracking.
 
+        Appends the provided messages to the accumulated output messages list.
+
         Args:
-            messages: List of output messages
+            messages: List of output messages to append
         """
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(messages))
+        self._output_messages.extend(messages)
+        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(self._output_messages))
