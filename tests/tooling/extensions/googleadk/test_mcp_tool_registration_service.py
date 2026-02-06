@@ -24,7 +24,7 @@ class TestMcpToolRegistrationServiceInit:
             service = McpToolRegistrationService()
 
             assert service._logger is not None
-            assert service.config_service is not None
+            assert service._mcp_server_configuration_service is not None
             assert service._connected_servers == []
 
     @pytest.mark.unit
