@@ -227,8 +227,50 @@ Framework-specific adapters for MCP tool integration:
 |---------|---------|------------|
 | `extensions-agentframework` | Adapt MCP tools to Microsoft Agents SDK | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-agentframework/docs/design.md) |
 | `extensions-azureaifoundry` | Azure AI Foundry tool integration | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-azureaifoundry/docs/design.md) |
-| `extensions-openai` | OpenAI function calling integration | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-openai/docs/design.md) |
+| `extensions-openai` | OpenAI function calling integration and chat history | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-openai/docs/design.md) |
 | `extensions-semantickernel` | Semantic Kernel plugin integration | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-semantickernel/docs/design.md) |
+
+#### OpenAI Extension: Chat History API
+
+The OpenAI tooling extension provides methods to send chat history to the MCP platform for real-time threat protection:
+
+**Key Classes:**
+
+| Class | Purpose |
+|-------|---------|
+| `McpToolRegistrationService` | MCP tool registration and chat history management |
+
+**Methods:**
+
+| Method | Purpose |
+|--------|---------|
+| `send_chat_history(turn_context, session, limit, options)` | Extract messages from OpenAI Session and send to MCP platform |
+| `send_chat_history_messages(turn_context, messages, options)` | Send a list of OpenAI TResponseInputItem messages to MCP platform |
+
+**Usage Example:**
+
+```python
+from agents import Agent, Runner
+from microsoft_agents_a365.tooling.extensions.openai import McpToolRegistrationService
+
+service = McpToolRegistrationService()
+agent = Agent(name="my-agent", model="gpt-4")
+
+# In your agent handler:
+async with Runner.run(agent, messages) as result:
+    session = result.session
+
+    # Option 1: Send from Session object
+    op_result = await service.send_chat_history(turn_context, session)
+
+    # Option 2: Send from message list
+    op_result = await service.send_chat_history_messages(turn_context, messages)
+
+    if op_result.succeeded:
+        print("Chat history sent successfully")
+```
+
+The methods convert OpenAI message types to `ChatHistoryMessage` format and delegate to the core `McpToolServerConfigurationService.send_chat_history()` method.
 
 ### 6. Notifications (`microsoft-agents-a365-notifications`)
 

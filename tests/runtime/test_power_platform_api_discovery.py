@@ -4,7 +4,6 @@
 """Unit tests for PowerPlatformApiDiscovery class."""
 
 import pytest
-
 from microsoft_agents_a365.runtime.power_platform_api_discovery import (
     PowerPlatformApiDiscovery,
 )

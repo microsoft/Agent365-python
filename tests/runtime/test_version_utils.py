@@ -4,8 +4,8 @@
 """Unit tests for version_utils module."""
 
 import warnings
-import pytest
 
+import pytest
 from microsoft_agents_a365.runtime.version_utils import build_version
 
 

@@ -1,5 +1,5 @@
-# Copyright (c) Microsoft. All rights reserved.
-
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 
 import unittest
 from unittest.mock import MagicMock

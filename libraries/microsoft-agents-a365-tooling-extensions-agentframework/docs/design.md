@@ -76,6 +76,87 @@ mcp_tool = MCPStreamableHTTPTool(
 )
 ```
 
+### Chat History API
+
+The service provides methods to send chat history to the MCP platform for real-time threat protection analysis. This enables security scanning of conversation content.
+
+#### send_chat_history_messages
+
+The primary method for sending chat history. Converts Agent Framework `ChatMessage` objects to the `ChatHistoryMessage` format expected by the MCP platform.
+
+```python
+from agent_framework import ChatMessage, Role
+
+service = McpToolRegistrationService()
+
+# Create messages
+messages = [
+    ChatMessage(role=Role.USER, text="Hello, how are you?"),
+    ChatMessage(role=Role.ASSISTANT, text="I'm doing well, thank you!"),
+]
+
+# Send to MCP platform for threat protection
+result = await service.send_chat_history_messages(messages, turn_context)
+
+if result.succeeded:
+    print("Chat history sent successfully")
+else:
+    print(f"Failed: {result.errors}")
+```
+
+#### send_chat_history_from_store
+
+A convenience method that extracts messages from a `ChatMessageStoreProtocol` and delegates to `send_chat_history_messages`.
+
+```python
+# Using a ChatMessageStore directly
+result = await service.send_chat_history_from_store(
+    thread.chat_message_store,
+    turn_context
+)
+```
+
+#### Chat History API Parameters
+
+| Method | Parameter | Type | Description |
+|--------|-----------|------|-------------|
+| `send_chat_history_messages` | `chat_messages` | `Sequence[ChatMessage]` | Messages to send |
+| | `turn_context` | `TurnContext` | Conversation context |
+| | `tool_options` | `ToolOptions \| None` | Optional configuration |
+| `send_chat_history_from_store` | `chat_message_store` | `ChatMessageStoreProtocol` | Message store |
+| | `turn_context` | `TurnContext` | Conversation context |
+| | `tool_options` | `ToolOptions \| None` | Optional configuration |
+
+#### Chat History Integration Flow
+
+```
+Agent Framework ChatMessage objects
+       │
+       ▼
+McpToolRegistrationService.send_chat_history_messages()
+       │
+       ├── Convert ChatMessage → ChatHistoryMessage
+       │   ├── Extract role via .value property
+       │   ├── Generate UUID if message_id is None
+       │   ├── Filter out empty/whitespace content
+       │   └── Filter out None roles
+       │
+       ▼
+McpToolServerConfigurationService.send_chat_history()
+       │
+       ▼
+MCP Platform Real-Time Threat Protection Endpoint
+```
+
+#### Message Filtering Behavior
+
+The conversion process filters out invalid messages:
+- Messages with `None` role are skipped (logged at WARNING level)
+- Messages with empty or whitespace-only content are skipped
+- If all messages are filtered out, the method returns success without calling the backend
+
+This ensures only valid, meaningful messages are sent for threat analysis.
+
 ## File Structure
 
 ```

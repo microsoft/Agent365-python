@@ -23,18 +23,52 @@ members = [
     "microsoft-agents-a365-tooling-extensions-openai",
     "microsoft-agents-a365-tooling-extensions-semantickernel",
 ]
-
-[manifest.dependency-groups]
-dev = [
+constraints = [
     { name = "agent-framework-azure-ai", specifier = ">=1.0.0b251114" },
+    { name = "aiohttp", specifier = ">=3.8.0" },
+    { name = "asyncio-throttle", specifier = ">=1.0.0" },
+    { name = "azure-ai-agents", specifier = ">=1.0.0b251001" },
+    { name = "azure-ai-projects", specifier = ">=2.0.0b1" },
     { name = "azure-identity", specifier = ">=1.12.0" },
+    { name = "azure-monitor-ingestion", specifier = ">=1.0.0" },
+    { name = "azure-monitor-opentelemetry-exporter", specifier = ">=1.0.0b39" },
+    { name = "black", specifier = ">=23.0.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "langchain", specifier = ">=0.1.0" },
+    { name = "langchain-core", specifier = ">=0.1.0" },
+    { name = "microsoft-agents-activity", specifier = ">=0.4.0" },
+    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0" },
+    { name = "mypy", specifier = ">=1.0.0" },
     { name = "openai", specifier = ">=1.0.0" },
     { name = "openai-agents", specifier = ">=0.2.6" },
+    { name = "opentelemetry-api", specifier = ">=1.36.0" },
+    { name = "opentelemetry-exporter-otlp", specifier = ">=1.36.0" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.36.0" },
+    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "pytest", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.21.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "pytest-mock", specifier = ">=3.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "ruff", specifier = ">=0.1.0" },
+    { name = "semantic-kernel", specifier = ">=1.0.0" },
+    { name = "typing-extensions", specifier = ">=4.0.0" },
+]
+
+[manifest.dependency-groups]
+dev = [
+    { name = "agent-framework-azure-ai" },
+    { name = "azure-identity" },
+    { name = "openai" },
+    { name = "openai-agents" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-mock" },
+    { name = "python-dotenv" },
+    { name = "ruff" },
 ]
 
 [[package]]
@@ -1550,17 +1584,17 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "microsoft-agents-activity", specifier = ">=0.4.0" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "typing-extensions", specifier = ">=4.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "microsoft-agents-activity" },
+    { name = "microsoft-agents-hosting-core" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pydantic" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "typing-extensions" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1599,23 +1633,23 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "azure-identity", marker = "extra == 'azure'", specifier = ">=1.12.0" },
-    { name = "azure-monitor-ingestion", marker = "extra == 'azure'", specifier = ">=1.0.0" },
-    { name = "azure-monitor-opentelemetry-exporter", marker = "extra == 'azure'", specifier = ">=1.0.0b39" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "azure-identity", marker = "extra == 'azure'" },
+    { name = "azure-monitor-ingestion", marker = "extra == 'azure'" },
+    { name = "azure-monitor-opentelemetry-exporter", marker = "extra == 'azure'" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-runtime", editable = "libraries/microsoft-agents-a365-runtime" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-exporter-otlp", specifier = ">=1.36.0" },
-    { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'jaeger'", specifier = ">=1.36.0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "typing-extensions", specifier = ">=4.0.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'jaeger'" },
+    { name = "opentelemetry-sdk" },
+    { name = "pydantic" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "typing-extensions" },
 ]
 provides-extras = ["azure", "jaeger", "dev", "test"]
 
@@ -1644,17 +1678,17 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-sdk" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1685,19 +1719,19 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "langchain", specifier = ">=0.1.0" },
-    { name = "langchain-core", specifier = ">=0.1.0" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "langchain" },
+    { name = "langchain-core" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-sdk" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1727,18 +1761,18 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "openai-agents", specifier = ">=0.2.6" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "openai-agents" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-sdk" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1768,18 +1802,18 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
-    { name = "opentelemetry-instrumentation", specifier = ">=0.47b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.36.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "semantic-kernel", specifier = ">=1.0.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-sdk" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "semantic-kernel" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1795,8 +1829,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
-    { name = "opentelemetry-api", specifier = ">=1.36.0" },
+    { name = "microsoft-agents-hosting-core" },
+    { name = "opentelemetry-api" },
 ]
 
 [[package]]
@@ -1821,14 +1855,14 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pyjwt" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1852,14 +1886,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "typing-extensions", specifier = ">=4.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "microsoft-agents-hosting-core" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pydantic" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "typing-extensions" },
 ]
 provides-extras = ["dev"]
 
@@ -1869,6 +1903,7 @@ source = { editable = "libraries/microsoft-agents-a365-tooling-extensions-agentf
 dependencies = [
     { name = "agent-framework-azure-ai" },
     { name = "azure-identity" },
+    { name = "httpx" },
     { name = "microsoft-agents-a365-tooling" },
     { name = "microsoft-agents-hosting-core" },
     { name = "typing-extensions" },
@@ -1889,18 +1924,19 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-framework-azure-ai", specifier = ">=1.0.0b251114" },
-    { name = "azure-identity", specifier = ">=1.12.0" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "agent-framework-azure-ai" },
+    { name = "azure-identity" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "httpx" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
-    { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0,<0.6.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "typing-extensions", specifier = ">=4.0.0" },
+    { name = "microsoft-agents-hosting-core" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "typing-extensions" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1929,17 +1965,17 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "azure-ai-agents", specifier = ">=1.0.0b251001" },
-    { name = "azure-ai-projects", specifier = ">=2.0.0b1" },
-    { name = "azure-identity", specifier = ">=1.12.0" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "azure-ai-agents" },
+    { name = "azure-ai-projects" },
+    { name = "azure-identity" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -1968,15 +2004,15 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "asyncio-throttle" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
     { name = "openai-agents" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
 
@@ -2004,34 +2040,34 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", specifier = ">=3.8.0" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "aiohttp" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "semantic-kernel", specifier = ">=1.0.0" },
+    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "semantic-kernel" },
 ]
 provides-extras = ["dev", "test"]
 
 [[package]]
 name = "microsoft-agents-activity"
-version = "0.5.1"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/87/96/4416c5b3f13309d7503f3db3c2bfc321824366b68a240ed71e8145634c3d/microsoft_agents_activity-0.5.1.tar.gz", hash = "sha256:07be29aca58ea9d8279155cfa4c00261e3a18bdf718c8164c1d87e3e57ad527b", size = 55830, upload-time = "2025-10-28T19:27:03.938Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/e9/7f8086719f28815baca72b2f2600ce1e62b7cd53826bb406c52f28e81998/microsoft_agents_activity-0.7.0.tar.gz", hash = "sha256:77eeb6ffa9ee9e6237e1dbf5e962ea641ff60f20b0966e68e903ffbc10ebd41d", size = 60673, upload-time = "2026-01-21T18:05:24.601Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/04/47/333591538c134b5b4637ffc8ab4f5d0bf1c1b6310e3cfb5adc4002aa5940/microsoft_agents_activity-0.5.1-py3-none-any.whl", hash = "sha256:07562064125f2bc8066c2c8e9a60ff6f038f7413ccd01a9d9b0aa426e47467cd", size = 127817, upload-time = "2025-10-28T19:27:12.382Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/f3/64dc3bf13e46c6a09cc1983f66da2e42bf726586fe0f77f915977a6be7d8/microsoft_agents_activity-0.7.0-py3-none-any.whl", hash = "sha256:8d30a25dfd0f491b834be52b4a21ff90ab3b9360ec7e50770c050f1d4a39e5ce", size = 132592, upload-time = "2026-01-21T18:05:33.533Z" },
 ]
 
 [[package]]
 name = "microsoft-agents-hosting-core"
-version = "0.5.1"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "azure-core" },
@@ -2040,9 +2076,9 @@ dependencies = [
     { name = "pyjwt" },
     { name = "python-dotenv" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f2/0b/71bc8f2fd673de9f8a0d7e9bef30dd15892d8539c4557129a5aead2c5882/microsoft_agents_hosting_core-0.5.1.tar.gz", hash = "sha256:d9b64095bf7624d4fc9f1d48cea5a3c66cc2dee9e1c3fb6ea3e9b6dfc03ace8f", size = 81277, upload-time = "2025-10-28T19:27:08.623Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/da/26d461cb222ab41f38a3c72ca43900a65b8e8b6b71d6d1207fad1edc3e7b/microsoft_agents_hosting_core-0.7.0.tar.gz", hash = "sha256:31448279c47e39d63edc347c1d3b4de8043aa1b4c51a1f01d40d7d451221b202", size = 90446, upload-time = "2026-01-21T18:05:29.28Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/2c/bcb8d66ebfe59cf6093c5eac1fc19a7797b5b80ce3ceaec07f2954a21493/microsoft_agents_hosting_core-0.5.1-py3-none-any.whl", hash = "sha256:10a1f394d8e444f6e2e74ab935f5c0a04ebfa43d136be4658fbaccab1321c37e", size = 120190, upload-time = "2025-10-28T19:27:16.263Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/e4/8d9e2e3f3a3106d0c80141631385206a6946f0b414cf863db851b98533e7/microsoft_agents_hosting_core-0.7.0-py3-none-any.whl", hash = "sha256:d03549fff01f38c1a96da4f79375c33378205ee9b5c6e01b87ba576f59b7887f", size = 133749, upload-time = "2026-01-21T18:05:38.002Z" },
 ]
 
 [[package]]
@@ -3042,16 +3078,17 @@ wheels = [
 
 [[package]]
 name = "protobuf"
-version = "5.29.5"
+version = "6.33.5"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/43/29/d09e70352e4e88c9c7a198d5645d7277811448d76c23b00345670f7c8a38/protobuf-5.29.5.tar.gz", hash = "sha256:bc1463bafd4b0929216c35f437a8e28731a2b7fe3d98bb77a600efced5a15c84", size = 425226, upload-time = "2025-05-28T23:51:59.82Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/25/7c72c307aafc96fa87062aa6291d9f7c94836e43214d43722e86037aac02/protobuf-6.33.5.tar.gz", hash = "sha256:6ddcac2a081f8b7b9642c09406bc6a4290128fce5f471cddd165960bb9119e5c", size = 444465, upload-time = "2026-01-29T21:51:33.494Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5f/11/6e40e9fc5bba02988a214c07cf324595789ca7820160bfd1f8be96e48539/protobuf-5.29.5-cp310-abi3-win32.whl", hash = "sha256:3f1c6468a2cfd102ff4703976138844f78ebd1fb45f49011afc5139e9e283079", size = 422963, upload-time = "2025-05-28T23:51:41.204Z" },
-    { url = "https://files.pythonhosted.org/packages/81/7f/73cefb093e1a2a7c3ffd839e6f9fcafb7a427d300c7f8aef9c64405d8ac6/protobuf-5.29.5-cp310-abi3-win_amd64.whl", hash = "sha256:3f76e3a3675b4a4d867b52e4a5f5b78a2ef9565549d4037e06cf7b0942b1d3fc", size = 434818, upload-time = "2025-05-28T23:51:44.297Z" },
-    { url = "https://files.pythonhosted.org/packages/dd/73/10e1661c21f139f2c6ad9b23040ff36fee624310dc28fba20d33fdae124c/protobuf-5.29.5-cp38-abi3-macosx_10_9_universal2.whl", hash = "sha256:e38c5add5a311f2a6eb0340716ef9b039c1dfa428b28f25a7838ac329204a671", size = 418091, upload-time = "2025-05-28T23:51:45.907Z" },
-    { url = "https://files.pythonhosted.org/packages/6c/04/98f6f8cf5b07ab1294c13f34b4e69b3722bb609c5b701d6c169828f9f8aa/protobuf-5.29.5-cp38-abi3-manylinux2014_aarch64.whl", hash = "sha256:fa18533a299d7ab6c55a238bf8629311439995f2e7eca5caaff08663606e9015", size = 319824, upload-time = "2025-05-28T23:51:47.545Z" },
-    { url = "https://files.pythonhosted.org/packages/85/e4/07c80521879c2d15f321465ac24c70efe2381378c00bf5e56a0f4fbac8cd/protobuf-5.29.5-cp38-abi3-manylinux2014_x86_64.whl", hash = "sha256:63848923da3325e1bf7e9003d680ce6e14b07e55d0473253a690c3a8b8fd6e61", size = 319942, upload-time = "2025-05-28T23:51:49.11Z" },
-    { url = "https://files.pythonhosted.org/packages/7e/cc/7e77861000a0691aeea8f4566e5d3aa716f2b1dece4a24439437e41d3d25/protobuf-5.29.5-py3-none-any.whl", hash = "sha256:6cf42630262c59b2d8de33954443d94b746c952b01434fc58a417fdbd2e84bd5", size = 172823, upload-time = "2025-05-28T23:51:58.157Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/79/af92d0a8369732b027e6d6084251dd8e782c685c72da161bd4a2e00fbabb/protobuf-6.33.5-cp310-abi3-win32.whl", hash = "sha256:d71b040839446bac0f4d162e758bea99c8251161dae9d0983a3b88dee345153b", size = 425769, upload-time = "2026-01-29T21:51:21.751Z" },
+    { url = "https://files.pythonhosted.org/packages/55/75/bb9bc917d10e9ee13dee8607eb9ab963b7cf8be607c46e7862c748aa2af7/protobuf-6.33.5-cp310-abi3-win_amd64.whl", hash = "sha256:3093804752167bcab3998bec9f1048baae6e29505adaf1afd14a37bddede533c", size = 437118, upload-time = "2026-01-29T21:51:24.022Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/6b/e48dfc1191bc5b52950246275bf4089773e91cb5ba3592621723cdddca62/protobuf-6.33.5-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:a5cb85982d95d906df1e2210e58f8e4f1e3cdc088e52c921a041f9c9a0386de5", size = 427766, upload-time = "2026-01-29T21:51:25.413Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/b1/c79468184310de09d75095ed1314b839eb2f72df71097db9d1404a1b2717/protobuf-6.33.5-cp39-abi3-manylinux2014_aarch64.whl", hash = "sha256:9b71e0281f36f179d00cbcb119cb19dec4d14a81393e5ea220f64b286173e190", size = 324638, upload-time = "2026-01-29T21:51:26.423Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/f5/65d838092fd01c44d16037953fd4c2cc851e783de9b8f02b27ec4ffd906f/protobuf-6.33.5-cp39-abi3-manylinux2014_s390x.whl", hash = "sha256:8afa18e1d6d20af15b417e728e9f60f3aa108ee76f23c3b2c07a2c3b546d3afd", size = 339411, upload-time = "2026-01-29T21:51:27.446Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/53/a9443aa3ca9ba8724fdfa02dd1887c1bcd8e89556b715cfbacca6b63dbec/protobuf-6.33.5-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:cbf16ba3350fb7b889fca858fb215967792dc125b35c7976ca4818bee3521cf0", size = 323465, upload-time = "2026-01-29T21:51:28.925Z" },
+    { url = "https://files.pythonhosted.org/packages/57/bf/2086963c69bdac3d7cff1cc7ff79b8ce5ea0bec6797a017e1be338a46248/protobuf-6.33.5-py3-none-any.whl", hash = "sha256:69915a973dd0f60f31a08b8318b73eab2bd6a392c79184b3612226b0a3f8ec02", size = 170687, upload-time = "2026-01-29T21:51:32.557Z" },
 ]
 
 [[package]]
@@ -3320,11 +3357,11 @@ wheels = [
 
 [[package]]
 name = "python-multipart"
-version = "0.0.20"
+version = "0.0.22"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f3/87/f44d7c9f274c7ee665a29b885ec97089ec5dc034c7f3fafa03da9e39a09e/python_multipart-0.0.20.tar.gz", hash = "sha256:8dd0cab45b8e23064ae09147625994d090fa46f5b0d1e13af944c331a7fa9d13", size = 37158, upload-time = "2024-12-16T19:45:46.972Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/01/979e98d542a70714b0cb2b6728ed0b7c46792b695e3eaec3e20711271ca3/python_multipart-0.0.22.tar.gz", hash = "sha256:7340bef99a7e0032613f56dc36027b959fd3b30a787ed62d310e951f7c3a3a58", size = 37612, upload-time = "2026-01-25T10:15:56.219Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/45/58/38b5afbc1a800eeea951b9285d3912613f2603bdf897a4ab0f4bd7f405fc/python_multipart-0.0.20-py3-none-any.whl", hash = "sha256:8a62d3a8335e06589fe01f2a3e178cdcc632f3fbe0d492ad9ee0ec35aab1f104", size = 24546, upload-time = "2024-12-16T19:45:44.423Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/d0/397f9626e711ff749a95d96b7af99b9c566a9bb5129b8e4c10fc4d100304/python_multipart-0.0.22-py3-none-any.whl", hash = "sha256:2b2cd894c83d21bf49d702499531c7bafd057d730c201782048f7945d82de155", size = 24579, upload-time = "2026-01-25T10:15:54.811Z" },
 ]
 
 [[package]]

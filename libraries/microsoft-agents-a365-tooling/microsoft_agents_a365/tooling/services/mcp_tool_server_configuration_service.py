@@ -352,23 +352,73 @@ class McpToolServerConfigurationService:
 
         return mcp_servers
 
-    def _prepare_gateway_headers(self, auth_token: str, options: ToolOptions) -> Dict[str, str]:
+    def _prepare_gateway_headers(
+        self, auth_token: str, options: ToolOptions, turn_context: Optional[TurnContext] = None
+    ) -> Dict[str, str]:
         """
         Prepares headers for tooling gateway requests.
 
         Args:
             auth_token: Authentication token.
             options: ToolOptions instance containing optional parameters.
+            turn_context: Optional TurnContext for extracting agent blueprint ID for request headers.
 
         Returns:
             Dictionary of HTTP headers.
         """
-        return {
+        headers: Dict[str, str] = {
             Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
             Constants.Headers.USER_AGENT: RuntimeUtility.get_user_agent_header(
                 options.orchestrator_name
             ),
         }
+
+        # Add x-ms-agentid header with priority fallback
+        agent_id = self._resolve_agent_id_for_header(auth_token, turn_context)
+        if agent_id:
+            headers[Constants.Headers.AGENT_ID] = agent_id
+
+        return headers
+
+    def _resolve_agent_id_for_header(
+        self, auth_token: str, turn_context: Optional[TurnContext] = None
+    ) -> Optional[str]:
+        """
+        Resolves the best available agent identifier for the x-ms-agentid header.
+        Priority: TurnContext.agenticAppBlueprintId > token claims (xms_par_app_azp > appid > azp)
+                  > application name
+
+        Note: This differs from RuntimeUtility.resolve_agent_identity() which resolves the agenticAppId
+        for URL construction. This method resolves the identifier specifically for the x-ms-agentid header.
+
+        Args:
+            auth_token: The authentication token to extract claims from.
+            turn_context: Optional TurnContext to extract agent blueprint ID from.
+
+        Returns:
+            Agent ID string or None if not available.
+        """
+        # Priority 1: Agent Blueprint ID from TurnContext
+        # The 'from_' property may include agentic_app_blueprint_id when the request originates
+        # from an agentic app
+        try:
+            if turn_context and turn_context.activity and turn_context.activity.from_:
+                blueprint_id = getattr(
+                    turn_context.activity.from_, "agentic_app_blueprint_id", None
+                )
+                if blueprint_id:
+                    return blueprint_id
+        except (AttributeError, TypeError):
+            pass
+
+        # Priority 2 & 3: Agent ID from token (xms_par_app_azp > appid > azp)
+        # Single decode, checks claims in priority order
+        agent_id = RuntimeUtility.get_agent_id_from_token(auth_token)
+        if agent_id:
+            return agent_id
+
+        # Priority 4: Application name from AGENT365_APPLICATION_NAME env or pyproject.toml
+        return RuntimeUtility.get_application_name()
 
     async def _parse_gateway_response(
         self, response: aiohttp.ClientResponse
@@ -412,16 +462,26 @@ class McpToolServerConfigurationService:
             MCPServerConfig object or None if parsing fails.
         """
         try:
-            name = self._extract_server_name(server_element)
-            server_name = self._extract_server_unique_name(server_element)
+            mcp_server_name = self._extract_server_name(server_element)
+            mcp_server_unique_name = self._extract_server_unique_name(server_element)
 
-            if not self._validate_server_strings(name, server_name):
+            if not self._validate_server_strings(mcp_server_name, mcp_server_unique_name):
                 return None
 
-            # Construct full URL using environment utilities
-            full_url = build_mcp_server_url(server_name)
+            # Check if a URL is provided
+            endpoint = self._extract_server_url(server_element)
 
-            return MCPServerConfig(mcp_server_name=name, mcp_server_unique_name=full_url)
+            # Use mcp_server_name if available, otherwise fall back to mcp_server_unique_name for URL construction
+            server_name = mcp_server_name or mcp_server_unique_name
+
+            # Determine the final URL: use custom URL if provided, otherwise construct it
+            final_url = endpoint if endpoint else build_mcp_server_url(server_name)
+
+            return MCPServerConfig(
+                mcp_server_name=mcp_server_name,
+                mcp_server_unique_name=mcp_server_unique_name,
+                url=final_url,
+            )
 
         except Exception:
             return None
@@ -439,13 +499,26 @@ class McpToolServerConfigurationService:
             MCPServerConfig object or None if parsing fails.
         """
         try:
-            name = self._extract_server_name(server_element)
-            endpoint = self._extract_server_unique_name(server_element)
+            mcp_server_name = self._extract_server_name(server_element)
+            mcp_server_unique_name = self._extract_server_unique_name(server_element)
 
-            if not self._validate_server_strings(name, endpoint):
+            if not self._validate_server_strings(mcp_server_name, mcp_server_unique_name):
                 return None
 
-            return MCPServerConfig(mcp_server_name=name, mcp_server_unique_name=endpoint)
+            # Check if a URL is provided by the gateway
+            endpoint = self._extract_server_url(server_element)
+
+            # Use mcp_server_name if available, otherwise fall back to mcp_server_unique_name for URL construction
+            server_name = mcp_server_name or mcp_server_unique_name
+
+            # Determine the final URL: use custom URL if provided, otherwise construct it
+            final_url = endpoint if endpoint else build_mcp_server_url(server_name)
+
+            return MCPServerConfig(
+                mcp_server_name=mcp_server_name,
+                mcp_server_unique_name=mcp_server_unique_name,
+                url=final_url,
+            )
 
         except Exception:
             return None
@@ -500,6 +573,21 @@ class McpToolServerConfigurationService:
             return server_element["mcpServerUniqueName"]
         return None
 
+    def _extract_server_url(self, server_element: Dict[str, Any]) -> Optional[str]:
+        """
+        Extracts custom server URL from configuration element.
+
+        Args:
+            server_element: Configuration dictionary.
+
+        Returns:
+            Server URL string or None.
+        """
+        # Check for 'url' field in both manifest and gateway responses
+        if "url" in server_element and isinstance(server_element["url"], str):
+            return server_element["url"]
+        return None
+
     def _validate_server_strings(self, name: Optional[str], unique_name: Optional[str]) -> bool:
         """
         Validates that server name and unique name are valid strings.
@@ -531,7 +619,8 @@ class McpToolServerConfigurationService:
                           Must have a valid activity with conversation.id, activity.id, and
                           activity.text.
             chat_history_messages: List of ChatHistoryMessage objects representing the chat
-                                   history. Must be non-empty.
+                                   history. May be empty - an empty list will still send a
+                                   request to the MCP platform with empty chat history.
             options: Optional ToolOptions instance containing optional parameters.
 
         Returns:
@@ -540,9 +629,14 @@ class McpToolServerConfigurationService:
                              On failure, returns OperationResult.failed() with error details.
 
         Raises:
-            ValueError: If turn_context is None, chat_history_messages is None or empty,
+            ValueError: If turn_context is None, chat_history_messages is None,
                         turn_context.activity is None, or any of the required fields
                         (conversation.id, activity.id, activity.text) are missing or empty.
+
+        Note:
+            Even if chat_history_messages is empty, the request will still be sent to
+            the MCP platform. This ensures the user message from turn_context.activity.text
+            is registered correctly for real-time threat protection.
 
         Example:
             >>> from datetime import datetime, timezone
@@ -561,8 +655,11 @@ class McpToolServerConfigurationService:
         # Validate input parameters
         if turn_context is None:
             raise ValueError("turn_context cannot be None")
-        if chat_history_messages is None or len(chat_history_messages) == 0:
-            raise ValueError("chat_history_messages cannot be None or empty")
+        if chat_history_messages is None:
+            raise ValueError("chat_history_messages cannot be None")
+
+        # Note: Empty chat_history_messages is allowed - we still send the request to MCP platform
+        # The platform needs to receive the request even with empty chat history
 
         # Extract required information from turn context
         if not turn_context.activity:
