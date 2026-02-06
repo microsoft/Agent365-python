@@ -41,6 +41,7 @@ INVOKE_AGENT_ATTRIBUTES = [
     # Caller Agent (A2A) attributes
     consts.GEN_AI_CALLER_AGENT_ID_KEY,  # gen_ai.caller.agent.id
     consts.GEN_AI_CALLER_AGENT_NAME_KEY,  # gen_ai.caller.agent.name
+    consts.GEN_AI_CALLER_AGENT_TYPE_KEY,  # gen_ai.caller.agent.type
     consts.GEN_AI_CALLER_AGENT_USER_ID_KEY,  # gen_ai.caller.agent.userid
     consts.GEN_AI_CALLER_AGENT_UPN_KEY,  # gen_ai.caller.agent.upn
     consts.GEN_AI_CALLER_AGENT_TENANT_ID_KEY,  # gen_ai.caller.agent.tenantid
