@@ -2,9 +2,8 @@
 # Licensed under the MIT License.
 
 import sys
-from os import environ
 from pathlib import Path
-
+from os import environ
 from setuptools import setup
 
 # Get version from environment variable set by CI/CD

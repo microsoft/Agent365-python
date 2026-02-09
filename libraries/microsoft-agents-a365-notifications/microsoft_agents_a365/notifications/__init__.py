@@ -10,19 +10,19 @@ This module provides utilities for handling agent notifications and routing.
 
 # Main notification handler class
 from .agent_notification import (
-    AgentNotification,
     AgentHandler,
+    AgentNotification,
 )
 
 # Import all models from the models subpackage
 from .models import (
+    AgentLifecycleEvent,
     AgentNotificationActivity,
+    AgentSubChannel,
     EmailReference,
-    WpxComment,
     EmailResponse,
     NotificationTypes,
-    AgentSubChannel,
-    AgentLifecycleEvent,
+    WpxComment,
 )
 
 __all__ = [
