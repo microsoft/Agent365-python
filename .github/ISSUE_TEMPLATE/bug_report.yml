@@ -37,8 +37,8 @@ body:
 
   - type: input
     attributes:
-      label: Language/Runtime
-      description: e.g., .NET 8, Python 3.11, Node.js 20
+      label: Python Version
+      description: e.g., Python 3.10, Python 3.11, Python 3.12
     validations:
       required: true
 
