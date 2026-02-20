@@ -25,11 +25,18 @@ The observability core package provides OpenTelemetry-based distributed tracing 
                               │
            ┌──────────────────┼──────────────────┐
            ▼                  ▼                  ▼
-┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-│  SpanProcessor   │ │ BatchSpanProcessor│ │ Agent365Exporter │
-│ (Custom baggage  │ │  (OTEL SDK)      │ │ (HTTP export)    │
-│  propagation)    │ │                  │ │                  │
-└──────────────────┘ └──────────────────┘ └──────────────────┘
+┌──────────────────┐ ┌────────────────────────┐ ┌──────────────────┐
+│  SpanProcessor   │ │_EnrichingBatchSpan     │ │ Agent365Exporter │
+│ (Custom baggage  │ │Processor               │ │ (HTTP export)    │
+│  propagation)    │ │(enricher hook + batch) │ │                  │
+└──────────────────┘ └────────────────────────┘ └──────────────────┘
+                              │
+                              ▼ (optional)
+                     ┌──────────────────┐
+                     │ span_enricher()  │
+                     │ (registered by   │
+                     │  extensions)     │
+                     └──────────────────┘
 ```
 
 ## Key Components
@@ -40,20 +47,46 @@ The `TelemetryManager` class is a thread-safe singleton that manages telemetry c
 
 ```python
 from microsoft_agents_a365.observability.core import configure
+from microsoft_agents_a365.observability.core.exporters import Agent365ExporterOptions
 
+# Preferred: use exporter_options
+configure(
+    service_name="my-agent",
+    service_namespace="my-namespace",
+    exporter_options=Agent365ExporterOptions(
+        token_resolver=lambda agent_id, tenant_id: get_token(),
+        cluster_category="prod",
+    ),
+    suppress_invoke_agent_input=False,
+)
+
+# Legacy (deprecated): token_resolver and cluster_category as top-level params
 configure(
     service_name="my-agent",
     service_namespace="my-namespace",
     token_resolver=lambda agent_id, tenant_id: get_token(),
-    cluster_category="prod"
+    cluster_category="prod",
 )
 ```
 
 **Key behaviors:**
 - Creates or reuses an existing `TracerProvider`
-- Adds `BatchSpanProcessor` for span export
+- Adds `_EnrichingBatchSpanProcessor` (extension hook + batching) for span export
 - Adds custom `SpanProcessor` for baggage-to-attribute copying
 - Falls back to `ConsoleSpanExporter` if token resolver is not provided
+- `suppress_invoke_agent_input=True` omits input message attributes from child spans of `InvokeAgentScope`
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `service_name` | `str` | Name of the service (recorded in resource attributes) |
+| `service_namespace` | `str` | Namespace of the service |
+| `logger_name` | `str` | Logger name to configure (defaults to module name) |
+| `exporter_options` | `Agent365ExporterOptions` | Preferred: full exporter configuration |
+| `token_resolver` | `Callable` | *Deprecated* – use `exporter_options.token_resolver` |
+| `cluster_category` | `str` | *Deprecated* – use `exporter_options.cluster_category` |
+| `suppress_invoke_agent_input` | `bool` | If `True`, suppress input messages on child spans |
 
 ### Scope Classes
 
@@ -100,6 +133,7 @@ from microsoft_agents_a365.observability.core import (
     TenantDetails,
     AgentDetails,
 )
+from microsoft_agents_a365.observability.core.models.caller_details import CallerDetails
 
 with InvokeAgentScope.start(
     invoke_agent_details=InvokeAgentDetails(
@@ -109,9 +143,13 @@ with InvokeAgentScope.start(
     ),
     tenant_details=TenantDetails(tenant_id="tenant-789"),
     request=Request(content="Hello", execution_type=ExecutionType.CHAT),
+    caller_agent_details=AgentDetails(agent_id="caller-agent-id"),  # optional
+    caller_details=CallerDetails(caller_id="user-abc"),             # optional
 ) as scope:
     # Agent processing
     scope.record_response("Agent response")
+    scope.record_input_messages(["User question"])
+    scope.record_output_messages(["Agent answer"])
 ```
 
 **Span attributes recorded:**
@@ -120,7 +158,8 @@ with InvokeAgentScope.start(
 - Execution source metadata
 - Execution type
 - Input/output messages
-- Caller details (if provided)
+- Caller details (if provided): ID, UPN, name, user ID, tenant ID
+- Caller agent details (if provided): name, ID, type, blueprint ID, AUID (agent unique ID), UPN, tenant ID, client IP
 
 #### InferenceScope ([inference_scope.py](../microsoft_agents_a365/observability/core/inference_scope.py))
 
@@ -161,6 +200,29 @@ with ExecuteToolScope.start(
     # Tool execution
     scope.record_response("Tool result")
 ```
+
+#### OutputScope ([spans_scopes/output_scope.py](../microsoft_agents_a365/observability/core/spans_scopes/output_scope.py))
+
+Traces outbound message delivery from an agent. Used internally to record response messages sent back to callers:
+
+```python
+from microsoft_agents_a365.observability.core.spans_scopes.output_scope import OutputScope
+from microsoft_agents_a365.observability.core.models.response import Response
+
+with OutputScope.start(
+    agent_details=agent_details,
+    tenant_details=tenant_details,
+    response=Response(messages=["Initial response"]),
+    parent_id="parent-activity-id",  # optional: link to upstream span
+) as scope:
+    # Record additional messages as they arrive
+    scope.record_output_messages(["Additional message chunk"])
+```
+
+**Key behavior:**
+- Initializes with messages from the `Response` object
+- `record_output_messages()` appends to the accumulated list and updates the span attribute
+- `parent_id` allows linking to an upstream activity for cross-service correlation
 
 ### Context Propagation ([middleware/baggage_builder.py](../microsoft_agents_a365/observability/core/middleware/baggage_builder.py))
 
@@ -244,6 +306,42 @@ options = Agent365ExporterOptions(
 )
 ```
 
+### Span Enrichment ([exporters/enriching_span_processor.py](../microsoft_agents_a365/observability/core/exporters/enriching_span_processor.py) and [exporters/enriched_span.py](../microsoft_agents_a365/observability/core/exporters/enriched_span.py))
+
+`_EnrichingBatchSpanProcessor` wraps OpenTelemetry's `BatchSpanProcessor` and applies a registered enricher function to every span before batching and exporting. Only one enricher can be active at a time (one platform instrumentor per process).
+
+`EnrichedReadableSpan` is a wrapper around `ReadableSpan` that merges extra attributes into the immutable span without modifying it in place.
+
+**How extensions register an enricher:**
+
+```python
+from microsoft_agents_a365.observability.core import (
+    register_span_enricher,
+    unregister_span_enricher,
+    EnrichedReadableSpan,
+)
+from opentelemetry.sdk.trace import ReadableSpan
+
+def my_enricher(span: ReadableSpan) -> ReadableSpan:
+    """Add platform-specific attributes before export."""
+    extra = {"gen_ai.platform.version": "1.2.3"}
+    return EnrichedReadableSpan(span, extra)
+
+# During instrumentation setup:
+register_span_enricher(my_enricher)
+
+# During uninstrumentation teardown:
+unregister_span_enricher()
+```
+
+**Enrichment functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `register_span_enricher(fn)` | Register enricher; raises `RuntimeError` if one is already registered |
+| `unregister_span_enricher()` | Remove the current enricher |
+| `get_span_enricher()` | Return the current enricher (or `None`) |
+
 ## Data Classes
 
 ### InvokeAgentDetails
@@ -281,6 +379,18 @@ class TenantDetails:
     tenant_id: str | None
 ```
 
+### CallerDetails
+
+```python
+@dataclass
+class CallerDetails:
+    caller_id: str | None       # Unique identifier for the caller
+    caller_upn: str | None      # User Principal Name of the caller
+    caller_name: str | None     # Human-readable name of the caller
+    caller_user_id: str | None  # User ID of the caller
+    tenant_id: str | None       # Tenant ID of the caller
+```
+
 ### InferenceCallDetails
 
 ```python
@@ -301,6 +411,24 @@ class ToolCallDetails:
     tool_endpoint: str | None
     tool_type: ToolType | None
 ```
+
+### Response
+
+```python
+@dataclass
+class Response:
+    messages: list[str]  # Response messages from agent execution
+```
+
+## Enums
+
+| Enum | Values | Purpose |
+|------|--------|---------|
+| `ExecutionType` | `CHAT`, `STREAMING`, ... | Type of agent request |
+| `InferenceOperationType` | `CHAT`, `COMPLETION`, ... | Type of LLM inference call |
+| `ToolType` | `FUNCTION`, `MCP`, ... | Type of tool being executed |
+| `AgentType` | `` `ENTRA_EMBODIED` ``, `` `ENTRA_NON_EMBODIED` ``, `` `MICROSOFT_COPILOT` ``, `` `DECLARATIVE_AGENT` ``, `` `FOUNDRY` `` | Supported agent types for generative AI |
+| `OperationSource` | `SDK`, `GATEWAY`, `MCP_SERVER` | Source of the operation being traced |
 
 ## Environment Variables
 
@@ -373,6 +501,9 @@ microsoft_agents_a365/observability/core/
 ├── middleware/
 │   ├── __init__.py
 │   └── baggage_builder.py         # BaggageBuilder and BaggageScope
+├── spans_scopes/
+│   ├── __init__.py
+│   └── output_scope.py            # OutputScope for outbound message tracing
 ├── trace_processor/
 │   ├── __init__.py
 │   ├── span_processor.py          # Custom SpanProcessor
@@ -381,12 +512,15 @@ microsoft_agents_a365/observability/core/
 │   ├── __init__.py
 │   ├── agent365_exporter.py       # Agent365 backend exporter
 │   ├── agent365_exporter_options.py  # Exporter configuration
+│   ├── enriched_span.py           # EnrichedReadableSpan wrapper
+│   ├── enriching_span_processor.py   # _EnrichingBatchSpanProcessor + enricher registry
 │   └── utils.py                   # Exporter utilities
 └── models/
     ├── __init__.py
     ├── agent_type.py              # AgentType enum
     ├── caller_details.py          # CallerDetails dataclass
-    └── operation_source.py        # OperationSource enum
+    ├── operation_source.py        # OperationSource enum
+    └── response.py                # Response dataclass
 ```
 
 ## Testing
