@@ -4445,7 +4445,7 @@ wheels = [
 
 [[package]]
 name = "semantic-kernel"
-version = "1.39.3"
+version = "1.39.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -4456,6 +4456,7 @@ dependencies = [
     { name = "cloudevents" },
     { name = "defusedxml" },
     { name = "jinja2" },
+    { name = "mcp" },
     { name = "nest-asyncio" },
     { name = "numpy" },
     { name = "openai" },
@@ -4471,9 +4472,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/40/75/ace6cc290bbfec20def659df8dcc76fa1dc059ecbe7a13a65877a3d9ef42/semantic_kernel-1.39.3.tar.gz", hash = "sha256:c67265817cd0e4af8f49059ac46421a911158c8bbe9629b1092a632a2bc1f404", size = 601695, upload-time = "2026-02-02T01:32:42.727Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/dc/a915e90d755fe601831406f7f77bfa3b44cb7eaacd60aca2722a8414b96a/semantic_kernel-1.39.4.tar.gz", hash = "sha256:9f629919346216f3b48c1ea6da56fa3d1bffd546a6be8fe5b7893a097f0dc798", size = 602392, upload-time = "2026-02-10T10:09:49.223Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/ee/a8f12b1d32f3a528f1fa5dfb4afb1f74eac2191c9efca300f17a177af539/semantic_kernel-1.39.3-py3-none-any.whl", hash = "sha256:0540547bc60b24caaf8b8ddff57d995dbabdd343448c434f939be8891fb52624", size = 913654, upload-time = "2026-02-02T01:32:40.525Z" },
+    { url = "https://files.pythonhosted.org/packages/03/38/edd944f3a5781573a8c965de8940339e0dc90f3fe088a0ca405af676a438/semantic_kernel-1.39.4-py3-none-any.whl", hash = "sha256:a10833e493485f59e22e988975396f234871a4103a424c30ac9569591b43870d", size = 914347, upload-time = "2026-02-10T10:09:47.014Z" },
 ]
 
 [[package]]
