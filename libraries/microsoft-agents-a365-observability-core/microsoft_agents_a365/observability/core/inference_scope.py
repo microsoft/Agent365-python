@@ -34,6 +34,7 @@ class InferenceScope(OpenTelemetryScope):
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         request: Request | None = None,
+        parent_id: str | None = None,
     ) -> "InferenceScope":
         """Creates and starts a new scope for inference tracing.
 
@@ -42,11 +43,13 @@ class InferenceScope(OpenTelemetryScope):
             agent_details: The details of the agent making the call
             tenant_details: The details of the tenant
             request: Optional request details for additional context
+            parent_id: Optional parent Activity ID used to link this span to an upstream
+                operation
 
         Returns:
             A new InferenceScope instance
         """
-        return InferenceScope(details, agent_details, tenant_details, request)
+        return InferenceScope(details, agent_details, tenant_details, request, parent_id)
 
     def __init__(
         self,
@@ -54,6 +57,7 @@ class InferenceScope(OpenTelemetryScope):
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         request: Request | None = None,
+        parent_id: str | None = None,
     ):
         """Initialize the inference scope.
 
@@ -62,6 +66,8 @@ class InferenceScope(OpenTelemetryScope):
             agent_details: The details of the agent making the call
             tenant_details: The details of the tenant
             request: Optional request details for additional context
+            parent_id: Optional parent Activity ID used to link this span to an upstream
+                operation
         """
 
         super().__init__(
@@ -70,6 +76,7 @@ class InferenceScope(OpenTelemetryScope):
             activity_name=f"{details.operationName.value} {details.model}",
             agent_details=agent_details,
             tenant_details=tenant_details,
+            parent_id=parent_id,
         )
 
         if request:

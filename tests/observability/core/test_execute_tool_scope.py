@@ -131,6 +131,32 @@ class TestExecuteToolScope(unittest.TestCase):
             request.source_metadata.description,
         )
 
+    def test_execute_tool_scope_with_parent_id(self):
+        """Test ExecuteToolScope uses parent_id to link span to parent context."""
+        parent_trace_id = "1234567890abcdef1234567890abcdef"
+        parent_span_id = "abcdefabcdef1234"
+        parent_id = f"00-{parent_trace_id}-{parent_span_id}-01"
+
+        with ExecuteToolScope.start(
+            self.tool_details, self.agent_details, self.tenant_details, parent_id=parent_id
+        ):
+            pass
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+
+        span = finished_spans[-1]
+
+        # Verify span inherits parent's trace_id
+        span_trace_id = f"{span.context.trace_id:032x}"
+        self.assertEqual(span_trace_id, parent_trace_id)
+
+        # Verify span's parent_span_id matches
+        self.assertIsNotNone(span.parent, "Expected span to have a parent")
+        self.assertTrue(hasattr(span.parent, "span_id"), "Expected parent to have span_id")
+        span_parent_id = f"{span.parent.span_id:016x}"
+        self.assertEqual(span_parent_id, parent_span_id)
+
 
 if __name__ == "__main__":
     # Run pytest only on the current file
