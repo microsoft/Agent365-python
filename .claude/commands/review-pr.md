@@ -43,7 +43,7 @@ First, collect information about the pull request:
 
 3. **IMPORTANT**: Save the diff output - you will need it to:
    - Include relevant diff context snippets in each finding
-   - Determine the exact **diff line numbers** for inline comments (line numbers as they appear in the diff, not file line numbers)
+   - Determine the exact **target file line numbers** for inline comments (absolute line numbers in the target file, computed from the diff hunk headers, as required by `/post-review-comments`)
    - Determine the **side** (RIGHT for additions `+`, LEFT for deletions `-`)
 
 4. Create the `.codereviews/` directory if it doesn't exist.

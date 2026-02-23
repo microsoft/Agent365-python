@@ -30,7 +30,7 @@ First, collect information about the staged changes:
 
 3. **IMPORTANT**: Save the diff output - you will need it to:
    - Include relevant diff context snippets in each finding
-   - Determine the exact **diff line numbers** for inline comments (line numbers as they appear in the diff, not file line numbers)
+   - Determine the exact **Diff Line** values for inline comments (absolute line numbers in the target file; use the diff hunks to map changes to their file line numbers)
    - Determine the **side** (RIGHT for additions `+`, LEFT for deletions `-`)
 
 4. If there are no staged changes, inform the user and suggest they stage files with `git add`.
