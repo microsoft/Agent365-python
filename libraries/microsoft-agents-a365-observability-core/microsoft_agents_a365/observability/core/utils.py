@@ -13,11 +13,12 @@ from ipaddress import AddressValueError, ip_address
 from threading import RLock
 from typing import Any, Generic, TypeVar, cast
 
+from opentelemetry import context
 from opentelemetry.semconv.attributes.exception_attributes import (
     EXCEPTION_MESSAGE,
     EXCEPTION_STACKTRACE,
 )
-from opentelemetry.trace import Span
+from opentelemetry.trace import NonRecordingSpan, Span, SpanContext, TraceFlags, set_span_in_context
 from opentelemetry.util.types import AttributeValue
 from wrapt import ObjectProxy
 
@@ -25,6 +26,128 @@ from microsoft_agents_a365.observability.core.constants import ERROR_TYPE_KEY
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
+
+
+# W3C Trace Context constants
+W3C_TRACE_CONTEXT_VERSION = "00"
+W3C_TRACE_ID_LENGTH = 32  # 32 hex chars = 128 bits
+W3C_SPAN_ID_LENGTH = 16  # 16 hex chars = 64 bits
+
+
+def validate_w3c_trace_context_version(version: str) -> bool:
+    """Validate W3C Trace Context version.
+
+    Args:
+        version: The version string to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    return version == W3C_TRACE_CONTEXT_VERSION
+
+
+def _is_valid_hex(hex_string: str) -> bool:
+    """Check if a string contains only valid hexadecimal characters.
+
+    Args:
+        hex_string: The string to validate
+
+    Returns:
+        True if all characters are valid hexadecimal (0-9, a-f, A-F), False otherwise
+    """
+    return all(c in "0123456789abcdefABCDEF" for c in hex_string)
+
+
+def validate_trace_id(trace_id_hex: str) -> bool:
+    """Validate W3C Trace Context trace_id format.
+
+    Args:
+        trace_id_hex: The trace_id hex string to validate (should be 32 hex chars)
+
+    Returns:
+        True if valid (32 hex chars), False otherwise
+    """
+    return len(trace_id_hex) == W3C_TRACE_ID_LENGTH and _is_valid_hex(trace_id_hex)
+
+
+def validate_span_id(span_id_hex: str) -> bool:
+    """Validate W3C Trace Context span_id format.
+
+    Args:
+        span_id_hex: The span_id hex string to validate (should be 16 hex chars)
+
+    Returns:
+        True if valid (16 hex chars), False otherwise
+    """
+    return len(span_id_hex) == W3C_SPAN_ID_LENGTH and _is_valid_hex(span_id_hex)
+
+
+def parse_parent_id_to_context(parent_id: str | None) -> context.Context | None:
+    """Parse a W3C trace context parent ID and return a context with the parent span.
+
+    The parent_id format is expected to be W3C Trace Context format:
+    "00-{trace_id}-{span_id}-{trace_flags}"
+    Example: "00-1234567890abcdef1234567890abcdef-abcdefabcdef1234-01"
+
+    Args:
+        parent_id: The W3C Trace Context format parent ID string
+
+    Returns:
+        A context containing the parent span, or None if parent_id is invalid
+    """
+    if not parent_id:
+        return None
+
+    try:
+        # W3C Trace Context format: "00-{trace_id}-{span_id}-{trace_flags}"
+        parts = parent_id.split("-")
+        if len(parts) != 4:
+            logger.warning(f"Invalid parent_id format (expected 4 parts): {parent_id}")
+            return None
+
+        version, trace_id_hex, span_id_hex, trace_flags_hex = parts
+
+        # Validate W3C Trace Context version
+        if not validate_w3c_trace_context_version(version):
+            logger.warning(f"Unsupported W3C Trace Context version: {version}")
+            return None
+
+        # Validate trace_id (must be 32 hex chars)
+        if not validate_trace_id(trace_id_hex):
+            logger.warning(
+                f"Invalid trace_id (expected {W3C_TRACE_ID_LENGTH} hex chars): '{trace_id_hex}'"
+            )
+            return None
+
+        # Validate span_id (must be 16 hex chars)
+        if not validate_span_id(span_id_hex):
+            logger.warning(
+                f"Invalid span_id (expected {W3C_SPAN_ID_LENGTH} hex chars): '{span_id_hex}'"
+            )
+            return None
+
+        # Parse the hex values
+        trace_id = int(trace_id_hex, 16)
+        span_id = int(span_id_hex, 16)
+        trace_flags = TraceFlags(int(trace_flags_hex, 16))
+
+        # Create a SpanContext from the parsed values
+        parent_span_context = SpanContext(
+            trace_id=trace_id,
+            span_id=span_id,
+            is_remote=True,
+            trace_flags=trace_flags,
+        )
+
+        # Create a NonRecordingSpan with the parent context
+        parent_span = NonRecordingSpan(parent_span_context)
+
+        # Create a context with the parent span
+        return set_span_in_context(parent_span)
+
+    except (ValueError, IndexError) as e:
+        logger.warning(f"Failed to parse parent_id '{parent_id}': {e}")
+        return None
 
 
 def safe_json_dumps(obj: Any, **kwargs: Any) -> str:

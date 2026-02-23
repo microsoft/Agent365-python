@@ -241,3 +241,228 @@ class TestMcpToolServerConfigurationService:
             assert servers[0].mcp_server_name == "ProdServer"
             assert servers[0].mcp_server_unique_name == "prod_server"
             assert servers[0].url == "https://prod.custom.url/mcp"
+
+
+class TestPrepareGatewayHeaders:
+    """Tests for _prepare_gateway_headers and _resolve_agent_id_for_header."""
+
+    @pytest.fixture
+    def service(self):
+        """Create a service instance for testing."""
+        return McpToolServerConfigurationService()
+
+    @pytest.fixture
+    def create_test_jwt(self):
+        """Fixture to create test JWT tokens."""
+        import jwt
+
+        def _create(claims: dict) -> str:
+            return jwt.encode(claims, key="", algorithm="none")
+
+        return _create
+
+    @pytest.fixture
+    def default_options(self):
+        """Default ToolOptions for tests."""
+        from microsoft_agents_a365.tooling.models import ToolOptions
+
+        return ToolOptions(orchestrator_name="TestOrchestrator")
+
+    def test_includes_authorization_header(self, service, default_options):
+        """Test that Authorization header is always included."""
+        headers = service._prepare_gateway_headers("test-token", default_options)
+        assert headers["Authorization"] == "Bearer test-token"
+
+    def test_includes_user_agent_header(self, service, default_options):
+        """Test that User-Agent header is always included."""
+        headers = service._prepare_gateway_headers("test-token", default_options)
+        assert "User-Agent" in headers
+        assert "Agent365SDK" in headers["User-Agent"]
+        assert "TestOrchestrator" in headers["User-Agent"]
+
+    def test_includes_x_ms_agentid_from_token_claims(
+        self, service, create_test_jwt, default_options
+    ):
+        """Test x-ms-agentid header is populated from token claims."""
+        token = create_test_jwt({"appid": "token-app-id-123"})
+        headers = service._prepare_gateway_headers(token, default_options)
+        assert headers.get("x-ms-agentid") == "token-app-id-123"
+
+    def test_includes_x_ms_agentid_from_xms_par_app_azp(
+        self, service, create_test_jwt, default_options
+    ):
+        """Test x-ms-agentid prefers xms_par_app_azp over appid."""
+        token = create_test_jwt({
+            "xms_par_app_azp": "blueprint-id-from-token",
+            "appid": "app-id-456",
+        })
+        headers = service._prepare_gateway_headers(token, default_options)
+        assert headers.get("x-ms-agentid") == "blueprint-id-from-token"
+
+    def test_includes_x_ms_agentid_from_turn_context_blueprint_id(
+        self, service, create_test_jwt, default_options
+    ):
+        """Test x-ms-agentid prefers TurnContext agenticAppBlueprintId over token."""
+        token = create_test_jwt({"appid": "token-app-id"})
+
+        # Create mock TurnContext with agenticAppBlueprintId
+        mock_from = MagicMock()
+        mock_from.agentic_app_blueprint_id = "context-blueprint-id"
+        mock_activity = MagicMock()
+        mock_activity.from_ = mock_from
+        mock_context = MagicMock()
+        mock_context.activity = mock_activity
+
+        headers = service._prepare_gateway_headers(token, default_options, mock_context)
+        assert headers.get("x-ms-agentid") == "context-blueprint-id"
+
+    def test_falls_back_to_application_name(self, service, create_test_jwt, default_options):
+        """Test x-ms-agentid falls back to application name when no token claims."""
+        # Token with no relevant claims
+        token = create_test_jwt({"sub": "some-subject"})
+
+        with patch(
+            "microsoft_agents_a365.runtime.utility.Utility.get_application_name",
+            return_value="my-application",
+        ):
+            headers = service._prepare_gateway_headers(token, default_options)
+            assert headers.get("x-ms-agentid") == "my-application"
+
+    def test_omits_x_ms_agentid_when_nothing_available(
+        self, service, create_test_jwt, default_options
+    ):
+        """Test x-ms-agentid header is omitted when no identifier is available."""
+        # Token with no relevant claims
+        token = create_test_jwt({"sub": "some-subject"})
+
+        with patch(
+            "microsoft_agents_a365.runtime.utility.Utility.get_application_name",
+            return_value=None,
+        ):
+            headers = service._prepare_gateway_headers(token, default_options)
+            assert "x-ms-agentid" not in headers
+
+
+class TestResolveAgentIdForHeader:
+    """Tests for _resolve_agent_id_for_header method."""
+
+    @pytest.fixture
+    def service(self):
+        """Create a service instance for testing."""
+        return McpToolServerConfigurationService()
+
+    @pytest.fixture
+    def create_test_jwt(self):
+        """Fixture to create test JWT tokens."""
+        import jwt as pyjwt
+
+        def _create(claims: dict) -> str:
+            return pyjwt.encode(claims, key="", algorithm="none")
+
+        return _create
+
+    def test_priority_1_turn_context_blueprint_id(self, service, create_test_jwt):
+        """Test TurnContext agenticAppBlueprintId has highest priority."""
+        token = create_test_jwt({
+            "xms_par_app_azp": "token-blueprint",
+            "appid": "token-appid",
+        })
+
+        mock_from = MagicMock()
+        mock_from.agentic_app_blueprint_id = "context-blueprint-id"
+        mock_activity = MagicMock()
+        mock_activity.from_ = mock_from
+        mock_context = MagicMock()
+        mock_context.activity = mock_activity
+
+        result = service._resolve_agent_id_for_header(token, mock_context)
+        assert result == "context-blueprint-id"
+
+    def test_priority_2_token_xms_par_app_azp(self, service, create_test_jwt):
+        """Test token xms_par_app_azp claim is second priority."""
+        token = create_test_jwt({
+            "xms_par_app_azp": "token-blueprint",
+            "appid": "token-appid",
+        })
+
+        result = service._resolve_agent_id_for_header(token, None)
+        assert result == "token-blueprint"
+
+    def test_priority_3_token_appid(self, service, create_test_jwt):
+        """Test token appid claim is third priority."""
+        token = create_test_jwt({"appid": "token-appid"})
+
+        result = service._resolve_agent_id_for_header(token, None)
+        assert result == "token-appid"
+
+    def test_priority_4_application_name(self, service, create_test_jwt):
+        """Test application name is lowest priority."""
+        token = create_test_jwt({"sub": "no-relevant-claims"})
+
+        with patch(
+            "microsoft_agents_a365.runtime.utility.Utility.get_application_name",
+            return_value="fallback-app-name",
+        ):
+            result = service._resolve_agent_id_for_header(token, None)
+            assert result == "fallback-app-name"
+
+    def test_returns_none_when_nothing_available(self, service, create_test_jwt):
+        """Test returns None when no identifier is available."""
+        token = create_test_jwt({"sub": "no-relevant-claims"})
+
+        with patch(
+            "microsoft_agents_a365.runtime.utility.Utility.get_application_name",
+            return_value=None,
+        ):
+            result = service._resolve_agent_id_for_header(token, None)
+            assert result is None
+
+    def test_handles_turn_context_without_activity(self, service, create_test_jwt):
+        """Test handles TurnContext with None activity gracefully."""
+        token = create_test_jwt({"appid": "token-appid"})
+
+        mock_context = MagicMock()
+        mock_context.activity = None
+
+        result = service._resolve_agent_id_for_header(token, mock_context)
+        assert result == "token-appid"
+
+    def test_handles_turn_context_without_from(self, service, create_test_jwt):
+        """Test handles TurnContext activity with None from_ gracefully."""
+        token = create_test_jwt({"appid": "token-appid"})
+
+        mock_activity = MagicMock()
+        mock_activity.from_ = None
+        mock_context = MagicMock()
+        mock_context.activity = mock_activity
+
+        result = service._resolve_agent_id_for_header(token, mock_context)
+        assert result == "token-appid"
+
+    def test_handles_turn_context_without_blueprint_id_attribute(self, service, create_test_jwt):
+        """Test handles from_ object without agentic_app_blueprint_id attribute."""
+        token = create_test_jwt({"appid": "token-appid"})
+
+        # Mock from_ that doesn't have agentic_app_blueprint_id
+        mock_from = MagicMock(spec=[])  # Empty spec means no attributes
+        mock_activity = MagicMock()
+        mock_activity.from_ = mock_from
+        mock_context = MagicMock()
+        mock_context.activity = mock_activity
+
+        result = service._resolve_agent_id_for_header(token, mock_context)
+        assert result == "token-appid"
+
+    def test_skips_empty_blueprint_id(self, service, create_test_jwt):
+        """Test skips empty string blueprint ID from TurnContext."""
+        token = create_test_jwt({"appid": "token-appid"})
+
+        mock_from = MagicMock()
+        mock_from.agentic_app_blueprint_id = ""  # Empty string
+        mock_activity = MagicMock()
+        mock_activity.from_ = mock_from
+        mock_context = MagicMock()
+        mock_context.activity = mock_activity
+
+        result = service._resolve_agent_id_for_header(token, mock_context)
+        assert result == "token-appid"

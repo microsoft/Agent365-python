@@ -12,6 +12,12 @@ from .config import (
 )
 from .execute_tool_scope import ExecuteToolScope
 from .execution_type import ExecutionType
+from .exporters.enriched_span import EnrichedReadableSpan
+from .exporters.enriching_span_processor import (
+    get_span_enricher,
+    register_span_enricher,
+    unregister_span_enricher,
+)
 from .inference_call_details import InferenceCallDetails
 from .inference_operation_type import InferenceOperationType
 from .inference_scope import InferenceScope
@@ -32,6 +38,11 @@ __all__ = [
     "is_configured",
     "get_tracer",
     "get_tracer_provider",
+    # Span enrichment
+    "register_span_enricher",
+    "unregister_span_enricher",
+    "get_span_enricher",
+    "EnrichedReadableSpan",
     # Span processor
     "SpanProcessor",
     # Base scope class

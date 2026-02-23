@@ -11,6 +11,7 @@ from .constants import (
     GEN_AI_CALLER_AGENT_ID_KEY,
     GEN_AI_CALLER_AGENT_NAME_KEY,
     GEN_AI_CALLER_AGENT_TENANT_ID_KEY,
+    GEN_AI_CALLER_AGENT_TYPE_KEY,
     GEN_AI_CALLER_AGENT_UPN_KEY,
     GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
     GEN_AI_CALLER_AGENT_USER_ID_KEY,
@@ -138,6 +139,10 @@ class InvokeAgentScope(OpenTelemetryScope):
         if caller_agent_details:
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_NAME_KEY, caller_agent_details.agent_name)
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_ID_KEY, caller_agent_details.agent_id)
+            self.set_tag_maybe(
+                GEN_AI_CALLER_AGENT_TYPE_KEY,
+                caller_agent_details.agent_type.value if caller_agent_details.agent_type else None,
+            )
             self.set_tag_maybe(
                 GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY, caller_agent_details.agent_blueprint_id
             )

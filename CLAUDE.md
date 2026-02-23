@@ -136,6 +136,34 @@ libraries/
    - MCP (Model Context Protocol) integration
    - Framework-specific adapters for tool execution
 
+### Centralized Dependency Version Management
+
+This monorepo uses uv's `constraint-dependencies` feature to centralize version constraints:
+
+**How it works:**
+1. **Root pyproject.toml** defines version constraints for all external packages
+2. **Package pyproject.toml** files declare dependencies by name only (no version)
+3. **uv** applies root constraints during dependency resolution
+
+**Adding a new dependency:**
+1. Add the package name to your package's `dependencies` array
+2. Add the version constraint to root `pyproject.toml` `constraint-dependencies`
+3. Run `uv lock && uv sync`
+
+**Updating a dependency version:**
+1. Edit the constraint in root `pyproject.toml` only
+2. Run `uv lock && uv sync`
+3. All packages automatically use the new version
+
+**Internal workspace dependencies:**
+- Package pyproject.toml files list internal deps by name only (e.g., `microsoft-agents-a365-runtime`)
+- Root pyproject.toml `[tool.uv.sources]` maps them to `{ workspace = true }` for local development
+- At build time, `setup.py` injects exact version matches (e.g., `== 1.2.3`) for published packages
+- This ensures all SDK packages require the exact same version of each other
+
+**CI Enforcement:** The `scripts/verify_constraints.py` script runs in CI to prevent
+accidental reintroduction of version constraints in package files.
+
 ### Test Organization
 
 Tests mirror the library structure:

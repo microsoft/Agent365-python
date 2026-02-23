@@ -9,6 +9,7 @@ from typing import Any, List, Optional, Sequence, Union
 from agent_framework import ChatAgent, ChatMessage, ChatMessageStoreProtocol, MCPStreamableHTTPTool
 from agent_framework.azure import AzureOpenAIChatClient
 from agent_framework.openai import OpenAIChatClient
+import httpx
 
 from microsoft_agents.hosting.core import Authorization, TurnContext
 
@@ -22,6 +23,10 @@ from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
 )
+
+
+# Default timeout for MCP server HTTP requests (in seconds)
+MCP_HTTP_CLIENT_TIMEOUT_SECONDS = 90.0
 
 
 class McpToolRegistrationService:
@@ -46,6 +51,7 @@ class McpToolRegistrationService:
             logger=self._logger
         )
         self._connected_servers = []
+        self._http_clients: List[httpx.AsyncClient] = []
 
     async def add_tool_servers_to_agent(
         self,
@@ -114,11 +120,17 @@ class McpToolRegistrationService:
                         self._orchestrator_name
                     )
 
-                    # Create and configure MCPStreamableHTTPTool
+                    # Create httpx client with auth headers configured
+                    http_client = httpx.AsyncClient(
+                        headers=headers, timeout=MCP_HTTP_CLIENT_TIMEOUT_SECONDS
+                    )
+                    self._http_clients.append(http_client)
+
+                    # Create and configure MCPStreamableHTTPTool with http_client
                     mcp_tools = MCPStreamableHTTPTool(
                         name=server_name,
                         url=config.url,
-                        headers=headers,
+                        http_client=http_client,
                         description=f"MCP tools from {server_name}",
                     )
 
@@ -225,6 +237,8 @@ class McpToolRegistrationService:
 
         Args:
             chat_messages: Sequence of Agent Framework ChatMessage objects to send.
+                           Can be empty - the request will still be sent to register
+                           the user message from turn_context.activity.text.
             turn_context: TurnContext from the Agents SDK containing conversation info.
             tool_options: Optional configuration for the request. Defaults to
                           AgentFramework-specific options if not provided.
@@ -234,6 +248,12 @@ class McpToolRegistrationService:
 
         Raises:
             ValueError: If chat_messages or turn_context is None.
+
+        Note:
+            Even if chat_messages is empty or all messages are filtered during
+            conversion, the request will still be sent to the MCP platform. This
+            ensures the user message from turn_context.activity.text is registered
+            correctly for real-time threat protection.
 
         Example:
             >>> service = McpToolRegistrationService()
@@ -249,11 +269,6 @@ class McpToolRegistrationService:
         if turn_context is None:
             raise ValueError("turn_context cannot be None")
 
-        # Handle empty messages - return success with warning
-        if len(chat_messages) == 0:
-            self._logger.warning("Empty message list provided to send_chat_history_messages")
-            return OperationResult.success()
-
         self._logger.info(f"Send chat history initiated with {len(chat_messages)} messages")
 
         # Use default options if not provided
@@ -263,10 +278,13 @@ class McpToolRegistrationService:
         # Convert messages to ChatHistoryMessage format
         history_messages = self._convert_chat_messages_to_history(chat_messages)
 
-        # Check if all messages were filtered out during conversion
+        # Call core service even with empty history_messages to register
+        # the user message from turn_context.activity.text in the MCP platform.
         if len(history_messages) == 0:
-            self._logger.warning("All messages were filtered out during conversion (empty content)")
-            return OperationResult.success()
+            self._logger.info(
+                "Empty history messages (either no input or all filtered), "
+                "still sending to register user message"
+            )
 
         # Delegate to core service
         result = await self._mcp_server_configuration_service.send_chat_history(
@@ -333,12 +351,21 @@ class McpToolRegistrationService:
     async def cleanup(self):
         """Clean up any resources used by the service."""
         try:
+            # Close MCP server connections
             for plugin in self._connected_servers:
                 try:
                     if hasattr(plugin, "close"):
                         await plugin.close()
                 except Exception as cleanup_ex:
-                    self._logger.debug(f"Error during cleanup: {cleanup_ex}")
+                    self._logger.debug(f"Error during plugin cleanup: {cleanup_ex}")
             self._connected_servers.clear()
+
+            # Close httpx clients to prevent connection/file descriptor leaks
+            for http_client in self._http_clients:
+                try:
+                    await http_client.aclose()
+                except Exception as client_ex:
+                    self._logger.debug(f"Error closing http client: {client_ex}")
+            self._http_clients.clear()
         except Exception as ex:
             self._logger.debug(f"Error during service cleanup: {ex}")

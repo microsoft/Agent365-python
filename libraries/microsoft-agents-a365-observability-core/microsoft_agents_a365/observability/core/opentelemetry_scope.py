@@ -10,7 +10,14 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import baggage, context, trace
-from opentelemetry.trace import Span, SpanKind, Status, StatusCode, Tracer, set_span_in_context
+from opentelemetry.trace import (
+    Span,
+    SpanKind,
+    Status,
+    StatusCode,
+    Tracer,
+    set_span_in_context,
+)
 
 from .constants import (
     ENABLE_A365_OBSERVABILITY,
@@ -32,6 +39,7 @@ from .constants import (
     SOURCE_NAME,
     TENANT_ID_KEY,
 )
+from .utils import parse_parent_id_to_context
 
 if TYPE_CHECKING:
     from .agent_details import AgentDetails
@@ -71,6 +79,7 @@ class OpenTelemetryScope:
         activity_name: str,
         agent_details: "AgentDetails | None" = None,
         tenant_details: "TenantDetails | None" = None,
+        parent_id: str | None = None,
     ):
         """Initialize the OpenTelemetry scope.
 
@@ -80,6 +89,8 @@ class OpenTelemetryScope:
             activity_name: The name of the activity for display purposes
             agent_details: Optional agent details
             tenant_details: Optional tenant details
+            parent_id: Optional parent Activity ID used to link this span to an upstream
+                operation
         """
         self._span: Span | None = None
         self._start_time = time.time()
@@ -102,12 +113,13 @@ class OpenTelemetryScope:
             elif kind.lower() == "consumer":
                 activity_kind = SpanKind.CONSUMER
 
-            # Get current context for parent relationship
-            current_context = context.get_current()
+            # Get context for parent relationship
+            # If parent_id is provided, parse it and use it as the parent context
+            # Otherwise, use the current context
+            parent_context = parse_parent_id_to_context(parent_id)
+            span_context = parent_context if parent_context else context.get_current()
 
-            self._span = tracer.start_span(
-                activity_name, kind=activity_kind, context=current_context
-            )
+            self._span = tracer.start_span(activity_name, kind=activity_kind, context=span_context)
 
             # Log span creation
             if self._span:

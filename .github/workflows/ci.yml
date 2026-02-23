@@ -105,7 +105,10 @@ jobs:
     
     - name: Install the project
       run: uv lock && uv sync --locked --all-extras --dev
-    
+
+    - name: Verify centralized version constraints
+      run: python scripts/verify_constraints.py
+
     - name: Check linting
       run: |
         uv run --frozen ruff check . --preview

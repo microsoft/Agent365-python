@@ -2,8 +2,9 @@
 # Licensed under the MIT License.
 
 import sys
-from pathlib import Path
 from os import environ
+from pathlib import Path
+
 from setuptools import setup
 
 # Get version from environment variable set by CI/CD
@@ -15,14 +16,13 @@ sys.path.insert(0, str(helper_path))
 
 from setup_utils import get_dynamic_dependencies  # noqa: E402
 
-# Use minimum version strategy:
-# - Internal packages get: >= current_base_version (e.g., >= 0.1.0)
-# - Automatically updates when you build new versions
-# - Consumers can upgrade to any higher version
+# Use exact version matching for internal dependencies:
+# - Internal packages get: == current_version (e.g., == 1.2.3)
+# - Ensures all SDK packages must be at the same version
+# - Prevents incompatibility issues from version mismatches
 setup(
     version=package_version,
     install_requires=get_dynamic_dependencies(
-        use_compatible_release=False,  # No upper bound
-        use_exact_match=False,  # Not exact match
+        use_exact_match=True,
     ),
 )

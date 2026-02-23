@@ -25,12 +25,12 @@ classifiers = [
 license = {text = "MIT"}
 keywords = ["observability", "telemetry", "tracing", "opentelemetry", "monitoring", "ai", "agents"]
 dependencies = [
-    "opentelemetry-api >= 1.36.0",
-    "opentelemetry-sdk >= 1.36.0",
-    "opentelemetry-exporter-otlp >= 1.36.0",
-    "pydantic >= 2.0.0",
-    "typing-extensions >= 4.0.0",
-    "microsoft-agents-a365-runtime >= 0.0.0"
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp",
+    "pydantic",
+    "typing-extensions",
+    "microsoft-agents-a365-runtime",
 ]
 
 [project.urls]
@@ -41,24 +41,24 @@ Documentation = "https://github.com/microsoft/Agent365-python/tree/main/librarie
 
 [project.optional-dependencies]
 azure = [
-    "azure-monitor-opentelemetry-exporter >= 1.0.0b39",
-    "azure-identity >= 1.12.0",
-    "azure-monitor-ingestion >= 1.0.0",
+    "azure-monitor-opentelemetry-exporter",
+    "azure-identity",
+    "azure-monitor-ingestion",
 ]
 # Modern approach: use OTLP exporter to send to Jaeger (since Jaeger v1.35+ supports OTLP natively)
 jaeger = [
-    "opentelemetry-exporter-otlp-proto-grpc >= 1.36.0",
+    "opentelemetry-exporter-otlp-proto-grpc",
 ]
 dev = [
-    "pytest >= 7.0.0",
-    "pytest-asyncio >= 0.21.0",
-    "ruff >= 0.1.0",
-    "black >= 23.0.0",
-    "mypy >= 1.0.0",
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "black",
+    "mypy",
 ]
 test = [
-    "pytest >= 7.0.0",
-    "pytest-asyncio >= 0.21.0",
+    "pytest",
+    "pytest-asyncio",
 ]
 
 [tool.setuptools.packages.find]
