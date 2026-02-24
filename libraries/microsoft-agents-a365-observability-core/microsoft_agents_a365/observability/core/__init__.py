@@ -24,7 +24,7 @@ from .inference_scope import InferenceScope
 from .invoke_agent_details import InvokeAgentDetails
 from .invoke_agent_scope import InvokeAgentScope
 from .middleware.baggage_builder import BaggageBuilder
-from .opentelemetry_scope import OpenTelemetryScope
+from .opentelemetry_scope import OpenTelemetryScope, TimeInput
 from .request import Request
 from .source_metadata import SourceMetadata
 from .tenant_details import TenantDetails
@@ -47,6 +47,8 @@ __all__ = [
     "SpanProcessor",
     # Base scope class
     "OpenTelemetryScope",
+    # Type aliases
+    "TimeInput",
     # Specific scope classes
     "ExecuteToolScope",
     "InvokeAgentScope",

@@ -6,6 +6,7 @@
 import logging
 import os
 import time
+from datetime import datetime
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
@@ -48,6 +49,12 @@ if TYPE_CHECKING:
 # Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
 logger = logging.getLogger(__name__)
 
+# TimeInput is a type alias for types that can be used as span timestamps.
+# OpenTelemetry Python SDK accepts int (nanoseconds since epoch), float (seconds since epoch),
+# or a tuple of (seconds, nanoseconds) as HrTime.
+# We extend this to also accept datetime objects for convenience.
+TimeInput = int | float | tuple[int, int] | datetime | None
+
 
 class OpenTelemetryScope:
     """Base class for OpenTelemetry tracing scopes in the SDK."""
@@ -80,6 +87,8 @@ class OpenTelemetryScope:
         agent_details: "AgentDetails | None" = None,
         tenant_details: "TenantDetails | None" = None,
         parent_id: str | None = None,
+        start_time: TimeInput = None,
+        end_time: TimeInput = None,
     ):
         """Initialize the OpenTelemetry scope.
 
@@ -91,9 +100,20 @@ class OpenTelemetryScope:
             tenant_details: Optional tenant details
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
+            start_time: Optional explicit start time. Can be:
+                - int: nanoseconds since epoch
+                - float: seconds since epoch
+                - tuple[int, int]: HrTime as (seconds, nanoseconds)
+                - datetime: Python datetime object
+                Useful when recording an operation after it has already completed.
+            end_time: Optional explicit end time in the same format as start_time.
+                When provided, the span will use this timestamp when disposed
+                instead of the current wall-clock time.
         """
         self._span: Span | None = None
-        self._start_time = time.time()
+        self._wall_clock_start_ms = time.time() * 1000  # milliseconds
+        self._custom_start_time: TimeInput = start_time
+        self._custom_end_time: TimeInput = end_time
         self._has_ended = False
         self._error_type: str | None = None
         self._exception: Exception | None = None
@@ -119,7 +139,15 @@ class OpenTelemetryScope:
             parent_context = parse_parent_id_to_context(parent_id)
             span_context = parent_context if parent_context else context.get_current()
 
-            self._span = tracer.start_span(activity_name, kind=activity_kind, context=span_context)
+            # Convert custom start time to OTel-compatible format (nanoseconds since epoch)
+            otel_start_time = self._time_input_to_ns(start_time) if start_time else None
+
+            self._span = tracer.start_span(
+                activity_name,
+                kind=activity_kind,
+                context=span_context,
+                start_time=otel_start_time,
+            )
 
             # Log span creation
             if self._span:
@@ -230,6 +258,71 @@ class OpenTelemetryScope:
             if key and key.strip():
                 self._span.set_attribute(key, value)
 
+    @staticmethod
+    def _time_input_to_ns(t: TimeInput) -> int | None:
+        """Convert a TimeInput value to nanoseconds since epoch.
+
+        OpenTelemetry Python SDK accepts int (nanoseconds since epoch) for span
+        start_time and end_time parameters.
+
+        Args:
+            t: TimeInput value which can be:
+                - int: nanoseconds since epoch (returned as-is)
+                - float: seconds since epoch
+                - tuple[int, int]: HrTime as (seconds, nanoseconds)
+                - datetime: Python datetime object
+
+        Returns:
+            Nanoseconds since epoch, or None if input is None
+        """
+        if t is None:
+            return None
+        if isinstance(t, int):
+            # Assume nanoseconds if it's an integer
+            return t
+        if isinstance(t, float):
+            # Convert seconds to nanoseconds
+            return int(t * 1_000_000_000)
+        if isinstance(t, tuple) and len(t) == 2:
+            # HrTime: (seconds, nanoseconds)
+            seconds, nanos = t
+            return seconds * 1_000_000_000 + nanos
+        if isinstance(t, datetime):
+            return int(t.timestamp() * 1_000_000_000)
+        logger.warning(
+            f"_time_input_to_ns received unexpected TimeInput "
+            f"(type={type(t).__name__}); returning None"
+        )
+        return None
+
+    @staticmethod
+    def _time_input_to_ms(t: TimeInput) -> float | None:
+        """Convert a TimeInput value to milliseconds since epoch.
+
+        Used for duration calculations.
+
+        Args:
+            t: TimeInput value (see _time_input_to_ns for accepted types)
+
+        Returns:
+            Milliseconds since epoch, or None if input is None
+        """
+        ns = OpenTelemetryScope._time_input_to_ns(t)
+        return ns / 1_000_000 if ns is not None else None
+
+    def set_end_time(self, end_time: TimeInput) -> None:
+        """Set a custom end time for the scope.
+
+        When set, dispose() will pass this value to span.end() instead of using
+        the current wall-clock time. This is useful when the actual end time of
+        the operation is known before the scope is disposed.
+
+        Args:
+            end_time: The end time as nanoseconds since epoch, seconds since epoch,
+                     HrTime tuple (seconds, nanoseconds), or datetime object.
+        """
+        self._custom_end_time = end_time
+
     def _end(self) -> None:
         """End the span and record metrics."""
         if self._span and self._is_telemetry_enabled() and not self._has_ended:
@@ -237,7 +330,12 @@ class OpenTelemetryScope:
             span_id = f"{self._span.context.span_id:016x}" if self._span.context else "unknown"
             logger.info(f"Span ended: '{self._span.name}' ({span_id})")
 
-            self._span.end()
+            # Convert custom end time to OTel-compatible format (nanoseconds since epoch)
+            otel_end_time = self._time_input_to_ns(self._custom_end_time)
+            if otel_end_time is not None:
+                self._span.end(end_time=otel_end_time)
+            else:
+                self._span.end()
 
     def __enter__(self):
         """Enter the context manager and make span active."""

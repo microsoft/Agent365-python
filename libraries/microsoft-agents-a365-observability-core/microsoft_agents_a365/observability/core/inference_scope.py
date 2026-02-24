@@ -19,7 +19,7 @@ from .constants import (
     GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
 )
 from .inference_call_details import InferenceCallDetails
-from .opentelemetry_scope import OpenTelemetryScope
+from .opentelemetry_scope import OpenTelemetryScope, TimeInput
 from .request import Request
 from .tenant_details import TenantDetails
 from .utils import safe_json_dumps
@@ -35,6 +35,8 @@ class InferenceScope(OpenTelemetryScope):
         tenant_details: TenantDetails,
         request: Request | None = None,
         parent_id: str | None = None,
+        start_time: TimeInput = None,
+        end_time: TimeInput = None,
     ) -> "InferenceScope":
         """Creates and starts a new scope for inference tracing.
 
@@ -45,11 +47,15 @@ class InferenceScope(OpenTelemetryScope):
             request: Optional request details for additional context
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
+            start_time: Optional explicit start time (ms epoch, Date, or HrTime)
+            end_time: Optional explicit end time (ms epoch, Date, or HrTime)
 
         Returns:
             A new InferenceScope instance
         """
-        return InferenceScope(details, agent_details, tenant_details, request, parent_id)
+        return InferenceScope(
+            details, agent_details, tenant_details, request, parent_id, start_time, end_time
+        )
 
     def __init__(
         self,
@@ -58,6 +64,8 @@ class InferenceScope(OpenTelemetryScope):
         tenant_details: TenantDetails,
         request: Request | None = None,
         parent_id: str | None = None,
+        start_time: TimeInput = None,
+        end_time: TimeInput = None,
     ):
         """Initialize the inference scope.
 
@@ -68,6 +76,8 @@ class InferenceScope(OpenTelemetryScope):
             request: Optional request details for additional context
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
+            start_time: Optional explicit start time (ms epoch, Date, or HrTime)
+            end_time: Optional explicit end time (ms epoch, Date, or HrTime)
         """
 
         super().__init__(
@@ -77,6 +87,8 @@ class InferenceScope(OpenTelemetryScope):
             agent_details=agent_details,
             tenant_details=tenant_details,
             parent_id=parent_id,
+            start_time=start_time,
+            end_time=end_time,
         )
 
         if request:
