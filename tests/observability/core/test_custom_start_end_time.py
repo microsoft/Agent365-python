@@ -5,6 +5,7 @@
 
 import os
 import sys
+import time
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
@@ -78,31 +79,6 @@ class TestCustomStartEndTime(unittest.TestCase):
         self.assertTrue(finished_spans, "Expected at least one span to be created")
         return finished_spans[-1]
 
-    def test_custom_start_and_end_time_with_nanoseconds(self):
-        """Test that constructor-provided start and end times are recorded on the span."""
-        # Use nanoseconds since epoch
-        custom_start_ns = 1700000000000000000  # 2023-11-14T22:13:20Z
-        custom_end_ns = 1700000005000000000  # 5 seconds later
-
-        scope = ExecuteToolScope.start(
-            self.tool_details,
-            self.agent_details,
-            self.tenant_details,
-            start_time=custom_start_ns,
-            end_time=custom_end_ns,
-        )
-        scope.dispose()
-
-        span = self._get_finished_span()
-
-        # OTel Python SDK stores times as nanoseconds (int)
-        span_start_ns = span.start_time
-        span_end_ns = span.end_time
-
-        # Verify start and end times are close to what we provided
-        self.assertAlmostEqual(span_start_ns, custom_start_ns, delta=1000)  # 1μs tolerance
-        self.assertAlmostEqual(span_end_ns, custom_end_ns, delta=1000)
-
     def test_custom_start_and_end_time_with_datetime(self):
         """Test that datetime objects are correctly converted to span timestamps."""
         custom_start = datetime(2023, 11, 14, 22, 13, 20, tzinfo=UTC)
@@ -128,84 +104,31 @@ class TestCustomStartEndTime(unittest.TestCase):
         self.assertAlmostEqual(span_start_ns, expected_start_ns, delta=1000)
         self.assertAlmostEqual(span_end_ns, expected_end_ns, delta=1000)
 
-    def test_custom_start_and_end_time_with_float_seconds(self):
-        """Test that float seconds are correctly converted to span timestamps."""
-        # Float seconds since epoch
-        custom_start_sec = 1700000000.0  # 2023-11-14T22:13:20Z
-        custom_end_sec = 1700000005.5  # 5.5 seconds later
-
-        scope = ExecuteToolScope.start(
-            self.tool_details,
-            self.agent_details,
-            self.tenant_details,
-            start_time=custom_start_sec,
-            end_time=custom_end_sec,
-        )
-        scope.dispose()
-
-        span = self._get_finished_span()
-
-        expected_start_ns = int(custom_start_sec * 1_000_000_000)
-        expected_end_ns = int(custom_end_sec * 1_000_000_000)
-
-        span_start_ns = span.start_time
-        span_end_ns = span.end_time
-
-        self.assertAlmostEqual(span_start_ns, expected_start_ns, delta=1000)
-        self.assertAlmostEqual(span_end_ns, expected_end_ns, delta=1000)
-
-    def test_custom_start_and_end_time_with_hrtime_tuple(self):
-        """Test that HrTime tuples (seconds, nanoseconds) are correctly handled."""
-        # HrTime: (seconds, nanoseconds)
-        custom_start: tuple[int, int] = (1700000000, 0)  # 2023-11-14T22:13:20Z
-        custom_end: tuple[int, int] = (1700000005, 500000000)  # 5.5 seconds later
+    def test_set_end_time_overrides_end_time(self):
+        """Test that set_end_time overrides the end time when called before dispose."""
+        custom_start = datetime(2023, 11, 14, 22, 13, 40, tzinfo=UTC)
+        initial_end = datetime(2023, 11, 14, 22, 13, 45, tzinfo=UTC)  # 5 seconds after start
+        later_end = datetime(2023, 11, 14, 22, 13, 48, tzinfo=UTC)  # 8 seconds after start
 
         scope = ExecuteToolScope.start(
             self.tool_details,
             self.agent_details,
             self.tenant_details,
             start_time=custom_start,
-            end_time=custom_end,
-        )
-        scope.dispose()
-
-        span = self._get_finished_span()
-
-        expected_start_ns = custom_start[0] * 1_000_000_000 + custom_start[1]
-        expected_end_ns = custom_end[0] * 1_000_000_000 + custom_end[1]
-
-        span_start_ns = span.start_time
-        span_end_ns = span.end_time
-
-        self.assertAlmostEqual(span_start_ns, expected_start_ns, delta=1000)
-        self.assertAlmostEqual(span_end_ns, expected_end_ns, delta=1000)
-
-    def test_set_end_time_overrides_end_time(self):
-        """Test that set_end_time overrides the end time when called before dispose."""
-        custom_start_ns = 1700000040000000000
-        initial_end_ns = 1700000045000000000  # 5 seconds after start
-        later_end_ns = 1700000048000000000  # 8 seconds after start
-
-        scope = ExecuteToolScope.start(
-            self.tool_details,
-            self.agent_details,
-            self.tenant_details,
-            start_time=custom_start_ns,
-            end_time=initial_end_ns,
+            end_time=initial_end,
         )
         # Override the end time
-        scope.set_end_time(later_end_ns)
+        scope.set_end_time(later_end)
         scope.dispose()
 
         span = self._get_finished_span()
 
+        expected_end_ns = int(later_end.timestamp() * 1_000_000_000)
         span_end_ns = span.end_time
-        self.assertAlmostEqual(span_end_ns, later_end_ns, delta=1000)
+        self.assertAlmostEqual(span_end_ns, expected_end_ns, delta=1000)
 
     def test_wall_clock_time_used_when_no_custom_times(self):
         """Test that wall-clock time is used when no custom times are provided."""
-        import time
-
         before = time.time_ns()
         scope = ExecuteToolScope.start(
             self.tool_details,
@@ -227,22 +150,23 @@ class TestCustomStartEndTime(unittest.TestCase):
 
     def test_only_start_time_provided(self):
         """Test that only custom start time can be provided without end time."""
-        custom_start_ns = 1700000000000000000
+        custom_start = datetime(2023, 11, 14, 22, 13, 20, tzinfo=UTC)
 
         scope = ExecuteToolScope.start(
             self.tool_details,
             self.agent_details,
             self.tenant_details,
-            start_time=custom_start_ns,
+            start_time=custom_start,
         )
         scope.dispose()
 
         span = self._get_finished_span()
 
+        expected_start_ns = int(custom_start.timestamp() * 1_000_000_000)
         span_start_ns = span.start_time
 
         # Start time should match what we provided
-        self.assertAlmostEqual(span_start_ns, custom_start_ns, delta=1000)
+        self.assertAlmostEqual(span_start_ns, expected_start_ns, delta=1000)
 
         # End time should be close to current time (not custom)
         span_end_ns = span.end_time

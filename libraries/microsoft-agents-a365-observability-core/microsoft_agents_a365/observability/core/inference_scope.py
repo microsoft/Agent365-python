@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from datetime import datetime
 from typing import List
 
 from .agent_details import AgentDetails
@@ -19,7 +20,7 @@ from .constants import (
     GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
 )
 from .inference_call_details import InferenceCallDetails
-from .opentelemetry_scope import OpenTelemetryScope, TimeInput
+from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .tenant_details import TenantDetails
 from .utils import safe_json_dumps
@@ -35,8 +36,8 @@ class InferenceScope(OpenTelemetryScope):
         tenant_details: TenantDetails,
         request: Request | None = None,
         parent_id: str | None = None,
-        start_time: TimeInput = None,
-        end_time: TimeInput = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> "InferenceScope":
         """Creates and starts a new scope for inference tracing.
 
@@ -47,9 +48,8 @@ class InferenceScope(OpenTelemetryScope):
             request: Optional request details for additional context
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
-            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
-                float (seconds since epoch), tuple[int, int] (HrTime), or datetime.
-            end_time: Optional explicit end time in the same formats as start_time.
+            start_time: Optional explicit start time as a datetime object.
+            end_time: Optional explicit end time as a datetime object.
 
         Returns:
             A new InferenceScope instance
@@ -65,8 +65,8 @@ class InferenceScope(OpenTelemetryScope):
         tenant_details: TenantDetails,
         request: Request | None = None,
         parent_id: str | None = None,
-        start_time: TimeInput = None,
-        end_time: TimeInput = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ):
         """Initialize the inference scope.
 
@@ -77,9 +77,8 @@ class InferenceScope(OpenTelemetryScope):
             request: Optional request details for additional context
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
-            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
-                float (seconds since epoch), tuple[int, int] (HrTime), or datetime.
-            end_time: Optional explicit end time in the same formats as start_time.
+            start_time: Optional explicit start time as a datetime object.
+            end_time: Optional explicit end time as a datetime object.
         """
 
         super().__init__(

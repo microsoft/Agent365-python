@@ -1,10 +1,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from datetime import datetime
+
 from ..agent_details import AgentDetails
 from ..constants import GEN_AI_OUTPUT_MESSAGES_KEY
 from ..models.response import Response
-from ..opentelemetry_scope import OpenTelemetryScope, TimeInput
+from ..opentelemetry_scope import OpenTelemetryScope
 from ..tenant_details import TenantDetails
 from ..utils import safe_json_dumps
 
@@ -20,8 +22,8 @@ class OutputScope(OpenTelemetryScope):
         tenant_details: TenantDetails,
         response: Response,
         parent_id: str | None = None,
-        start_time: TimeInput = None,
-        end_time: TimeInput = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> "OutputScope":
         """Creates and starts a new scope for output tracing.
 
@@ -31,8 +33,8 @@ class OutputScope(OpenTelemetryScope):
             response: The response details from the agent
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
-            start_time: Optional explicit start time (ms epoch, Date, or HrTime)
-            end_time: Optional explicit end time (ms epoch, Date, or HrTime)
+            start_time: Optional explicit start time as a datetime object.
+            end_time: Optional explicit end time as a datetime object.
 
         Returns:
             A new OutputScope instance
@@ -45,8 +47,8 @@ class OutputScope(OpenTelemetryScope):
         tenant_details: TenantDetails,
         response: Response,
         parent_id: str | None = None,
-        start_time: TimeInput = None,
-        end_time: TimeInput = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ):
         """Initialize the output scope.
 
@@ -56,8 +58,8 @@ class OutputScope(OpenTelemetryScope):
             response: The response details from the agent
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
-            start_time: Optional explicit start time (ms epoch, Date, or HrTime)
-            end_time: Optional explicit end time (ms epoch, Date, or HrTime)
+            start_time: Optional explicit start time as a datetime object.
+            end_time: Optional explicit end time as a datetime object.
         """
         super().__init__(
             kind="Client",

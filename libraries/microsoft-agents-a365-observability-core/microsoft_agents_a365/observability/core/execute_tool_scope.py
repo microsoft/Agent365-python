@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from datetime import datetime
+
 from .agent_details import AgentDetails
 from .constants import (
     EXECUTE_TOOL_OPERATION_NAME,
@@ -15,7 +17,7 @@ from .constants import (
     SERVER_ADDRESS_KEY,
     SERVER_PORT_KEY,
 )
-from .opentelemetry_scope import OpenTelemetryScope, TimeInput
+from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .tenant_details import TenantDetails
 from .tool_call_details import ToolCallDetails
@@ -31,8 +33,8 @@ class ExecuteToolScope(OpenTelemetryScope):
         tenant_details: TenantDetails,
         request: Request | None = None,
         parent_id: str | None = None,
-        start_time: TimeInput = None,
-        end_time: TimeInput = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> "ExecuteToolScope":
         """Creates and starts a new scope for tool execution tracing.
 
@@ -43,11 +45,10 @@ class ExecuteToolScope(OpenTelemetryScope):
             request: Optional request details for additional context
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
-            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
-                float (seconds since epoch), tuple[int, int] (HrTime), or datetime. Useful when
+            start_time: Optional explicit start time as a datetime object. Useful when
                 recording a tool call after execution has already completed.
-            end_time: Optional explicit end time in the same formats as start_time. When
-                provided, the span will use this timestamp when disposed instead of the
+            end_time: Optional explicit end time as a datetime object. When provided,
+                the span will use this timestamp when disposed instead of the
                 current wall-clock time.
 
         Returns:
@@ -64,8 +65,8 @@ class ExecuteToolScope(OpenTelemetryScope):
         tenant_details: TenantDetails,
         request: Request | None = None,
         parent_id: str | None = None,
-        start_time: TimeInput = None,
-        end_time: TimeInput = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ):
         """Initialize the tool execution scope.
 
@@ -76,11 +77,10 @@ class ExecuteToolScope(OpenTelemetryScope):
             request: Optional request details for additional context
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
-            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
-                float (seconds since epoch), tuple[int, int] (HrTime), or datetime. Useful when
+            start_time: Optional explicit start time as a datetime object. Useful when
                 recording a tool call after execution has already completed.
-            end_time: Optional explicit end time in the same formats as start_time. When
-                provided, the span will use this timestamp when disposed instead of the
+            end_time: Optional explicit end time as a datetime object. When provided,
+                the span will use this timestamp when disposed instead of the
                 current wall-clock time.
         """
         super().__init__(

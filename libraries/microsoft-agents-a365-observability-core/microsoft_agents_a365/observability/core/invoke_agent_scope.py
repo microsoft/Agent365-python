@@ -4,6 +4,7 @@
 # Invoke agent scope for tracing agent invocation.
 
 import logging
+from datetime import datetime
 
 from .agent_details import AgentDetails
 from .constants import (
@@ -32,7 +33,7 @@ from .constants import (
 )
 from .invoke_agent_details import InvokeAgentDetails
 from .models.caller_details import CallerDetails
-from .opentelemetry_scope import OpenTelemetryScope, TimeInput
+from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .tenant_details import TenantDetails
 from .utils import safe_json_dumps, validate_and_normalize_ip
@@ -50,8 +51,8 @@ class InvokeAgentScope(OpenTelemetryScope):
         request: Request | None = None,
         caller_agent_details: AgentDetails | None = None,
         caller_details: CallerDetails | None = None,
-        start_time: TimeInput = None,
-        end_time: TimeInput = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> "InvokeAgentScope":
         """Create and start a new scope for agent invocation tracing.
 
@@ -62,9 +63,8 @@ class InvokeAgentScope(OpenTelemetryScope):
             request: Optional request details for additional context
             caller_agent_details: Optional details of the caller agent
             caller_details: Optional details of the non-agentic caller
-            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
-                float (seconds since epoch), tuple[int, int] (HrTime), or datetime.
-            end_time: Optional explicit end time in the same formats as start_time.
+            start_time: Optional explicit start time as a datetime object.
+            end_time: Optional explicit end time as a datetime object.
 
         Returns:
             A new InvokeAgentScope instance
@@ -86,8 +86,8 @@ class InvokeAgentScope(OpenTelemetryScope):
         request: Request | None = None,
         caller_agent_details: AgentDetails | None = None,
         caller_details: CallerDetails | None = None,
-        start_time: TimeInput = None,
-        end_time: TimeInput = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ):
         """Initialize the agent invocation scope.
 
@@ -97,9 +97,8 @@ class InvokeAgentScope(OpenTelemetryScope):
             request: Optional request details for additional context
             caller_agent_details: Optional details of the caller agent
             caller_details: Optional details of the non-agentic caller
-            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
-                float (seconds since epoch), tuple[int, int] (HrTime), or datetime.
-            end_time: Optional explicit end time in the same formats as start_time.
+            start_time: Optional explicit start time as a datetime object.
+            end_time: Optional explicit end time as a datetime object.
         """
         activity_name = INVOKE_AGENT_OPERATION_NAME
         if invoke_agent_details.details.agent_name:
