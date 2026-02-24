@@ -62,8 +62,9 @@ class InvokeAgentScope(OpenTelemetryScope):
             request: Optional request details for additional context
             caller_agent_details: Optional details of the caller agent
             caller_details: Optional details of the non-agentic caller
-            start_time: Optional explicit start time (ms epoch, Date, or HrTime)
-            end_time: Optional explicit end time (ms epoch, Date, or HrTime)
+            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
+                float (seconds since epoch), tuple[int, int] (HrTime), or datetime.
+            end_time: Optional explicit end time in the same formats as start_time.
 
         Returns:
             A new InvokeAgentScope instance
@@ -96,8 +97,9 @@ class InvokeAgentScope(OpenTelemetryScope):
             request: Optional request details for additional context
             caller_agent_details: Optional details of the caller agent
             caller_details: Optional details of the non-agentic caller
-            start_time: Optional explicit start time (ms epoch, Date, or HrTime)
-            end_time: Optional explicit end time (ms epoch, Date, or HrTime)
+            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
+                float (seconds since epoch), tuple[int, int] (HrTime), or datetime.
+            end_time: Optional explicit end time in the same formats as start_time.
         """
         activity_name = INVOKE_AGENT_OPERATION_NAME
         if invoke_agent_details.details.agent_name:

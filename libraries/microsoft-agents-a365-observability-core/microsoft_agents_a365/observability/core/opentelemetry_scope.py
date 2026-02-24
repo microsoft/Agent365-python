@@ -5,7 +5,6 @@
 
 import logging
 import os
-import time
 from datetime import datetime
 from threading import Lock
 from typing import TYPE_CHECKING, Any
@@ -111,7 +110,6 @@ class OpenTelemetryScope:
                 instead of the current wall-clock time.
         """
         self._span: Span | None = None
-        self._wall_clock_start_ms = time.time() * 1000  # milliseconds
         self._custom_start_time: TimeInput = start_time
         self._custom_end_time: TimeInput = end_time
         self._has_ended = False

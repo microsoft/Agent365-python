@@ -43,11 +43,12 @@ class ExecuteToolScope(OpenTelemetryScope):
             request: Optional request details for additional context
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
-            start_time: Optional explicit start time (ms epoch, Date, or HrTime). Useful when
+            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
+                float (seconds since epoch), tuple[int, int] (HrTime), or datetime. Useful when
                 recording a tool call after execution has already completed.
-            end_time: Optional explicit end time (ms epoch, Date, or HrTime). When provided,
-                the span will use this timestamp when disposed instead of the current
-                wall-clock time.
+            end_time: Optional explicit end time in the same formats as start_time. When
+                provided, the span will use this timestamp when disposed instead of the
+                current wall-clock time.
 
         Returns:
             A new ExecuteToolScope instance
@@ -75,11 +76,12 @@ class ExecuteToolScope(OpenTelemetryScope):
             request: Optional request details for additional context
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
-            start_time: Optional explicit start time (ms epoch, Date, or HrTime). Useful when
+            start_time: Optional explicit start time. Accepts int (nanoseconds since epoch),
+                float (seconds since epoch), tuple[int, int] (HrTime), or datetime. Useful when
                 recording a tool call after execution has already completed.
-            end_time: Optional explicit end time (ms epoch, Date, or HrTime). When provided,
-                the span will use this timestamp when disposed instead of the current
-                wall-clock time.
+            end_time: Optional explicit end time in the same formats as start_time. When
+                provided, the span will use this timestamp when disposed instead of the
+                current wall-clock time.
         """
         super().__init__(
             kind="Internal",
