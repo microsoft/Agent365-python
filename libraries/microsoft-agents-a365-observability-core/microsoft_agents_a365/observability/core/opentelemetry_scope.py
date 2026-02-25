@@ -5,7 +5,7 @@
 
 import logging
 import os
-import time
+from datetime import datetime
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
@@ -72,6 +72,20 @@ class OpenTelemetryScope:
         enable_observability = os.getenv(ENABLE_A365_OBSERVABILITY, "").lower()
         return (env_value or enable_observability) in ("true", "1", "yes", "on")
 
+    @staticmethod
+    def _datetime_to_ns(dt: datetime | None) -> int | None:
+        """Convert a datetime to nanoseconds since epoch.
+
+        Args:
+            dt: Python datetime object, or None
+
+        Returns:
+            Nanoseconds since epoch, or None if input is None
+        """
+        if dt is None:
+            return None
+        return int(dt.timestamp() * 1_000_000_000)
+
     def __init__(
         self,
         kind: str,
@@ -80,6 +94,8 @@ class OpenTelemetryScope:
         agent_details: "AgentDetails | None" = None,
         tenant_details: "TenantDetails | None" = None,
         parent_id: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ):
         """Initialize the OpenTelemetry scope.
 
@@ -91,9 +107,15 @@ class OpenTelemetryScope:
             tenant_details: Optional tenant details
             parent_id: Optional parent Activity ID used to link this span to an upstream
                 operation
+            start_time: Optional explicit start time as a datetime object.
+                Useful when recording an operation after it has already completed.
+            end_time: Optional explicit end time as a datetime object.
+                When provided, the span will use this timestamp when disposed
+                instead of the current wall-clock time.
         """
         self._span: Span | None = None
-        self._start_time = time.time()
+        self._custom_start_time: datetime | None = start_time
+        self._custom_end_time: datetime | None = end_time
         self._has_ended = False
         self._error_type: str | None = None
         self._exception: Exception | None = None
@@ -119,7 +141,15 @@ class OpenTelemetryScope:
             parent_context = parse_parent_id_to_context(parent_id)
             span_context = parent_context if parent_context else context.get_current()
 
-            self._span = tracer.start_span(activity_name, kind=activity_kind, context=span_context)
+            # Convert custom start time to OTel-compatible format (nanoseconds since epoch)
+            otel_start_time = self._datetime_to_ns(start_time)
+
+            self._span = tracer.start_span(
+                activity_name,
+                kind=activity_kind,
+                context=span_context,
+                start_time=otel_start_time,
+            )
 
             # Log span creation
             if self._span:
@@ -230,6 +260,18 @@ class OpenTelemetryScope:
             if key and key.strip():
                 self._span.set_attribute(key, value)
 
+    def set_end_time(self, end_time: datetime) -> None:
+        """Set a custom end time for the scope.
+
+        When set, dispose() will pass this value to span.end() instead of using
+        the current wall-clock time. This is useful when the actual end time of
+        the operation is known before the scope is disposed.
+
+        Args:
+            end_time: The end time as a datetime object.
+        """
+        self._custom_end_time = end_time
+
     def _end(self) -> None:
         """End the span and record metrics."""
         if self._span and self._is_telemetry_enabled() and not self._has_ended:
@@ -237,7 +279,12 @@ class OpenTelemetryScope:
             span_id = f"{self._span.context.span_id:016x}" if self._span.context else "unknown"
             logger.info(f"Span ended: '{self._span.name}' ({span_id})")
 
-            self._span.end()
+            # Convert custom end time to OTel-compatible format (nanoseconds since epoch)
+            otel_end_time = self._datetime_to_ns(self._custom_end_time)
+            if otel_end_time is not None:
+                self._span.end(end_time=otel_end_time)
+            else:
+                self._span.end()
 
     def __enter__(self):
         """Enter the context manager and make span active."""

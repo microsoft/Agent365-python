@@ -4,6 +4,7 @@
 # Invoke agent scope for tracing agent invocation.
 
 import logging
+from datetime import datetime
 
 from .agent_details import AgentDetails
 from .constants import (
@@ -50,6 +51,8 @@ class InvokeAgentScope(OpenTelemetryScope):
         request: Request | None = None,
         caller_agent_details: AgentDetails | None = None,
         caller_details: CallerDetails | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> "InvokeAgentScope":
         """Create and start a new scope for agent invocation tracing.
 
@@ -60,12 +63,20 @@ class InvokeAgentScope(OpenTelemetryScope):
             request: Optional request details for additional context
             caller_agent_details: Optional details of the caller agent
             caller_details: Optional details of the non-agentic caller
+            start_time: Optional explicit start time as a datetime object.
+            end_time: Optional explicit end time as a datetime object.
 
         Returns:
             A new InvokeAgentScope instance
         """
         return InvokeAgentScope(
-            invoke_agent_details, tenant_details, request, caller_agent_details, caller_details
+            invoke_agent_details,
+            tenant_details,
+            request,
+            caller_agent_details,
+            caller_details,
+            start_time,
+            end_time,
         )
 
     def __init__(
@@ -75,6 +86,8 @@ class InvokeAgentScope(OpenTelemetryScope):
         request: Request | None = None,
         caller_agent_details: AgentDetails | None = None,
         caller_details: CallerDetails | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ):
         """Initialize the agent invocation scope.
 
@@ -84,6 +97,8 @@ class InvokeAgentScope(OpenTelemetryScope):
             request: Optional request details for additional context
             caller_agent_details: Optional details of the caller agent
             caller_details: Optional details of the non-agentic caller
+            start_time: Optional explicit start time as a datetime object.
+            end_time: Optional explicit end time as a datetime object.
         """
         activity_name = INVOKE_AGENT_OPERATION_NAME
         if invoke_agent_details.details.agent_name:
@@ -97,6 +112,8 @@ class InvokeAgentScope(OpenTelemetryScope):
             activity_name=activity_name,
             agent_details=invoke_agent_details.details,
             tenant_details=tenant_details,
+            start_time=start_time,
+            end_time=end_time,
         )
 
         endpoint, _, session_id = (
