@@ -22,11 +22,9 @@ _instruments = ("openai-agents >= 0.2.6",)
 
 
 class OpenAIAgentsTraceInstrumentor(BaseInstrumentor):
-    """
-    Custom Trace Processor for OpenAI Agents SDK using Microsoft Agent 365.
-    Forwards OpenAI Agents SDK traces and spans to Microsoft Agent 365's tracing scopes.
+    """Custom Trace Processor for OpenAI Agents SDK using Microsoft Agent 365.
 
-    ```
+    Forwards OpenAI Agents SDK traces and spans to Microsoft Agent 365's tracing scopes.
     """
 
     def __init__(self):
