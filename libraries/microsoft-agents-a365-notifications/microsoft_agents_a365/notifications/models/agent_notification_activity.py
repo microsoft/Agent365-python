@@ -28,15 +28,17 @@ class AgentNotificationActivity:
         activity: The underlying Activity object.
 
     Example:
-        >>> async def email_handler(
-        ...     context: TurnContext,
-        ...     state: TurnState,
-        ...     notification: AgentNotificationActivity,
-        ... ) -> None:
-        ...     email = notification.email
-        ...     if email:
-        ...         print(f"Received email: {email.id}")
-        ...         print(f"Body: {email.html_body}")
+        .. code-block:: python
+
+            async def email_handler(
+                context: TurnContext,
+                state: TurnState,
+                notification: AgentNotificationActivity,
+            ) -> None:
+                email = notification.email
+                if email:
+                    print(f"Received email: {email.id}")
+                    print(f"Body: {email.html_body}")
     """
 
     def __init__(self, activity: Activity):
@@ -160,13 +162,17 @@ class AgentNotificationActivity:
             An instance of the specified model type if validation succeeds, otherwise None.
 
         Example:
-            >>> from pydantic import BaseModel
-            >>> class CustomNotification(BaseModel):
-            ...     custom_field: str
-            >>> notification = AgentNotificationActivity(activity)
-            >>> custom = notification.as_model(CustomNotification)
-            >>> if custom:
-            ...     print(custom.custom_field)
+            .. code-block:: python
+
+                from pydantic import BaseModel
+
+                class CustomNotification(BaseModel):
+                    custom_field: str
+
+                notification = AgentNotificationActivity(activity)
+                custom = notification.as_model(CustomNotification)
+                if custom:
+                    print(custom.custom_field)
         """
         try:
             return model.model_validate(self.value or {})
