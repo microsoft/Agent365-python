@@ -123,7 +123,9 @@ class TestAgent365Exporter(unittest.TestCase):
             url, body, headers = args
 
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
-            self.assertIn("/maven/agent365/agents/test-agent-456/traces", url)
+            self.assertIn(
+                "/observability/tenants/test-tenant-123/agents/test-agent-456/traces", url
+            )
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
 
@@ -137,35 +139,23 @@ class TestAgent365Exporter(unittest.TestCase):
         )  # Two spans
 
     def test_export_fails_after_default_and_fallback_attempts(self):
-        """Test export failure when both default and IL tenant fallback endpoints fail."""
+        """Test export failure when default endpoint fails (no fallback in current implementation)."""
         # Arrange
         spans = [self._create_mock_span("failed_span")]
 
-        # Mock the PowerPlatformApiDiscovery class for fallback
-        with patch(
-            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
-        ) as mock_discovery_class:
-            mock_discovery = Mock()
-            mock_discovery.get_tenant_island_cluster_endpoint.return_value = "test-endpoint.com"
-            mock_discovery_class.return_value = mock_discovery
+        # Mock the _post_with_retries method to always return False (failure)
+        with patch.object(self.exporter, "_post_with_retries", return_value=False) as mock_post:
+            # Act
+            result = self.exporter.export(spans)
 
-            # Mock the _post_with_retries method to always return False (failure)
-            with patch.object(self.exporter, "_post_with_retries", return_value=False) as mock_post:
-                # Act
-                result = self.exporter.export(spans)
+            # Assert - should fail after default attempt (no fallback in current implementation)
+            self.assertEqual(result, SpanExportResult.FAILURE)
+            # Should be called once: only for default URL (no fallback logic)
+            self.assertEqual(mock_post.call_count, 1)
 
-                # Assert - should fail after both default and fallback attempts
-                self.assertEqual(result, SpanExportResult.FAILURE)
-                # Should be called twice: once for default URL, once for IL tenant fallback
-                self.assertEqual(mock_post.call_count, 2)
-
-                # Verify first call uses default endpoint
-                first_url = mock_post.call_args_list[0][0][0]
-                self.assertIn(DEFAULT_ENDPOINT_URL, first_url)
-
-                # Verify second call uses fallback endpoint
-                second_url = mock_post.call_args_list[1][0][0]
-                self.assertIn("test-endpoint.com", second_url)
+            # Verify call uses default endpoint
+            first_url = mock_post.call_args_list[0][0][0]
+            self.assertIn(DEFAULT_ENDPOINT_URL, first_url)
 
     def test_partitioning_by_scope(self):
         """Test 3: Test that spans are properly partitioned by instrumentation scope."""
@@ -246,8 +236,12 @@ class TestAgent365Exporter(unittest.TestCase):
             url, body, headers = args
 
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
-            self.assertIn("/maven/agent365/service/agents/test-agent-456/traces", url)
-            self.assertNotIn("/maven/agent365/agents/test-agent-456/traces", url)
+            self.assertIn(
+                "/observabilityService/tenants/test-tenant-123/agents/test-agent-456/traces", url
+            )
+            self.assertNotIn(
+                "/observability/tenants/test-tenant-123/agents/test-agent-456/traces", url
+            )
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
 
@@ -274,8 +268,12 @@ class TestAgent365Exporter(unittest.TestCase):
             url, body, headers = args
 
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
-            self.assertIn("/maven/agent365/agents/test-agent-456/traces", url)
-            self.assertNotIn("/maven/agent365/service/agents/test-agent-456/traces", url)
+            self.assertIn(
+                "/observability/tenants/test-tenant-123/agents/test-agent-456/traces", url
+            )
+            self.assertNotIn(
+                "/observabilityService/tenants/test-tenant-123/agents/test-agent-456/traces", url
+            )
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
 
@@ -320,7 +318,7 @@ class TestAgent365Exporter(unittest.TestCase):
                 unittest.mock.call.info("Found 1 identity groups with 2 total spans to export"),
                 # Should log endpoint being used (default endpoint)
                 unittest.mock.call.info(
-                    f"Exporting 2 spans to endpoint: {DEFAULT_ENDPOINT_URL}/maven/agent365/agents/test-agent-456/traces?api-version=1 "
+                    f"Exporting 2 spans to endpoint: {DEFAULT_ENDPOINT_URL}/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1 "
                     "(tenant: test-tenant-123, agent: test-agent-456)"
                 ),
                 # Should log token resolution success
@@ -379,28 +377,21 @@ class TestAgent365Exporter(unittest.TestCase):
 
         spans = [self._create_mock_span("override_test_span")]
 
-        # Mock the PowerPlatformApiDiscovery class (should not be called when override is set)
-        with patch(
-            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
-        ) as mock_discovery_class:
-            # Mock the _post_with_retries method
-            with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
-                # Act
-                result = exporter.export(spans)
+        # Mock the _post_with_retries method
+        with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+            # Act
+            result = exporter.export(spans)
 
-                # Assert
-                self.assertEqual(result, SpanExportResult.SUCCESS)
-                mock_post.assert_called_once()
+            # Assert
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_called_once()
 
-                # Verify the call arguments - should use override domain with complete URL
-                args, kwargs = mock_post.call_args
-                url, body, headers = args
+            # Verify the call arguments - should use override domain with complete URL
+            args, kwargs = mock_post.call_args
+            url, body, headers = args
 
-                expected_url = f"https://{override_domain}/maven/agent365/agents/test-agent-456/traces?api-version=1"
-                self.assertEqual(url, expected_url)
-
-                # Verify PowerPlatformApiDiscovery was not instantiated
-                mock_discovery_class.assert_not_called()
+            expected_url = f"https://{override_domain}/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
+            self.assertEqual(url, expected_url)
 
     def test_export_uses_default_endpoint_when_no_override(self):
         """Test that default endpoint URL is used when no override is set."""
@@ -428,9 +419,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = (
-                f"{DEFAULT_ENDPOINT_URL}/maven/agent365/agents/test-agent-456/traces?api-version=1"
-            )
+            expected_url = f"{DEFAULT_ENDPOINT_URL}/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_ignores_empty_domain_override(self):
@@ -471,28 +460,21 @@ class TestAgent365Exporter(unittest.TestCase):
 
         spans = [self._create_mock_span("test_span")]
 
-        # Mock the PowerPlatformApiDiscovery class (should NOT be called since override is valid)
-        with patch(
-            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
-        ) as mock_discovery_class:
-            # Mock the _post_with_retries method
-            with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
-                # Act
-                result = exporter.export(spans)
+        # Mock the _post_with_retries method
+        with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+            # Act
+            result = exporter.export(spans)
 
-                # Assert
-                self.assertEqual(result, SpanExportResult.SUCCESS)
-                mock_post.assert_called_once()
+            # Assert
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_called_once()
 
-                # Verify the call arguments - should use override URL without duplicating protocol
-                args, kwargs = mock_post.call_args
-                url, body, headers = args
+            # Verify the call arguments - should use override URL without duplicating protocol
+            args, kwargs = mock_post.call_args
+            url, body, headers = args
 
-                expected_url = "https://override.example.com/maven/agent365/agents/test-agent-456/traces?api-version=1"
-                self.assertEqual(url, expected_url)
-
-                # Verify PowerPlatformApiDiscovery was not called
-                mock_discovery_class.assert_not_called()
+            expected_url = "https://override.example.com/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
+            self.assertEqual(url, expected_url)
 
     def test_export_uses_valid_url_override_with_http(self):
         """Test that domain override with http:// protocol is accepted and used correctly."""
@@ -506,28 +488,21 @@ class TestAgent365Exporter(unittest.TestCase):
 
         spans = [self._create_mock_span("test_span")]
 
-        # Mock the PowerPlatformApiDiscovery class (should NOT be called since override is valid)
-        with patch(
-            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
-        ) as mock_discovery_class:
-            # Mock the _post_with_retries method
-            with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
-                # Act
-                result = exporter.export(spans)
+        # Mock the _post_with_retries method
+        with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+            # Act
+            result = exporter.export(spans)
 
-                # Assert
-                self.assertEqual(result, SpanExportResult.SUCCESS)
-                mock_post.assert_called_once()
+            # Assert
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_called_once()
 
-                # Verify the call arguments - should use override URL with http protocol
-                args, kwargs = mock_post.call_args
-                url, body, headers = args
+            # Verify the call arguments - should use override URL with http protocol
+            args, kwargs = mock_post.call_args
+            url, body, headers = args
 
-                expected_url = "http://localhost:8080/maven/agent365/agents/test-agent-456/traces?api-version=1"
-                self.assertEqual(url, expected_url)
-
-                # Verify PowerPlatformApiDiscovery was not called
-                mock_discovery_class.assert_not_called()
+            expected_url = "http://localhost:8080/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
+            self.assertEqual(url, expected_url)
 
     def test_export_uses_valid_domain_override_with_port(self):
         """Test that domain override with port (no protocol) is accepted and https:// is prepended."""
@@ -541,28 +516,21 @@ class TestAgent365Exporter(unittest.TestCase):
 
         spans = [self._create_mock_span("test_span")]
 
-        # Mock the PowerPlatformApiDiscovery class (should NOT be called since override is valid)
-        with patch(
-            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
-        ) as mock_discovery_class:
-            # Mock the _post_with_retries method
-            with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
-                # Act
-                result = exporter.export(spans)
+        # Mock the _post_with_retries method
+        with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+            # Act
+            result = exporter.export(spans)
 
-                # Assert
-                self.assertEqual(result, SpanExportResult.SUCCESS)
-                mock_post.assert_called_once()
+            # Assert
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_called_once()
 
-                # Verify the call arguments - should prepend https:// to domain with port
-                args, kwargs = mock_post.call_args
-                url, body, headers = args
+            # Verify the call arguments - should prepend https:// to domain with port
+            args, kwargs = mock_post.call_args
+            url, body, headers = args
 
-                expected_url = "https://example.com:8080/maven/agent365/agents/test-agent-456/traces?api-version=1"
-                self.assertEqual(url, expected_url)
-
-                # Verify PowerPlatformApiDiscovery was not called
-                mock_discovery_class.assert_not_called()
+            expected_url = "https://example.com:8080/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
+            self.assertEqual(url, expected_url)
 
     def test_export_ignores_invalid_domain_with_protocol(self):
         """Test that domain override with invalid protocol is ignored."""
@@ -617,7 +585,7 @@ class TestAgent365Exporter(unittest.TestCase):
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
 
     def test_export_falls_back_to_il_tenant_on_default_failure(self):
-        """Test that IL tenant endpoint is tried when default endpoint fails."""
+        """Test default endpoint failure (no fallback in current implementation)."""
         # Arrange
         os.environ.pop("A365_OBSERVABILITY_DOMAIN_OVERRIDE", None)
 
@@ -627,38 +595,18 @@ class TestAgent365Exporter(unittest.TestCase):
 
         spans = [self._create_mock_span("fallback_span")]
 
-        # Mock the PowerPlatformApiDiscovery class for fallback
-        with patch(
-            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
-        ) as mock_discovery_class:
-            mock_discovery = Mock()
-            mock_discovery.get_tenant_island_cluster_endpoint.return_value = "fallback-endpoint.com"
-            mock_discovery_class.return_value = mock_discovery
+        # Mock _post_with_retries: call fails (no fallback logic in current implementation)
+        with patch.object(exporter, "_post_with_retries", return_value=False) as mock_post:
+            # Act
+            result = exporter.export(spans)
 
-            # Mock _post_with_retries: first call fails (default), second call succeeds (fallback)
-            with patch.object(
-                exporter, "_post_with_retries", side_effect=[False, True]
-            ) as mock_post:
-                # Act
-                result = exporter.export(spans)
+            # Assert - should fail because no fallback exists in current implementation
+            self.assertEqual(result, SpanExportResult.FAILURE)
+            self.assertEqual(mock_post.call_count, 1)
 
-                # Assert - should succeed because fallback succeeded
-                self.assertEqual(result, SpanExportResult.SUCCESS)
-                self.assertEqual(mock_post.call_count, 2)
-
-                # Verify first call uses default endpoint
-                first_url = mock_post.call_args_list[0][0][0]
-                self.assertIn(DEFAULT_ENDPOINT_URL, first_url)
-
-                # Verify second call uses IL tenant fallback endpoint
-                second_url = mock_post.call_args_list[1][0][0]
-                self.assertIn("fallback-endpoint.com", second_url)
-
-                # Verify PowerPlatformApiDiscovery was called for fallback
-                mock_discovery_class.assert_called_once_with("test")
-                mock_discovery.get_tenant_island_cluster_endpoint.assert_called_once_with(
-                    "test-tenant-123"
-                )
+            # Verify call uses default endpoint
+            first_url = mock_post.call_args_list[0][0][0]
+            self.assertIn(DEFAULT_ENDPOINT_URL, first_url)
 
     def test_export_no_fallback_when_domain_override_fails(self):
         """Test that no fallback happens when domain override is set and fails."""
@@ -671,30 +619,23 @@ class TestAgent365Exporter(unittest.TestCase):
 
         spans = [self._create_mock_span("no_fallback_span")]
 
-        # Mock the PowerPlatformApiDiscovery class (should NOT be called)
-        with patch(
-            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
-        ) as mock_discovery_class:
-            # Mock _post_with_retries to return False (failure)
-            with patch.object(exporter, "_post_with_retries", return_value=False) as mock_post:
-                # Act
-                result = exporter.export(spans)
+        # Mock _post_with_retries to return False (failure)
+        with patch.object(exporter, "_post_with_retries", return_value=False) as mock_post:
+            # Act
+            result = exporter.export(spans)
 
-                # Assert - should fail without fallback
-                self.assertEqual(result, SpanExportResult.FAILURE)
-                # Should only be called once (no fallback for override)
-                mock_post.assert_called_once()
+            # Assert - should fail without fallback
+            self.assertEqual(result, SpanExportResult.FAILURE)
+            # Should only be called once (no fallback for override)
+            mock_post.assert_called_once()
 
-                # Verify the override URL was used
-                args, kwargs = mock_post.call_args
-                url = args[0]
-                self.assertIn("custom-override.com", url)
-
-                # Verify PowerPlatformApiDiscovery was NOT called
-                mock_discovery_class.assert_not_called()
+            # Verify the override URL was used
+            args, kwargs = mock_post.call_args
+            url = args[0]
+            self.assertIn("custom-override.com", url)
 
     def test_export_no_fallback_when_default_succeeds(self):
-        """Test that IL tenant fallback is not attempted when default endpoint succeeds."""
+        """Test that no fallback is attempted when default endpoint succeeds."""
         # Arrange
         os.environ.pop("A365_OBSERVABILITY_DOMAIN_OVERRIDE", None)
 
@@ -704,21 +645,14 @@ class TestAgent365Exporter(unittest.TestCase):
 
         spans = [self._create_mock_span("success_span")]
 
-        # Mock the PowerPlatformApiDiscovery class (should NOT be called)
-        with patch(
-            "microsoft_agents_a365.observability.core.exporters.agent365_exporter.PowerPlatformApiDiscovery"
-        ) as mock_discovery_class:
-            # Mock _post_with_retries to return True (success)
-            with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
-                # Act
-                result = exporter.export(spans)
+        # Mock _post_with_retries to return True (success)
+        with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+            # Act
+            result = exporter.export(spans)
 
-                # Assert
-                self.assertEqual(result, SpanExportResult.SUCCESS)
-                mock_post.assert_called_once()
-
-                # Verify PowerPlatformApiDiscovery was NOT called (no fallback needed)
-                mock_discovery_class.assert_not_called()
+            # Assert
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -197,6 +197,32 @@ def get_validated_domain_override() -> str | None:
     return domain_override
 
 
+def build_export_url(
+    endpoint: str, agent_id: str, tenant_id: str, use_s2s_endpoint: bool = False
+) -> str:
+    """Construct the full export URL from endpoint and agent ID.
+
+    Args:
+        endpoint: Base endpoint URL or domain.
+        agent_id: The agent identifier to include in the URL path.
+        tenant_id: The tenant identifier to include in the URL path.
+        use_s2s_endpoint: Whether to use the S2S endpoint path format.
+
+    Returns:
+        The fully constructed export URL with path and query parameters.
+    """
+    endpoint_path = (
+        f"/observabilityService/tenants/{tenant_id}/agents/{agent_id}/traces"
+        if use_s2s_endpoint
+        else f"/observability/tenants/{tenant_id}/agents/{agent_id}/traces"
+    )
+
+    parsed = urlparse(endpoint)
+    if parsed.scheme and "://" in endpoint:
+        return f"{endpoint}{endpoint_path}?api-version=1"
+    return f"https://{endpoint}{endpoint_path}?api-version=1"
+
+
 def is_agent365_exporter_enabled() -> bool:
     """Check if Agent 365 exporter is enabled."""
     # Check environment variable

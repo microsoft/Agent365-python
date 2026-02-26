@@ -11,10 +11,8 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from typing import Any, final
-from urllib.parse import urlparse
 
 import requests
-from microsoft_agents_a365.runtime.power_platform_api_discovery import PowerPlatformApiDiscovery
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
@@ -25,6 +23,7 @@ from ..constants import (
     INVOKE_AGENT_OPERATION_NAME,
 )
 from .utils import (
+    build_export_url,
     get_validated_domain_override,
     hex_span_id,
     hex_trace_id,
@@ -104,7 +103,7 @@ class _Agent365Exporter(SpanExporter):
                 else:
                     endpoint = DEFAULT_ENDPOINT_URL
 
-                url = self._build_url(endpoint, agent_id)
+                url = build_export_url(endpoint, agent_id, tenant_id, self._use_s2s_endpoint)
 
                 # Debug: Log endpoint being used
                 logger.info(
@@ -131,18 +130,6 @@ class _Agent365Exporter(SpanExporter):
                 # Basic retry loop
                 ok = self._post_with_retries(url, body, headers)
 
-                # Fallback to IL tenant endpoint if default endpoint failed
-                # and no domain override was set
-                if not ok and not self._domain_override:
-                    discovery = PowerPlatformApiDiscovery(self._cluster_category)
-                    fallback_endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
-                    fallback_url = self._build_url(fallback_endpoint, agent_id)
-                    logger.info(
-                        f"Falling back to IL tenant endpoint: {fallback_url} "
-                        f"(tenant: {tenant_id}, agent: {agent_id})"
-                    )
-                    ok = self._post_with_retries(fallback_url, body, headers)
-
                 if not ok:
                     any_failure = True
 
@@ -165,32 +152,6 @@ class _Agent365Exporter(SpanExporter):
 
     def force_flush(self, timeout_millis: int = 30000) -> bool:
         return True
-
-    # ------------- Helper methods -------------------
-
-    def _build_url(self, endpoint: str, agent_id: str) -> str:
-        """Construct the full export URL from endpoint and agent ID.
-
-        If the endpoint has a scheme (http:// or https://), use it as-is.
-        Otherwise, prepend https://.
-
-        Args:
-            endpoint: Base endpoint URL or domain.
-            agent_id: The agent identifier to include in the URL path.
-
-        Returns:
-            The fully constructed export URL with path and query parameters.
-        """
-        endpoint_path = (
-            f"/maven/agent365/service/agents/{agent_id}/traces"
-            if self._use_s2s_endpoint
-            else f"/maven/agent365/agents/{agent_id}/traces"
-        )
-
-        parsed = urlparse(endpoint)
-        if parsed.scheme and "://" in endpoint:
-            return f"{endpoint}{endpoint_path}?api-version=1"
-        return f"https://{endpoint}{endpoint_path}?api-version=1"
 
     # ------------- HTTP helper ----------------------
 
