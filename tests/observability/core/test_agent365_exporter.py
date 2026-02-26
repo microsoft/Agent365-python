@@ -136,8 +136,8 @@ class TestAgent365Exporter(unittest.TestCase):
             len(request_data["resourceSpans"][0]["scopeSpans"][0]["spans"]), 2
         )  # Two spans
 
-    def test_export_failure_with_retries(self):
-        """Test 2: Test export failure with fallback to IL tenant endpoint."""
+    def test_export_fails_after_default_and_fallback_attempts(self):
+        """Test export failure when both default and IL tenant fallback endpoints fail."""
         # Arrange
         spans = [self._create_mock_span("failed_span")]
 

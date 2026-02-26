@@ -173,6 +173,13 @@ class _Agent365Exporter(SpanExporter):
 
         If the endpoint has a scheme (http:// or https://), use it as-is.
         Otherwise, prepend https://.
+
+        Args:
+            endpoint: Base endpoint URL or domain.
+            agent_id: The agent identifier to include in the URL path.
+
+        Returns:
+            The fully constructed export URL with path and query parameters.
         """
         endpoint_path = (
             f"/maven/agent365/service/agents/{agent_id}/traces"
