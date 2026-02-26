@@ -39,6 +39,7 @@ from .utils import (
 # Hardcoded constants - not configurable
 DEFAULT_HTTP_TIMEOUT_SECONDS = 30.0
 DEFAULT_MAX_RETRIES = 3
+DEFAULT_ENDPOINT_URL = "https://agent365.svc.cloud.microsoft"
 
 # Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
 logger = logging.getLogger(__name__)
@@ -97,30 +98,13 @@ class _Agent365Exporter(SpanExporter):
                 payload = self._build_export_request(activities)
                 body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
-                # Resolve endpoint + token
+                # Resolve endpoint: domain override > default URL > IL tenant fallback
                 if self._domain_override:
                     endpoint = self._domain_override
                 else:
-                    discovery = PowerPlatformApiDiscovery(self._cluster_category)
-                    endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
+                    endpoint = DEFAULT_ENDPOINT_URL
 
-                endpoint_path = (
-                    f"/maven/agent365/service/agents/{agent_id}/traces"
-                    if self._use_s2s_endpoint
-                    else f"/maven/agent365/agents/{agent_id}/traces"
-                )
-
-                # Construct URL - if endpoint has a scheme (http:// or https://), use it as-is
-                # Otherwise, prepend https://
-                # Note: Check for "://" to distinguish between real protocols and domain:port format
-                # (urlparse treats "example.com:8080" as having scheme="example.com")
-                parsed = urlparse(endpoint)
-                if parsed.scheme and "://" in endpoint:
-                    # Endpoint is a full URL, append path
-                    url = f"{endpoint}{endpoint_path}?api-version=1"
-                else:
-                    # Endpoint is just a domain (possibly with port), prepend https://
-                    url = f"https://{endpoint}{endpoint_path}?api-version=1"
+                url = self._build_url(endpoint, agent_id)
 
                 # Debug: Log endpoint being used
                 logger.info(
@@ -146,6 +130,19 @@ class _Agent365Exporter(SpanExporter):
 
                 # Basic retry loop
                 ok = self._post_with_retries(url, body, headers)
+
+                # Fallback to IL tenant endpoint if default endpoint failed
+                # and no domain override was set
+                if not ok and not self._domain_override:
+                    discovery = PowerPlatformApiDiscovery(self._cluster_category)
+                    fallback_endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
+                    fallback_url = self._build_url(fallback_endpoint, agent_id)
+                    logger.info(
+                        f"Falling back to IL tenant endpoint: {fallback_url} "
+                        f"(tenant: {tenant_id}, agent: {agent_id})"
+                    )
+                    ok = self._post_with_retries(fallback_url, body, headers)
+
                 if not ok:
                     any_failure = True
 
@@ -170,6 +167,23 @@ class _Agent365Exporter(SpanExporter):
         return True
 
     # ------------- Helper methods -------------------
+
+    def _build_url(self, endpoint: str, agent_id: str) -> str:
+        """Construct the full export URL from endpoint and agent ID.
+
+        If the endpoint has a scheme (http:// or https://), use it as-is.
+        Otherwise, prepend https://.
+        """
+        endpoint_path = (
+            f"/maven/agent365/service/agents/{agent_id}/traces"
+            if self._use_s2s_endpoint
+            else f"/maven/agent365/agents/{agent_id}/traces"
+        )
+
+        parsed = urlparse(endpoint)
+        if parsed.scheme and "://" in endpoint:
+            return f"{endpoint}{endpoint_path}?api-version=1"
+        return f"https://{endpoint}{endpoint_path}?api-version=1"
 
     # ------------- HTTP helper ----------------------
 
