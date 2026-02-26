@@ -97,7 +97,7 @@ class _Agent365Exporter(SpanExporter):
                 payload = self._build_export_request(activities)
                 body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
-                # Resolve endpoint: domain override > default URL > IL tenant fallback
+                # Resolve endpoint: domain override > default URL
                 if self._domain_override:
                     endpoint = self._domain_override
                 else:
