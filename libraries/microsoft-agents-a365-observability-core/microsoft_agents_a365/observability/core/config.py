@@ -1,8 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-import os
 import logging
+import os
 import threading
 from collections.abc import Callable
 from typing import Any, Optional
