@@ -164,9 +164,8 @@ class TelemetryManager:
                 use_s2s_endpoint=exporter_options.use_s2s_endpoint,
                 suppress_invoke_agent_input=suppress_invoke_agent_input,
             )
-            
-        else:
 
+        else:
             if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
                 exporter = OTLPSpanExporter()
                 self._logger.warning(
