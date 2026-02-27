@@ -156,7 +156,6 @@ class TelemetryManager:
             "max_export_batch_size": exporter_options.max_export_batch_size,
         }
 
-        exporter = None
         if is_agent365_exporter_enabled() and exporter_options.token_resolver is not None:
             exporter = _Agent365Exporter(
                 token_resolver=exporter_options.token_resolver,
