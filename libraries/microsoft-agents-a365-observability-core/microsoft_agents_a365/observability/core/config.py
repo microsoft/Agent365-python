@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+import os
 import logging
 import threading
 from collections.abc import Callable
@@ -10,6 +11,7 @@ from opentelemetry import trace
 from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_NAMESPACE, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
 from .exporters.agent365_exporter import _Agent365Exporter
 from .exporters.agent365_exporter_options import Agent365ExporterOptions
@@ -154,6 +156,7 @@ class TelemetryManager:
             "max_export_batch_size": exporter_options.max_export_batch_size,
         }
 
+        exporter = None
         if is_agent365_exporter_enabled() and exporter_options.token_resolver is not None:
             exporter = _Agent365Exporter(
                 token_resolver=exporter_options.token_resolver,
@@ -161,11 +164,19 @@ class TelemetryManager:
                 use_s2s_endpoint=exporter_options.use_s2s_endpoint,
                 suppress_invoke_agent_input=suppress_invoke_agent_input,
             )
+            
         else:
-            exporter = ConsoleSpanExporter()
-            self._logger.warning(
-                "is_agent365_exporter_enabled() not enabled or token_resolver not set.Falling back to console exporter."
-            )
+
+            if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+                exporter = OTLPSpanExporter()
+                self._logger.warning(
+                    "is_agent365_exporter_enabled() not enabled or token_resolver not set. Falling back to OTLP exporter."
+                )
+            else:
+                exporter = ConsoleSpanExporter()
+                self._logger.warning(
+                    "is_agent365_exporter_enabled() not enabled or token_resolver not set.Falling back to console exporter."
+                )
 
         # Add span processors
 
