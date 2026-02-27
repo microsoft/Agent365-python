@@ -201,18 +201,13 @@ class TestAgent365Configure(unittest.TestCase):
                 self.assertIn("_EnrichingBatchSpanProcessor", processor_types)
                 self.assertIn("SpanProcessor", processor_types)
 
-
-class TestOTLPExporterConfiguration(unittest.TestCase):
-    """Test suite for OTLP exporter configuration based on environment variables."""
-
     @patch("microsoft_agents_a365.observability.core.config.OTLPSpanExporter")
     @patch(
         "microsoft_agents_a365.observability.core.config.is_agent365_exporter_enabled",
         return_value=False,
     )
-    @patch("microsoft_agents_a365.observability.core.config.TelemetryManager._instance", None)
     @patch.dict("os.environ", {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"}, clear=True)
-    def test_otlp_exporter_initialized_when_env_var_set(self, mock_is_enabled, mock_otlp_exporter):
+    def test_otlp_exporter_initialized_when_env_var_set(self, mock_otlp_exporter):
         """Test that OTLPSpanExporter is initialized when OTEL_EXPORTER_OTLP_ENDPOINT is set."""
 
         result = configure(
@@ -228,11 +223,8 @@ class TestOTLPExporterConfiguration(unittest.TestCase):
         "microsoft_agents_a365.observability.core.config.is_agent365_exporter_enabled",
         return_value=False,
     )
-    @patch("microsoft_agents_a365.observability.core.config.TelemetryManager._instance", None)
     @patch.dict("os.environ", {}, clear=True)
-    def test_otlp_exporter_not_initialized_when_env_var_not_set(
-        self, mock_is_enabled, mock_otlp_exporter
-    ):
+    def test_otlp_exporter_not_initialized_when_env_var_not_set(self, mock_otlp_exporter):
         """Test that OTLPSpanExporter is NOT initialized when OTEL_EXPORTER_OTLP_ENDPOINT is not set."""
 
         result = configure(
