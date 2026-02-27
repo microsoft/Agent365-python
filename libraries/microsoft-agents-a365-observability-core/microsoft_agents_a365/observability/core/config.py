@@ -166,16 +166,10 @@ class TelemetryManager:
             )
 
         else:
-            if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
-                exporter = OTLPSpanExporter()
-                self._logger.warning(
-                    "is_agent365_exporter_enabled() not enabled or token_resolver not set. Falling back to OTLP exporter."
-                )
-            else:
-                exporter = ConsoleSpanExporter()
-                self._logger.warning(
-                    "is_agent365_exporter_enabled() not enabled or token_resolver not set.Falling back to console exporter."
-                )
+            exporter = ConsoleSpanExporter()
+            self._logger.warning(
+                "is_agent365_exporter_enabled() not enabled or token_resolver not set. Falling back to console exporter."
+            )
 
         # Add span processors
 
@@ -190,6 +184,13 @@ class TelemetryManager:
         # Store references for cleanup
         self._span_processors["batch"] = batch_processor
         self._span_processors["agent"] = agent_processor
+
+        if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+            # The OTLPSpanExporter is auto configured from the environment variables
+            otlp_exporter = OTLPSpanExporter()
+            tracer_provider.add_span_processor(
+                _EnrichingBatchSpanProcessor(otlp_exporter, **batch_processor_kwargs)
+            )
 
         # Configure logging if logger_name is provided
         if logger_name:
