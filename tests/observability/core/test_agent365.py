@@ -207,7 +207,7 @@ class TestAgent365Configure(unittest.TestCase):
         return_value=False,
     )
     @patch.dict("os.environ", {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"}, clear=True)
-    def test_otlp_exporter_initialized_when_env_var_set(self, mock_otlp_exporter):
+    def test_otlp_exporter_initialized_when_env_var_set(self, mock_is_enabled, mock_otlp_exporter):
         """Test that OTLPSpanExporter is initialized when OTEL_EXPORTER_OTLP_ENDPOINT is set."""
 
         result = configure(
@@ -224,7 +224,9 @@ class TestAgent365Configure(unittest.TestCase):
         return_value=False,
     )
     @patch.dict("os.environ", {}, clear=True)
-    def test_otlp_exporter_not_initialized_when_env_var_not_set(self, mock_otlp_exporter):
+    def test_otlp_exporter_not_initialized_when_env_var_not_set(
+        self, mock_is_enabled, mock_otlp_exporter
+    ):
         """Test that OTLPSpanExporter is NOT initialized when OTEL_EXPORTER_OTLP_ENDPOINT is not set."""
 
         result = configure(
