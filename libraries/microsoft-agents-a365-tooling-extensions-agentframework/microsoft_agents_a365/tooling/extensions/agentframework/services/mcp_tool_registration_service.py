@@ -6,7 +6,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Optional, Sequence, Union
 
-from agent_framework import ChatAgent, ChatMessage, ChatMessageStoreProtocol, MCPStreamableHTTPTool
+from agent_framework import (
+    Agent,
+    Message,
+    BaseHistoryProvider,
+    MCPStreamableHTTPTool,
+)
 from agent_framework.azure import AzureOpenAIChatClient
 from agent_framework.openai import OpenAIChatClient
 import httpx
@@ -55,19 +60,19 @@ class McpToolRegistrationService:
 
     async def add_tool_servers_to_agent(
         self,
-        chat_client: Union[OpenAIChatClient, AzureOpenAIChatClient],
+        client: Union[OpenAIChatClient, AzureOpenAIChatClient],
         agent_instructions: str,
         initial_tools: List[Any],
         auth: Authorization,
         auth_handler_name: str,
         turn_context: TurnContext,
         auth_token: Optional[str] = None,
-    ) -> Optional[ChatAgent]:
+    ) -> Optional[Agent]:
         """
         Add MCP tool servers to a chat agent (mirrors .NET implementation).
 
         Args:
-            chat_client: The chat client instance (Union[OpenAIChatClient, AzureOpenAIChatClient])
+            client: The chat client instance (Union[OpenAIChatClient, AzureOpenAIChatClient])
             agent_instructions: Instructions for the agent behavior
             initial_tools: List of initial tools to add to the agent
             auth: Authorization context for token exchange
@@ -76,7 +81,7 @@ class McpToolRegistrationService:
             auth_token: Optional bearer token for authentication
 
         Returns:
-            ChatAgent instance with MCP tools registered, or None if creation failed
+            Agent instance with MCP tools registered, or None if creation failed
         """
         try:
             # Exchange token if not provided
@@ -148,9 +153,9 @@ class McpToolRegistrationService:
                     )
                     continue
 
-            # Create the ChatAgent
-            agent = ChatAgent(
-                chat_client=chat_client,
+            # Create the Agent
+            agent = Agent(
+                client=client,
                 tools=all_tools,
                 instructions=agent_instructions,
             )
@@ -164,7 +169,7 @@ class McpToolRegistrationService:
 
     def _convert_chat_messages_to_history(
         self,
-        chat_messages: Sequence[ChatMessage],
+        chat_messages: Sequence[Message],
     ) -> List[ChatHistoryMessage]:
         """
         Convert Agent Framework ChatMessage objects to ChatHistoryMessage format.
@@ -195,7 +200,8 @@ class McpToolRegistrationService:
             message_id = msg.message_id if msg.message_id is not None else str(uuid.uuid4())
             if msg.role is None:
                 self._logger.warning(
-                    "Skipping message %s with missing role during conversion", message_id
+                    "Skipping message %s with missing role during conversion",
+                    message_id,
                 )
                 continue
             # Defensive handling: use .value if role is an enum, otherwise convert to string
@@ -205,7 +211,8 @@ class McpToolRegistrationService:
             # Skip messages with empty content as ChatHistoryMessage validates non-empty content
             if not content.strip():
                 self._logger.warning(
-                    "Skipping message %s with empty content during conversion", message_id
+                    "Skipping message %s with empty content during conversion",
+                    message_id,
                 )
                 continue
 
@@ -218,14 +225,16 @@ class McpToolRegistrationService:
             history_messages.append(history_message)
 
             self._logger.debug(
-                "Converted message %s with role '%s' to ChatHistoryMessage", message_id, role
+                "Converted message %s with role '%s' to ChatHistoryMessage",
+                message_id,
+                role,
             )
 
         return history_messages
 
     async def send_chat_history_messages(
         self,
-        chat_messages: Sequence[ChatMessage],
+        chat_messages: Sequence[Message],
         turn_context: TurnContext,
         tool_options: Optional[ToolOptions] = None,
     ) -> OperationResult:
@@ -304,42 +313,45 @@ class McpToolRegistrationService:
 
     async def send_chat_history_from_store(
         self,
-        chat_message_store: ChatMessageStoreProtocol,
+        history_provider: BaseHistoryProvider,
         turn_context: TurnContext,
+        session_id: Optional[str] = None,
         tool_options: Optional[ToolOptions] = None,
     ) -> OperationResult:
         """
-        Send chat history from a ChatMessageStore to the MCP platform.
+        Send chat history from a history provider to the MCP platform.
 
-        This is a convenience method that extracts messages from the store
+        This is a convenience method that extracts messages from a history provider
         and delegates to send_chat_history_messages().
 
         Args:
-            chat_message_store: ChatMessageStore containing the conversation history.
+            history_provider: History provider containing conversation history.
             turn_context: TurnContext from the Agents SDK containing conversation info.
+            session_id: Optional session ID used by the history provider.
             tool_options: Optional configuration for the request.
 
         Returns:
             OperationResult indicating success or failure of the operation.
 
         Raises:
-            ValueError: If chat_message_store or turn_context is None.
+            ValueError: If history_provider or turn_context is None.
 
         Example:
             >>> service = McpToolRegistrationService()
+            >>> history_provider = InMemoryHistoryProvider()
             >>> result = await service.send_chat_history_from_store(
-            ...     thread.chat_message_store, turn_context
+            ...     history_provider, turn_context, session_id="session-123"
             ... )
         """
         # Input validation
-        if chat_message_store is None:
-            raise ValueError("chat_message_store cannot be None")
+        if history_provider is None:
+            raise ValueError("history_provider cannot be None")
 
         if turn_context is None:
             raise ValueError("turn_context cannot be None")
 
-        # Extract messages from the store
-        messages = await chat_message_store.list_messages()
+        # Extract messages from the history provider
+        messages = history_provider.get_messages(session_id=session_id)
 
         # Delegate to the primary implementation
         return await self.send_chat_history_messages(
