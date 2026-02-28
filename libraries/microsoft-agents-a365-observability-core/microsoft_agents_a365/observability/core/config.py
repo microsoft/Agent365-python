@@ -8,10 +8,10 @@ from collections.abc import Callable
 from typing import Any, Optional
 
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_NAMESPACE, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
 from .exporters.agent365_exporter import _Agent365Exporter
 from .exporters.agent365_exporter_options import Agent365ExporterOptions
