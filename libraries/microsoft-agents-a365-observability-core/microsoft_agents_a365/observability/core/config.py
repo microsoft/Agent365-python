@@ -1,8 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-import logging
 import os
+import logging
 import threading
 from collections.abc import Callable
 from typing import Any, Optional
@@ -184,7 +184,7 @@ class TelemetryManager:
         self._span_processors["batch"] = batch_processor
         self._span_processors["agent"] = agent_processor
 
-        if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+        if os.environ.get("ENABLE_OTLP_EXPORTER", "").lower() == "true":
             # The OTLPSpanExporter is auto configured from the environment variables
             otlp_exporter = OTLPSpanExporter()
             tracer_provider.add_span_processor(

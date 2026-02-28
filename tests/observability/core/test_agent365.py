@@ -206,9 +206,9 @@ class TestAgent365Configure(unittest.TestCase):
         "microsoft_agents_a365.observability.core.config.is_agent365_exporter_enabled",
         return_value=False,
     )
-    @patch.dict("os.environ", {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"}, clear=True)
+    @patch.dict("os.environ", {"ENABLE_OTLP_EXPORTER": "true"}, clear=True)
     def test_otlp_exporter_initialized_when_env_var_set(self, mock_is_enabled, mock_otlp_exporter):
-        """Test that OTLPSpanExporter is initialized when OTEL_EXPORTER_OTLP_ENDPOINT is set."""
+        """Test that OTLPSpanExporter is initialized when ENABLE_OTLP_EXPORTER is set."""
 
         result = configure(
             service_name="test-service",
@@ -227,7 +227,7 @@ class TestAgent365Configure(unittest.TestCase):
     def test_otlp_exporter_not_initialized_when_env_var_not_set(
         self, mock_is_enabled, mock_otlp_exporter
     ):
-        """Test that OTLPSpanExporter is NOT initialized when OTEL_EXPORTER_OTLP_ENDPOINT is not set."""
+        """Test that OTLPSpanExporter is NOT initialized when ENABLE_OTLP_EXPORTER is not set."""
 
         result = configure(
             service_name="test-service",
