@@ -11,10 +11,8 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from typing import Any, final
-from urllib.parse import urlparse
 
 import requests
-from microsoft_agents_a365.runtime.power_platform_api_discovery import PowerPlatformApiDiscovery
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
@@ -25,6 +23,7 @@ from ..constants import (
     INVOKE_AGENT_OPERATION_NAME,
 )
 from .utils import (
+    build_export_url,
     get_validated_domain_override,
     hex_span_id,
     hex_trace_id,
@@ -39,6 +38,7 @@ from .utils import (
 # Hardcoded constants - not configurable
 DEFAULT_HTTP_TIMEOUT_SECONDS = 30.0
 DEFAULT_MAX_RETRIES = 3
+DEFAULT_ENDPOINT_URL = "https://agent365.svc.cloud.microsoft"
 
 # Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
 logger = logging.getLogger(__name__)
@@ -97,30 +97,13 @@ class _Agent365Exporter(SpanExporter):
                 payload = self._build_export_request(activities)
                 body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
-                # Resolve endpoint + token
+                # Resolve endpoint: domain override > default URL
                 if self._domain_override:
                     endpoint = self._domain_override
                 else:
-                    discovery = PowerPlatformApiDiscovery(self._cluster_category)
-                    endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
+                    endpoint = DEFAULT_ENDPOINT_URL
 
-                endpoint_path = (
-                    f"/maven/agent365/service/agents/{agent_id}/traces"
-                    if self._use_s2s_endpoint
-                    else f"/maven/agent365/agents/{agent_id}/traces"
-                )
-
-                # Construct URL - if endpoint has a scheme (http:// or https://), use it as-is
-                # Otherwise, prepend https://
-                # Note: Check for "://" to distinguish between real protocols and domain:port format
-                # (urlparse treats "example.com:8080" as having scheme="example.com")
-                parsed = urlparse(endpoint)
-                if parsed.scheme and "://" in endpoint:
-                    # Endpoint is a full URL, append path
-                    url = f"{endpoint}{endpoint_path}?api-version=1"
-                else:
-                    # Endpoint is just a domain (possibly with port), prepend https://
-                    url = f"https://{endpoint}{endpoint_path}?api-version=1"
+                url = build_export_url(endpoint, agent_id, tenant_id, self._use_s2s_endpoint)
 
                 # Debug: Log endpoint being used
                 logger.info(
@@ -146,6 +129,7 @@ class _Agent365Exporter(SpanExporter):
 
                 # Basic retry loop
                 ok = self._post_with_retries(url, body, headers)
+
                 if not ok:
                     any_failure = True
 
@@ -168,8 +152,6 @@ class _Agent365Exporter(SpanExporter):
 
     def force_flush(self, timeout_millis: int = 30000) -> bool:
         return True
-
-    # ------------- Helper methods -------------------
 
     # ------------- HTTP helper ----------------------
 
