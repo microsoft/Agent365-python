@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from microsoft_agents.hosting.core import ChannelAdapter
+from microsoft_agents.hosting.core.middleware_set import MiddlewareSet
 
 from .baggage_middleware import BaggageMiddleware
 from .output_logging_middleware import OutputLoggingMiddleware
@@ -46,7 +46,7 @@ class ObservabilityHostingManager:
     @classmethod
     def configure(
         cls,
-        adapter: ChannelAdapter,
+        adapter: MiddlewareSet,
         options: ObservabilityHostingOptions,
     ) -> ObservabilityHostingManager:
         """Configure the singleton instance and register middleware on the adapter.
@@ -54,7 +54,7 @@ class ObservabilityHostingManager:
         Subsequent calls after the first are no-ops and return the existing instance.
 
         Args:
-            adapter: The channel adapter to register middleware on.
+            adapter: The middleware set to register middleware on.
             options: Configuration options controlling which middleware to enable.
 
         Returns:

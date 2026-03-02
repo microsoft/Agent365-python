@@ -43,14 +43,15 @@ InvokeAgentScope. The value should be a W3C traceparent string in the format
 
 def _derive_agent_details(context: TurnContext) -> AgentDetails | None:
     """Derive target agent details from the activity recipient."""
-    recipient = getattr(context.activity, "recipient", None)
+    activity = context.activity
+    recipient = getattr(activity, "recipient", None)
     if not recipient:
         return None
     return AgentDetails(
-        agent_id=getattr(recipient, "agentic_app_id", None) or "",
+        agent_id=activity.get_agentic_instance_id() or "",
         agent_name=getattr(recipient, "name", None),
         agent_auid=getattr(recipient, "aad_object_id", None),
-        agent_upn=getattr(recipient, "agentic_user_id", None),
+        agent_upn=activity.get_agentic_user(),
         agent_description=getattr(recipient, "role", None),
         tenant_id=getattr(recipient, "tenant_id", None),
     )
