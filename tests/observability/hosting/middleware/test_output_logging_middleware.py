@@ -36,7 +36,7 @@ def _make_turn_context(
         ),
         "recipient": ChannelAccount(
             tenant_id=recipient_tenant_id,
-            role="assistant",
+            role="agenticAppInstance",
             name="Agent One",
             agentic_app_id=recipient_agentic_app_id,
             aad_object_id="agent-auid",

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Awaitable, Callable
 
 from microsoft_agents.activity import ActivityEventNames, ActivityTypes
@@ -13,8 +12,6 @@ from microsoft_agents.hosting.core.turn_context import TurnContext
 from microsoft_agents_a365.observability.core.middleware.baggage_builder import BaggageBuilder
 
 from ..scope_helpers.populate_baggage import populate
-
-logger = logging.getLogger(__name__)
 
 
 class BaggageMiddleware:
@@ -26,7 +23,7 @@ class BaggageMiddleware:
     async def on_turn(
         self,
         context: TurnContext,
-        logic: Callable[[TurnContext], Awaitable],
+        logic: Callable[[], Awaitable],
     ) -> None:
         activity = context.activity
         is_async_reply = (

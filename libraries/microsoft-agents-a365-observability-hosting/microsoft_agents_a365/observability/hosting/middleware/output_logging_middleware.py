@@ -42,8 +42,15 @@ InvokeAgentScope. The value should be a W3C traceparent string in the format
 
 
 def _derive_agent_details(context: TurnContext) -> AgentDetails | None:
-    """Derive target agent details from the activity recipient."""
+    """Derive target agent details from the activity recipient.
+
+    Returns ``None`` when the activity is not an agentic request or the
+    recipient is missing, so callers can short-circuit without emitting
+    spans with empty identifiers.
+    """
     activity = context.activity
+    if not activity.is_agentic_request():
+        return None
     recipient = getattr(activity, "recipient", None)
     if not recipient:
         return None
@@ -119,7 +126,7 @@ class OutputLoggingMiddleware:
     async def on_turn(
         self,
         context: TurnContext,
-        logic: Callable[[TurnContext], Awaitable],
+        logic: Callable[[], Awaitable],
     ) -> None:
         agent_details = _derive_agent_details(context)
         tenant_details = _derive_tenant_details(context)
