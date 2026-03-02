@@ -33,7 +33,7 @@ class ObservabilityHostingManager:
     Example:
         .. code-block:: python
 
-            ObservabilityHostingManager.configure(adapter, ObservabilityHostingOptions(
+            ObservabilityHostingManager.configure(adapter.middleware_set, ObservabilityHostingOptions(
                 enable_output_logging=True,
             ))
     """
@@ -46,25 +46,26 @@ class ObservabilityHostingManager:
     @classmethod
     def configure(
         cls,
-        adapter: MiddlewareSet,
+        middleware_set: MiddlewareSet,
         options: ObservabilityHostingOptions,
     ) -> ObservabilityHostingManager:
-        """Configure the singleton instance and register middleware on the adapter.
+        """Configure the singleton instance and register middleware.
 
         Subsequent calls after the first are no-ops and return the existing instance.
 
         Args:
-            adapter: The middleware set to register middleware on.
+            middleware_set: The middleware set to register middleware on
+                (e.g., ``adapter.middleware_set``).
             options: Configuration options controlling which middleware to enable.
 
         Returns:
             The singleton :class:`ObservabilityHostingManager` instance.
 
         Raises:
-            TypeError: If *adapter* or *options* is ``None``.
+            TypeError: If *middleware_set* or *options* is ``None``.
         """
-        if adapter is None:
-            raise TypeError("adapter must not be None")
+        if middleware_set is None:
+            raise TypeError("middleware_set must not be None")
         if options is None:
             raise TypeError("options must not be None")
 
@@ -78,11 +79,11 @@ class ObservabilityHostingManager:
         instance = cls()
 
         if options.enable_baggage:
-            adapter.use(BaggageMiddleware())
+            middleware_set.use(BaggageMiddleware())
             logger.info("[ObservabilityHostingManager] BaggageMiddleware registered.")
 
         if options.enable_output_logging:
-            adapter.use(OutputLoggingMiddleware())
+            middleware_set.use(OutputLoggingMiddleware())
             logger.info("[ObservabilityHostingManager] OutputLoggingMiddleware registered.")
 
         logger.info(
