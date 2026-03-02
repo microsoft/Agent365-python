@@ -23,7 +23,7 @@ class BaggageMiddleware:
     async def on_turn(
         self,
         context: TurnContext,
-        logic: Callable[[], Awaitable],
+        logic: Callable[[TurnContext], Awaitable],
     ) -> None:
         activity = context.activity
         is_async_reply = (

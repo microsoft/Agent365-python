@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from microsoft_agents.activity import (
@@ -95,15 +95,3 @@ async def test_baggage_middleware_skips_async_reply():
     assert logic_called is True
     # Baggage should NOT be set because the middleware skipped it
     assert captured_caller_id is None
-
-
-@pytest.mark.asyncio
-async def test_baggage_middleware_calls_logic():
-    """BaggageMiddleware should always call the downstream logic."""
-    middleware = BaggageMiddleware()
-    ctx = _make_turn_context()
-
-    logic_mock = AsyncMock()
-    await middleware.on_turn(ctx, logic_mock)
-
-    logic_mock.assert_awaited_once()

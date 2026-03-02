@@ -126,7 +126,7 @@ class OutputLoggingMiddleware:
     async def on_turn(
         self,
         context: TurnContext,
-        logic: Callable[[], Awaitable],
+        logic: Callable[[TurnContext], Awaitable],
     ) -> None:
         agent_details = _derive_agent_details(context)
         tenant_details = _derive_tenant_details(context)
