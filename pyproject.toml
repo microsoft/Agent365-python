@@ -81,7 +81,7 @@ constraint-dependencies = [
     "azure-monitor-opentelemetry-exporter >= 1.0.0b39",
 
     # --- AI Frameworks ---
-    "agent-framework-azure-ai >= 1.0.0b251114",
+    "agent-framework-azure-ai 1.0.0rc2",
     "langchain >= 0.1.0",
     "langchain-core >= 0.1.0",
     "openai-agents >= 0.2.6",
