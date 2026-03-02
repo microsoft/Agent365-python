@@ -27,22 +27,23 @@ def _reset_singleton():
 def test_configure_returns_instance():
     """configure() should return an ObservabilityHostingManager instance."""
     adapter = MagicMock()
-    instance = ObservabilityHostingManager.configure(adapter)
+    instance = ObservabilityHostingManager.configure(adapter, ObservabilityHostingOptions())
     assert isinstance(instance, ObservabilityHostingManager)
 
 
 def test_configure_is_singleton():
     """Subsequent configure() calls should return the same instance."""
     adapter = MagicMock()
-    first = ObservabilityHostingManager.configure(adapter)
-    second = ObservabilityHostingManager.configure(adapter)
+    options = ObservabilityHostingOptions()
+    first = ObservabilityHostingManager.configure(adapter, options)
+    second = ObservabilityHostingManager.configure(adapter, options)
     assert first is second
 
 
 def test_configure_registers_baggage_middleware_by_default():
     """By default, BaggageMiddleware should be registered."""
     adapter = MagicMock()
-    ObservabilityHostingManager.configure(adapter)
+    ObservabilityHostingManager.configure(adapter, ObservabilityHostingOptions())
 
     # The adapter.use should have been called once (only BaggageMiddleware by default)
     assert adapter.use.call_count == 1
@@ -82,16 +83,14 @@ def test_configure_disables_all():
     adapter.use.assert_not_called()
 
 
-def test_configure_no_adapter():
-    """When no adapter is provided, no middleware should be registered."""
-    instance = ObservabilityHostingManager.configure()
-    assert isinstance(instance, ObservabilityHostingManager)
+def test_configure_raises_on_none_adapter():
+    """configure() should raise TypeError when adapter is None."""
+    with pytest.raises(TypeError, match="adapter must not be None"):
+        ObservabilityHostingManager.configure(None, ObservabilityHostingOptions())
 
 
-def test_configure_no_adapter_subsequent_call_ignored():
-    """Subsequent calls after no-adapter configure should still be no-ops."""
-    first = ObservabilityHostingManager.configure()
+def test_configure_raises_on_none_options():
+    """configure() should raise TypeError when options is None."""
     adapter = MagicMock()
-    second = ObservabilityHostingManager.configure(adapter)
-    assert first is second
-    adapter.use.assert_not_called()
+    with pytest.raises(TypeError, match="options must not be None"):
+        ObservabilityHostingManager.configure(adapter, None)
