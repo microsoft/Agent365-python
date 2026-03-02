@@ -1,12 +1,14 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+import os
 import logging
 import threading
 from collections.abc import Callable
 from typing import Any, Optional
 
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_NAMESPACE, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
@@ -161,10 +163,11 @@ class TelemetryManager:
                 use_s2s_endpoint=exporter_options.use_s2s_endpoint,
                 suppress_invoke_agent_input=suppress_invoke_agent_input,
             )
+
         else:
             exporter = ConsoleSpanExporter()
             self._logger.warning(
-                "is_agent365_exporter_enabled() not enabled or token_resolver not set.Falling back to console exporter."
+                "is_agent365_exporter_enabled() not enabled or token_resolver not set. Falling back to console exporter."
             )
 
         # Add span processors
@@ -180,6 +183,13 @@ class TelemetryManager:
         # Store references for cleanup
         self._span_processors["batch"] = batch_processor
         self._span_processors["agent"] = agent_processor
+
+        if os.environ.get("ENABLE_OTLP_EXPORTER", "").lower() == "true":
+            # The OTLPSpanExporter is auto configured from the environment variables
+            otlp_exporter = OTLPSpanExporter()
+            tracer_provider.add_span_processor(
+                _EnrichingBatchSpanProcessor(otlp_exporter, **batch_processor_kwargs)
+            )
 
         # Configure logging if logger_name is provided
         if logger_name:
