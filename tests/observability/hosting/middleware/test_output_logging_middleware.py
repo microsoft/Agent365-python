@@ -36,7 +36,7 @@ def _make_turn_context(
         ),
         "recipient": ChannelAccount(
             tenant_id=recipient_tenant_id,
-            role="assistant",
+            role="agenticAppInstance",
             name="Agent One",
             agentic_app_id=recipient_agentic_app_id,
             aad_object_id="agent-auid",
@@ -136,7 +136,7 @@ async def test_send_handler_skips_non_message_activities():
 
 @pytest.mark.asyncio
 async def test_send_handler_creates_output_scope_for_messages():
-    """Send handler should create an OutputScope for message activities."""
+    """Send handler should create an OutputScope for message activities and dispose on success."""
     middleware = OutputLoggingMiddleware()
     ctx = _make_turn_context()
 
@@ -159,6 +159,7 @@ async def test_send_handler_creates_output_scope_for_messages():
         mock_output_scope_cls.start.assert_called_once()
         send_next.assert_awaited_once()
         mock_scope.dispose.assert_called_once()
+        mock_scope.record_error.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -216,29 +217,3 @@ async def test_send_handler_rethrows_errors():
 
         mock_scope.record_error.assert_called_once_with(send_error)
         mock_scope.dispose.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_send_handler_disposes_scope_on_success():
-    """Send handler should dispose the OutputScope even when send_next succeeds."""
-    middleware = OutputLoggingMiddleware()
-    ctx = _make_turn_context()
-
-    await middleware.on_turn(ctx, AsyncMock())
-
-    handler = ctx._on_send_activities[-1]
-
-    activities = [Activity(type="message", text="Reply")]
-    send_next = AsyncMock()
-
-    with patch(
-        "microsoft_agents_a365.observability.hosting.middleware"
-        ".output_logging_middleware.OutputScope"
-    ) as mock_output_scope_cls:
-        mock_scope = MagicMock()
-        mock_output_scope_cls.start.return_value = mock_scope
-
-        await handler(ctx, activities, send_next)
-
-        mock_scope.dispose.assert_called_once()
-        mock_scope.record_error.assert_not_called()
