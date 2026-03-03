@@ -33,12 +33,7 @@ from ..scope_helpers.utils import (
 logger = logging.getLogger(__name__)
 
 A365_PARENT_SPAN_KEY = "A365ParentSpanId"
-"""TurnState key for the parent span reference.
-
-Set this in ``turn_state`` to link OutputScope spans as children of an
-InvokeAgentScope. The value should be a W3C traceparent string in the format
-``"00-{trace_id}-{span_id}-{trace_flags}"``.
-"""
+"""TurnState key for the parent span reference."""
 
 
 def _derive_agent_details(context: TurnContext) -> AgentDetails | None:
