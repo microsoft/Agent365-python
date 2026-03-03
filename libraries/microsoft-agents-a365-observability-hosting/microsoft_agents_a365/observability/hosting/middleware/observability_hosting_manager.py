@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 class ObservabilityHostingOptions:
     """Configuration options for the hosting observability layer."""
 
-    enable_baggage: bool = True
-    """Enable baggage propagation middleware. Defaults to ``True``."""
+    enable_baggage: bool = False
+    """Enable baggage propagation middleware. Defaults to ``False``."""
 
     enable_output_logging: bool = False
     """Enable output logging middleware for tracing outgoing messages. Defaults to ``False``."""
