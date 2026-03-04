@@ -62,10 +62,10 @@ def get_target_agent_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     rec = activity.recipient
     if not rec:
         return
-    yield GEN_AI_AGENT_ID_KEY, rec.agentic_app_id
+    yield GEN_AI_AGENT_ID_KEY, activity.get_agentic_instance_id()
     yield GEN_AI_AGENT_NAME_KEY, rec.name
     yield GEN_AI_AGENT_AUID_KEY, rec.aad_object_id
-    yield GEN_AI_AGENT_UPN_KEY, rec.agentic_user_id
+    yield GEN_AI_AGENT_UPN_KEY, activity.get_agentic_user()
     yield (
         GEN_AI_AGENT_DESCRIPTION_KEY,
         rec.role,

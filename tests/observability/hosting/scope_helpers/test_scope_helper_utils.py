@@ -66,7 +66,7 @@ def test_get_target_agent_pairs():
         name="Test Agent",
         aad_object_id="agent-auid",
         agentic_user_id="agent-upn",
-        role="Assistant",
+        role="agenticAppInstance",
     )
     activity = Activity(type="message", recipient=recipient)
 
@@ -76,7 +76,7 @@ def test_get_target_agent_pairs():
     assert (GEN_AI_AGENT_NAME_KEY, "Test Agent") in result
     assert (GEN_AI_AGENT_AUID_KEY, "agent-auid") in result
     assert (GEN_AI_AGENT_UPN_KEY, "agent-upn") in result
-    assert (GEN_AI_AGENT_DESCRIPTION_KEY, "Assistant") in result
+    assert (GEN_AI_AGENT_DESCRIPTION_KEY, "agenticAppInstance") in result
 
 
 def test_get_tenant_id_pair():
