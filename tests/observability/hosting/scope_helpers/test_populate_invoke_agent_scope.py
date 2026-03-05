@@ -9,9 +9,9 @@ from microsoft_agents.activity import Activity, ChannelAccount, ConversationAcco
 from microsoft_agents.hosting.core import TurnContext
 from microsoft_agents_a365.observability.core.agent_details import AgentDetails
 from microsoft_agents_a365.observability.core.constants import (
+    CHANNEL_NAME_KEY,
     GEN_AI_CALLER_ID_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
 )
@@ -80,8 +80,8 @@ def test_populate():
     assert GEN_AI_EXECUTION_TYPE_KEY in attributes
 
     # Check execution source
-    assert GEN_AI_EXECUTION_SOURCE_NAME_KEY in attributes
-    assert attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY] == "test-channel"
+    assert CHANNEL_NAME_KEY in attributes
+    assert attributes[CHANNEL_NAME_KEY] == "test-channel"
 
     # Check conversation ID
     assert GEN_AI_CONVERSATION_ID_KEY in attributes
