@@ -9,7 +9,8 @@ from typing import Any
 from opentelemetry import baggage, context
 
 from ..constants import (
-    CORRELATION_ID_KEY,
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_DESCRIPTION_KEY,
@@ -22,15 +23,10 @@ from ..constants import (
     GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
-    HIRING_MANAGER_ID_KEY,
-    OPERATION_SOURCE_KEY,
     SESSION_DESCRIPTION_KEY,
     SESSION_ID_KEY,
     TENANT_ID_KEY,
 )
-from ..models.operation_source import OperationSource
 from ..utils import deprecated, validate_and_normalize_ip
 
 logger = logging.getLogger(__name__)
@@ -47,8 +43,7 @@ class BaggageBuilder:
 
             builder = (BaggageBuilder()
                        .tenant_id("tenant-123")
-                       .agent_id("agent-456")
-                       .correlation_id("corr-789"))
+                       .agent_id("agent-456"))
 
             with builder.build():
                 # Baggage is set in this context
@@ -59,20 +54,6 @@ class BaggageBuilder:
     def __init__(self):
         """Initialize the baggage builder."""
         self._pairs: dict[str, str] = {}
-
-    def operation_source(self, value: OperationSource | None) -> "BaggageBuilder":
-        """Set the operation source baggage value.
-
-        Args:
-            value: The operation source enum value
-
-        Returns:
-            Self for method chaining
-        """
-        # Convert enum to string value for baggage storage
-        str_value = value.value if value is not None else None
-        self._set(OPERATION_SOURCE_KEY, str_value)
-        return self
 
     def tenant_id(self, value: str | None) -> "BaggageBuilder":
         """Set the tenant ID baggage value.
@@ -134,18 +115,6 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_BLUEPRINT_ID_KEY, value)
         return self
 
-    def correlation_id(self, value: str | None) -> "BaggageBuilder":
-        """Set the correlation ID baggage value.
-
-        Args:
-            value: The correlation ID
-
-        Returns:
-            Self for method chaining
-        """
-        self._set(CORRELATION_ID_KEY, value)
-        return self
-
     def caller_id(self, value: str | None) -> "BaggageBuilder":
         """Set the caller ID baggage value.
 
@@ -156,18 +125,6 @@ class BaggageBuilder:
             Self for method chaining
         """
         self._set(GEN_AI_CALLER_ID_KEY, value)
-        return self
-
-    def hiring_manager_id(self, value: str | None) -> "BaggageBuilder":
-        """Set the hiring manager ID baggage value.
-
-        Args:
-            value: The hiring manager ID
-
-        Returns:
-            Self for method chaining
-        """
-        self._set(HIRING_MANAGER_ID_KEY, value)
         return self
 
     def agent_name(self, value: str | None) -> "BaggageBuilder":
@@ -227,12 +184,12 @@ class BaggageBuilder:
 
     def channel_name(self, value: str | None) -> "BaggageBuilder":
         """Sets the channel name baggage value (e.g., 'Teams', 'msteams')."""
-        self._set(GEN_AI_EXECUTION_SOURCE_NAME_KEY, value)
+        self._set(CHANNEL_NAME_KEY, value)
         return self
 
     def channel_links(self, value: str | None) -> "BaggageBuilder":
         """Sets the channel link baggage value. (e.g., channel links or description)."""
-        self._set(GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, value)
+        self._set(CHANNEL_LINK_KEY, value)
         return self
 
     def set_pairs(self, pairs: Any) -> "BaggageBuilder":
@@ -273,14 +230,12 @@ class BaggageBuilder:
     def set_request_context(
         tenant_id: str | None = None,
         agent_id: str | None = None,
-        correlation_id: str | None = None,
     ) -> "BaggageScope":
         """Convenience method to begin a request baggage scope with common fields.
 
         Args:
             tenant_id: The tenant ID
             agent_id: The agent ID
-            correlation_id: The correlation ID
 
         Returns:
             A context manager that restores the previous baggage on exit
@@ -289,7 +244,6 @@ class BaggageBuilder:
             BaggageBuilder()
             .tenant_id(tenant_id)
             .agent_id(agent_id)
-            .correlation_id(correlation_id)
             .build()
         )
 

@@ -8,21 +8,18 @@ from datetime import datetime
 
 from .agent_details import AgentDetails
 from .constants import (
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
     GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY,
     GEN_AI_CALLER_AGENT_ID_KEY,
     GEN_AI_CALLER_AGENT_NAME_KEY,
-    GEN_AI_CALLER_AGENT_TENANT_ID_KEY,
-    GEN_AI_CALLER_AGENT_TYPE_KEY,
+    GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,
     GEN_AI_CALLER_AGENT_UPN_KEY,
-    GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
     GEN_AI_CALLER_AGENT_USER_ID_KEY,
+    GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CALLER_ID_KEY,
     GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_TENANT_ID_KEY,
     GEN_AI_CALLER_UPN_KEY,
-    GEN_AI_CALLER_USER_ID_KEY,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -133,9 +130,9 @@ class InvokeAgentScope(OpenTelemetryScope):
         # Set request metadata if provided
         if request:
             if request.source_metadata:
-                self.set_tag_maybe(GEN_AI_EXECUTION_SOURCE_NAME_KEY, request.source_metadata.name)
+                self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
                 self.set_tag_maybe(
-                    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, request.source_metadata.description
+                    CHANNEL_LINK_KEY, request.source_metadata.description
                 )
 
             self.set_tag_maybe(
@@ -149,27 +146,23 @@ class InvokeAgentScope(OpenTelemetryScope):
             self.set_tag_maybe(GEN_AI_CALLER_ID_KEY, caller_details.caller_id)
             self.set_tag_maybe(GEN_AI_CALLER_UPN_KEY, caller_details.caller_upn)
             self.set_tag_maybe(GEN_AI_CALLER_NAME_KEY, caller_details.caller_name)
-            self.set_tag_maybe(GEN_AI_CALLER_USER_ID_KEY, caller_details.caller_user_id)
-            self.set_tag_maybe(GEN_AI_CALLER_TENANT_ID_KEY, caller_details.tenant_id)
+            # Validate and set caller client IP
+            self.set_tag_maybe(
+                GEN_AI_CALLER_CLIENT_IP_KEY,
+                validate_and_normalize_ip(caller_details.caller_client_ip),
+            )
 
         # Set caller agent details tags
         if caller_agent_details:
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_NAME_KEY, caller_agent_details.agent_name)
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_ID_KEY, caller_agent_details.agent_id)
             self.set_tag_maybe(
-                GEN_AI_CALLER_AGENT_TYPE_KEY,
-                caller_agent_details.agent_type.value if caller_agent_details.agent_type else None,
-            )
-            self.set_tag_maybe(
                 GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY, caller_agent_details.agent_blueprint_id
             )
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_USER_ID_KEY, caller_agent_details.agent_auid)
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_UPN_KEY, caller_agent_details.agent_upn)
-            self.set_tag_maybe(GEN_AI_CALLER_AGENT_TENANT_ID_KEY, caller_agent_details.tenant_id)
-            # Validate and set caller agent client IP
             self.set_tag_maybe(
-                GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
-                validate_and_normalize_ip(caller_agent_details.agent_client_ip),
+                GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY, caller_agent_details.agent_platform_id
             )
 
     def record_response(self, response: str) -> None:
