@@ -6,6 +6,9 @@ Provides utility functions for the Tooling components.
 """
 
 import os
+import re
+import unicodedata
+from typing import Optional
 
 
 # Constants for base URLs
@@ -104,3 +107,58 @@ def get_chat_history_endpoint() -> str:
         str: The chat history endpoint URL.
     """
     return f"{_get_mcp_platform_base_url()}{CHAT_HISTORY_ENDPOINT_PATH}"
+
+
+# Mapping of Unicode characters to their ASCII equivalents for header sanitization.
+_UNICODE_REPLACEMENTS = {
+    "\u00a0": " ",  # Non-breaking space
+    "\u202f": " ",  # Narrow no-break space
+    "\u2018": "'",  # Left single quotation mark
+    "\u2019": "'",  # Right single quotation mark
+    "\u201c": '"',  # Left double quotation mark
+    "\u201d": '"',  # Right double quotation mark
+    "\u2013": "-",  # En dash
+    "\u2014": "-",  # Em dash
+    "\u2026": "...",  # Horizontal ellipsis
+}
+
+_UNICODE_REPLACEMENTS_PATTERN = re.compile("|".join(re.escape(k) for k in _UNICODE_REPLACEMENTS))
+
+
+def sanitize_text_for_header(text: Optional[str]) -> Optional[str]:
+    """
+    Sanitize text for use as an HTTP header value.
+
+    Ports the .NET ``HttpContextHeadersHandler.SanitizeTextForHeader`` logic:
+    1. Replace known Unicode characters with ASCII equivalents.
+    2. Normalize to NFD and strip non-spacing marks (accents).
+    3. Keep only printable ASCII (32–126), replacing others with a space.
+    4. Collapse multiple whitespace into a single space and strip.
+
+    Args:
+        text: The text to sanitize.
+
+    Returns:
+        The sanitized text, or None if the input is None, empty, or whitespace-only.
+    """
+    if text is None or text.strip() == "":
+        return None
+
+    try:
+        # Step 1: Replace known Unicode characters with ASCII equivalents
+        result = _UNICODE_REPLACEMENTS_PATTERN.sub(lambda m: _UNICODE_REPLACEMENTS[m.group()], text)
+
+        # Step 2: NFD normalization and strip non-spacing marks (accents)
+        result = unicodedata.normalize("NFD", result)
+        result = "".join(ch for ch in result if unicodedata.category(ch) != "Mn")
+
+        # Step 3: Keep only printable ASCII (32–126), replace others with space
+        result = "".join(ch if 32 <= ord(ch) <= 126 else " " for ch in result)
+
+        # Step 4: Collapse multiple whitespace into single space and strip
+        result = re.sub(r"\s+", " ", result).strip()
+
+        return result if result else None
+    except Exception:
+        # Match .NET fallback: return original text on failure
+        return text

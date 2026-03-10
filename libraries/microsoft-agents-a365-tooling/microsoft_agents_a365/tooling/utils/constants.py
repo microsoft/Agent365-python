@@ -33,3 +33,6 @@ class Constants:
 
         #: Header name for the subchannel ID.
         SUBCHANNEL_ID = "x-ms-subchannel-id"
+
+        #: Header name for passing the user message to MCP servers.
+        USER_MESSAGE = "x-ms-usermessage"

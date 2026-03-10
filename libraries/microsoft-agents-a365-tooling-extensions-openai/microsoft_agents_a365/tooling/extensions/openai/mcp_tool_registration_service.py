@@ -32,6 +32,7 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
+    sanitize_text_for_header,
 )
 
 
@@ -159,6 +160,10 @@ class McpToolRegistrationService:
                     headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
                         self._orchestrator_name
                     )
+
+                    sanitized = sanitize_text_for_header(context.activity.text)
+                    if sanitized is not None:
+                        headers[Constants.Headers.USER_MESSAGE] = sanitized
 
                     # Create MCPServerStreamableHttpParams with proper configuration
                     params = MCPServerStreamableHttpParams(url=si.url, headers=headers)
