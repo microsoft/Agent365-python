@@ -13,6 +13,7 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_UPN_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CALLER_ID_KEY,
+    SERVICE_NAME_KEY,
     SESSION_DESCRIPTION_KEY,
     SESSION_ID_KEY,
     TENANT_ID_KEY,
@@ -318,6 +319,37 @@ class TestBaggageBuilder(unittest.TestCase):
             current_baggage = baggage.get_all()
             # Should be None due to proper exception handling
             self.assertIsNone(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY))
+
+    def test_operation_source_method(self):
+        """Test operation_source method sets service name baggage using string values."""
+        # Should exist and be callable
+        self.assertTrue(hasattr(self.builder, "operation_source"))
+        self.assertTrue(callable(self.builder.operation_source))
+
+        # Test with custom service name
+        with BaggageBuilder().operation_source("my-agent-service").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(SERVICE_NAME_KEY), "my-agent-service")
+
+        # Test with another service name
+        with BaggageBuilder().operation_source("weather-bot").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(SERVICE_NAME_KEY), "weather-bot")
+
+        # Test with SDK as string
+        with BaggageBuilder().operation_source("SDK").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(SERVICE_NAME_KEY), "SDK")
+
+        # Test with None value (should not set baggage)
+        with BaggageBuilder().operation_source(None).build():
+            current_baggage = baggage.get_all()
+            self.assertIsNone(current_baggage.get(SERVICE_NAME_KEY))
+
+        # Test with whitespace-only value (should not set baggage)
+        with BaggageBuilder().operation_source("   ").build():
+            current_baggage = baggage.get_all()
+            self.assertIsNone(current_baggage.get(SERVICE_NAME_KEY))
 
 
 if __name__ == "__main__":

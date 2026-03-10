@@ -23,6 +23,7 @@ from ..constants import (
     GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
+    SERVICE_NAME_KEY,
     SESSION_DESCRIPTION_KEY,
     SESSION_ID_KEY,
     TENANT_ID_KEY,
@@ -54,6 +55,20 @@ class BaggageBuilder:
     def __init__(self):
         """Initialize the baggage builder."""
         self._pairs: dict[str, str] = {}
+
+    def operation_source(self, value: str | None) -> "BaggageBuilder":
+        """Set the operation source baggage value.
+
+        This captures the name of the service using the SDK.
+
+        Args:
+            value: The service name (e.g., "my-agent-service", "weather-bot")
+
+        Returns:
+            Self for method chaining
+        """
+        self._set(SERVICE_NAME_KEY, value)
+        return self
 
     def tenant_id(self, value: str | None) -> "BaggageBuilder":
         """Set the tenant ID baggage value.
