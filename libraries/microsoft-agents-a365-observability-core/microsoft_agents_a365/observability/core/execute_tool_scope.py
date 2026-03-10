@@ -120,7 +120,10 @@ class ExecuteToolScope(OpenTelemetryScope):
     def record_response(self, response: str) -> None:
         """Records response information for telemetry tracking.
 
+        Note: This method is intentionally a no-op as GEN_AI_EVENT_CONTENT was removed.
+        The method is kept for interface compatibility.
+
         Args:
             response: The response to record
         """
-        pass  # GEN_AI_EVENT_CONTENT removed
+        pass
