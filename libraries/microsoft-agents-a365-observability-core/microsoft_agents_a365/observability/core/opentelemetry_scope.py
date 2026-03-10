@@ -35,7 +35,6 @@ from .constants import (
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
     GEN_AI_PROVIDER_NAME_KEY,
-    SERVICE_NAME_KEY,
     SOURCE_NAME,
     TELEMETRY_SDK_LANGUAGE_KEY,
     TELEMETRY_SDK_LANGUAGE_VALUE,
@@ -192,8 +191,6 @@ class OpenTelemetryScope:
                     self.set_tag_maybe(GEN_AI_ICON_URI_KEY, agent_details.icon_uri)
                     # Set provider name dynamically from agent details
                     self.set_tag_maybe(GEN_AI_PROVIDER_NAME_KEY, agent_details.provider_name)
-                    # Set service name from agent details if available
-                    self.set_tag_maybe(SERVICE_NAME_KEY, agent_details.service_name)
 
                 # Set tenant details if provided
                 if tenant_details:

@@ -41,6 +41,3 @@ class AgentDetails:
 
     provider_name: Optional[str] = None
     """The provider name (e.g., openai, anthropic)."""
-
-    service_name: Optional[str] = None
-    """The service name for the agent."""
