@@ -94,13 +94,6 @@ GEN_AI_EXECUTION_PAYLOAD_KEY = "gen_ai.execution.payload"
 CHANNEL_NAME_KEY = "microsoft.channel.name"
 CHANNEL_LINK_KEY = "microsoft.channel.link"
 
-# Deprecated channel dimension keys - use CHANNEL_NAME_KEY and CHANNEL_LINK_KEY instead
-GEN_AI_EXECUTION_SOURCE_NAME_KEY = "microsoft.channel.name"
-GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY = "microsoft.channel.link"
-
-# Event content key
-GEN_AI_EVENT_CONTENT = "gen_ai.event.content"
-
 # Custom parent id and parent name key
 CUSTOM_PARENT_SPAN_ID_KEY = "custom.parent.span.id"
 CUSTOM_SPAN_NAME_KEY = "custom.span.name"
