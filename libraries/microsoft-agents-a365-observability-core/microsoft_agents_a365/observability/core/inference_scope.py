@@ -122,9 +122,7 @@ class InferenceScope(OpenTelemetryScope):
         # Set request metadata if provided
         if request and request.source_metadata:
             self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
-            self.set_tag_maybe(
-                CHANNEL_LINK_KEY, request.source_metadata.description
-            )
+            self.set_tag_maybe(CHANNEL_LINK_KEY, request.source_metadata.description)
 
     def record_input_messages(self, messages: List[str]) -> None:
         """Records the input messages for telemetry tracking.

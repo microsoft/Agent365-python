@@ -193,12 +193,8 @@ class OutputLoggingMiddleware:
             # Set additional attributes on the scope
             output_scope.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, conversation_id)
             output_scope.set_tag_maybe(GEN_AI_EXECUTION_TYPE_KEY, execution_type)
-            output_scope.set_tag_maybe(
-                CHANNEL_NAME_KEY, source_metadata.get("name")
-            )
-            output_scope.set_tag_maybe(
-                CHANNEL_LINK_KEY, source_metadata.get("description")
-            )
+            output_scope.set_tag_maybe(CHANNEL_NAME_KEY, source_metadata.get("name"))
+            output_scope.set_tag_maybe(CHANNEL_LINK_KEY, source_metadata.get("description"))
 
             if caller_details:
                 output_scope.set_tag_maybe(GEN_AI_CALLER_ID_KEY, caller_details.caller_id)

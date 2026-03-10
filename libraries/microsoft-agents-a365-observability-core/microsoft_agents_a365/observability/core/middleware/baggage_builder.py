@@ -226,27 +226,6 @@ class BaggageBuilder:
         if value is not None and value.strip():
             self._pairs[key] = value
 
-    @staticmethod
-    def set_request_context(
-        tenant_id: str | None = None,
-        agent_id: str | None = None,
-    ) -> "BaggageScope":
-        """Convenience method to begin a request baggage scope with common fields.
-
-        Args:
-            tenant_id: The tenant ID
-            agent_id: The agent ID
-
-        Returns:
-            A context manager that restores the previous baggage on exit
-        """
-        return (
-            BaggageBuilder()
-            .tenant_id(tenant_id)
-            .agent_id(agent_id)
-            .build()
-        )
-
 
 class BaggageScope:
     """Context manager for baggage scope.

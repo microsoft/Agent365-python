@@ -44,7 +44,7 @@ from .constants import (
     TELEMETRY_SDK_VERSION_KEY,
     TENANT_ID_KEY,
 )
-from .utils import parse_parent_id_to_context
+from .utils import get_sdk_version, parse_parent_id_to_context
 
 if TYPE_CHECKING:
     from .agent_details import AgentDetails
@@ -90,20 +90,6 @@ class OpenTelemetryScope:
         if dt is None:
             return None
         return int(dt.timestamp() * 1_000_000_000)
-
-    @staticmethod
-    def _get_sdk_version() -> str:
-        """Get the SDK version from package metadata.
-
-        Returns:
-            The SDK version string, or "0.0.0-unknown" if not found
-        """
-        try:
-            from importlib.metadata import version
-
-            return version("microsoft-agents-a365-observability-core")
-        except Exception:
-            return "0.0.0-unknown"
 
     def __init__(
         self,
@@ -184,7 +170,7 @@ class OpenTelemetryScope:
                 # Set telemetry SDK attributes
                 self._span.set_attribute(TELEMETRY_SDK_NAME_KEY, TELEMETRY_SDK_NAME_VALUE)
                 self._span.set_attribute(TELEMETRY_SDK_LANGUAGE_KEY, TELEMETRY_SDK_LANGUAGE_VALUE)
-                self._span.set_attribute(TELEMETRY_SDK_VERSION_KEY, self._get_sdk_version())
+                self._span.set_attribute(TELEMETRY_SDK_VERSION_KEY, get_sdk_version())
 
                 # Set agent details if provided
                 if agent_details:

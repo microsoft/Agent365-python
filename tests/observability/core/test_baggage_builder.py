@@ -241,9 +241,7 @@ class TestBaggageBuilder(unittest.TestCase):
         # Should set channel description baggage through delegation
         with self.builder.source_metadata_description("test-description").build():
             current_baggage = baggage.get_all()
-            self.assertEqual(
-                current_baggage.get(CHANNEL_LINK_KEY), "test-description"
-            )
+            self.assertEqual(current_baggage.get(CHANNEL_LINK_KEY), "test-description")
 
     def test_session_id_method(self):
         """Test session_id method sets session ID baggage."""
