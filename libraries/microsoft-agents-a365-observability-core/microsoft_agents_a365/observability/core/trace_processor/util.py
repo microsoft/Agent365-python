@@ -5,7 +5,7 @@ from .. import constants as consts
 
 # Generic / common tracing attributes
 COMMON_ATTRIBUTES = [
-    consts.TENANT_ID_KEY,  # microsoft.tenant.id
+    consts.TENANT_ID_KEY,
     consts.CUSTOM_PARENT_SPAN_ID_KEY,  # custom.parent.span.id
     consts.CUSTOM_SPAN_NAME_KEY,  # custom.span.name
     consts.GEN_AI_CONVERSATION_ID_KEY,  # gen_ai.conversation.id
