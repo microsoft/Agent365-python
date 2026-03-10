@@ -9,7 +9,7 @@ import traceback
 import warnings
 from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping
 from enum import Enum
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import version
 from ipaddress import AddressValueError, ip_address
 from threading import RLock
 from typing import Any, Generic, TypeVar, cast
@@ -308,7 +308,7 @@ def get_sdk_version() -> str:
     """
     try:
         return version("microsoft-agents-a365-observability-core")
-    except PackageNotFoundError:
+    except Exception:
         return "0.0.0-unknown"
 
 
