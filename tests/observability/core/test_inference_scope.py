@@ -91,7 +91,6 @@ class TestInferenceScope(unittest.TestCase):
         self.assertIsNone(details.inputTokens)
         self.assertIsNone(details.outputTokens)
         self.assertIsNone(details.finishReasons)
-        self.assertIsNone(details.responseId)
 
     def test_inference_call_details_with_all_fields(self):
         """Test InferenceCallDetails creation with all fields."""
@@ -102,7 +101,6 @@ class TestInferenceScope(unittest.TestCase):
             inputTokens=150,
             outputTokens=75,
             finishReasons=["stop"],
-            responseId="resp-123",
         )
 
         self.assertEqual(details.operationName, InferenceOperationType.TEXT_COMPLETION)
@@ -111,7 +109,6 @@ class TestInferenceScope(unittest.TestCase):
         self.assertEqual(details.inputTokens, 150)
         self.assertEqual(details.outputTokens, 75)
         self.assertEqual(details.finishReasons, ["stop"])
-        self.assertEqual(details.responseId, "resp-123")
 
     def test_inference_scope_start_method(self):
         """Test InferenceScope.start() static method."""
