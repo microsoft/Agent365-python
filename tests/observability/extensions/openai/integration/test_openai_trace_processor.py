@@ -242,7 +242,6 @@ class TestOpenAITraceProcessorIntegration:
                     .caller_client_ip("127.0.0.1")
                     .conversation_id("test-conversation-id")
                     .channel_name("test-channel")
-                    .correlation_id("test-correlation-id")
                     .build()
                 ):
                     result = await Runner.run(agent, "Say hello")
