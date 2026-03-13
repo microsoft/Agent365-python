@@ -200,6 +200,53 @@ class TestInvokeAgentScope(unittest.TestCase):
                 input_messages,
             )
 
+    def test_invoke_agent_scope_span_kind(self):
+        """Test that InvokeAgentScope creates spans with the correct SpanKind."""
+        # Create scope
+        scope = InvokeAgentScope.start(
+            invoke_agent_details=self.invoke_details,
+            tenant_details=self.tenant_details,
+            request=self.test_request,
+        )
+
+        if scope is not None:
+            scope.dispose()
+
+        # Check that span was created with correct SpanKind
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+
+        # Get the span and verify its kind
+        span = finished_spans[-1]
+        self.assertEqual(
+            span.kind,
+            SpanKind.CLIENT,
+            "InvokeAgentScope defaults to CLIENT spans (can be overridden with span_kind parameter)",
+        )
+
+        # Test SERVER span kind override
+        scope_server = InvokeAgentScope.start(
+            invoke_agent_details=self.invoke_details,
+            tenant_details=self.tenant_details,
+            request=self.test_request,
+            span_kind=SpanKind.SERVER,
+        )
+
+        if scope_server is not None:
+            scope_server.dispose()
+
+        # Check that SERVER span was created
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(len(finished_spans) >= 2, "Expected at least two spans to be created")
+
+        # Get the most recent span and verify it's SERVER
+        server_span = finished_spans[-1]
+        self.assertEqual(
+            server_span.kind,
+            SpanKind.SERVER,
+            "InvokeAgentScope should create SERVER spans when span_kind parameter is set",
+        )
+
 
 if __name__ == "__main__":
     # Run pytest only on the current file
