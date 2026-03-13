@@ -8,8 +8,8 @@ from microsoft_agents_a365.observability.core import configure, get_tracer_provi
 from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
+    GEN_AI_PROVIDER_NAME_KEY,
     GEN_AI_REQUEST_MODEL_KEY,
-    GEN_AI_SYSTEM_KEY,
     TENANT_ID_KEY,
 )
 from microsoft_agents_a365.observability.extensions.agentframework.trace_instrumentor import (
@@ -201,7 +201,10 @@ class TestAgentFrameworkTraceProcessorIntegration:
                 assert attributes[TENANT_ID_KEY] == agent365_config["tenant_id"]
 
             # Check for LLM spans (generation spans)
-            if GEN_AI_SYSTEM_KEY in attributes and attributes[GEN_AI_SYSTEM_KEY] == "openai":
+            if (
+                GEN_AI_PROVIDER_NAME_KEY in attributes
+                and attributes[GEN_AI_PROVIDER_NAME_KEY] == "openai"
+            ):
                 if GEN_AI_REQUEST_MODEL_KEY in attributes:
                     llm_spans_found += 1
                     # Validate LLM span attributes

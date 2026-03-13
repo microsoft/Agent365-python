@@ -7,7 +7,6 @@
 
 from collections.abc import Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, assert_never
-from urllib.parse import urlparse
 
 from agents import MCPListToolsSpanData
 from agents.tracing import Span
@@ -23,15 +22,12 @@ from agents.tracing.span_data import (
 )
 from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_CHOICE,
-    GEN_AI_EVENT_CONTENT,
     GEN_AI_EXECUTION_PAYLOAD_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
     GEN_AI_PROVIDER_NAME_KEY,
     GEN_AI_REQUEST_MODEL_KEY,
     GEN_AI_RESPONSE_FINISH_REASONS_KEY,
-    GEN_AI_RESPONSE_ID_KEY,
-    GEN_AI_SYSTEM_KEY,
     GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
     GEN_AI_TOOL_CALL_RESULT_KEY,
@@ -218,10 +214,6 @@ def get_attributes_from_generation_span_data(
         param := {k: v for k, v in obj.model_config.items() if v is not None}
     ):
         yield GEN_AI_EXECUTION_PAYLOAD_KEY, safe_json_dumps(param)
-        if base_url := param.get("base_url"):
-            parsed = urlparse(base_url)
-            if parsed.hostname == "api.openai.com":
-                yield GEN_AI_SYSTEM_KEY, "openai"
     yield from _get_attributes_from_chat_completions_input(obj.input)
     yield from _get_attributes_from_chat_completions_output(obj.output)
     yield from _get_attributes_from_chat_completions_usage(obj.usage)
@@ -257,9 +249,6 @@ def _get_attributes_from_chat_completions_output(
         yield GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(obj)
     except Exception:
         pass
-
-    if isinstance(obj, Mapping) and "id" in obj:
-        yield GEN_AI_RESPONSE_ID_KEY, obj["id"]
 
     # Collect all finish_reason values
     finish_reasons = [
@@ -368,7 +357,7 @@ def get_attributes_from_function_span_data(
     if obj.input:
         yield GEN_AI_TOOL_ARGS_KEY, obj.input
     if obj.output is not None:
-        yield GEN_AI_EVENT_CONTENT, _convert_to_primitive(obj.output)
+        yield GEN_AI_TOOL_CALL_RESULT_KEY, _convert_to_primitive(obj.output)
 
 
 def get_attributes_from_message_content_list(

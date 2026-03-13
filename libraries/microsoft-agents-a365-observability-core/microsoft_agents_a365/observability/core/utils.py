@@ -9,6 +9,7 @@ import traceback
 import warnings
 from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping
 from enum import Enum
+from importlib.metadata import version
 from ipaddress import AddressValueError, ip_address
 from threading import RLock
 from typing import Any, Generic, TypeVar, cast
@@ -297,6 +298,18 @@ def deprecated(reason: str):
         return wrapper
 
     return decorator
+
+
+def get_sdk_version() -> str:
+    """Get the SDK version from package metadata.
+
+    Returns:
+        The SDK version string, or "0.0.0-unknown" if not found
+    """
+    try:
+        return version("microsoft-agents-a365-observability-core")
+    except Exception:
+        return "0.0.0-unknown"
 
 
 def validate_and_normalize_ip(ip_string: str | None) -> str | None:

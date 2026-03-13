@@ -21,8 +21,8 @@ from microsoft_agents_a365.observability.core import (
 from microsoft_agents_a365.observability.core.agent_details import AgentDetails
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.constants import (
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
 )
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -91,7 +91,6 @@ class TestInferenceScope(unittest.TestCase):
         self.assertIsNone(details.inputTokens)
         self.assertIsNone(details.outputTokens)
         self.assertIsNone(details.finishReasons)
-        self.assertIsNone(details.responseId)
 
     def test_inference_call_details_with_all_fields(self):
         """Test InferenceCallDetails creation with all fields."""
@@ -102,7 +101,6 @@ class TestInferenceScope(unittest.TestCase):
             inputTokens=150,
             outputTokens=75,
             finishReasons=["stop"],
-            responseId="resp-123",
         )
 
         self.assertEqual(details.operationName, InferenceOperationType.TEXT_COMPLETION)
@@ -111,7 +109,6 @@ class TestInferenceScope(unittest.TestCase):
         self.assertEqual(details.inputTokens, 150)
         self.assertEqual(details.outputTokens, 75)
         self.assertEqual(details.finishReasons, ["stop"])
-        self.assertEqual(details.responseId, "resp-123")
 
     def test_inference_scope_start_method(self):
         """Test InferenceScope.start() static method."""
@@ -178,22 +175,22 @@ class TestInferenceScope(unittest.TestCase):
         span_attributes = getattr(span, "attributes", {}) or {}
 
         self.assertIn(
-            GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+            CHANNEL_NAME_KEY,
             span_attributes,
             "Expected source name to be set on span",
         )
         self.assertEqual(
-            span_attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY],
+            span_attributes[CHANNEL_NAME_KEY],
             request.source_metadata.name,
         )
 
         self.assertIn(
-            GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+            CHANNEL_LINK_KEY,
             span_attributes,
             "Expected source description to be set on span",
         )
         self.assertEqual(
-            span_attributes[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY],
+            span_attributes[CHANNEL_LINK_KEY],
             request.source_metadata.description,
         )
 

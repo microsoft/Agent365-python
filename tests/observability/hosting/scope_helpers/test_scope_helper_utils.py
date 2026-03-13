@@ -3,6 +3,8 @@
 
 from microsoft_agents.activity import Activity, ChannelAccount, ConversationAccount
 from microsoft_agents_a365.observability.core.constants import (
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_DESCRIPTION_KEY,
     GEN_AI_AGENT_ID_KEY,
@@ -10,12 +12,9 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_UPN_KEY,
     GEN_AI_CALLER_ID_KEY,
     GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_TENANT_ID_KEY,
     GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     TENANT_ID_KEY,
 )
@@ -45,7 +44,6 @@ def test_get_caller_pairs():
     assert (GEN_AI_CALLER_ID_KEY, "caller-aad-id") in result
     assert (GEN_AI_CALLER_NAME_KEY, "Test Caller") in result
     assert (GEN_AI_CALLER_UPN_KEY, "caller-upn") in result
-    assert (GEN_AI_CALLER_TENANT_ID_KEY, "caller-tenant-id") in result
 
 
 def test_get_execution_type_pair():
@@ -95,8 +93,8 @@ def test_get_source_metadata_pairs():
 
     result = list(get_source_metadata_pairs(activity))
 
-    assert (GEN_AI_EXECUTION_SOURCE_NAME_KEY, "test-channel") in result
-    assert (GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, None) in result
+    assert (CHANNEL_NAME_KEY, "test-channel") in result
+    assert (CHANNEL_LINK_KEY, None) in result
 
 
 def test_get_conversation_pairs():

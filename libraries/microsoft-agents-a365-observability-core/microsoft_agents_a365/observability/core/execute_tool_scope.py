@@ -7,10 +7,9 @@ from opentelemetry.trace import SpanKind
 
 from .agent_details import AgentDetails
 from .constants import (
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
     EXECUTE_TOOL_OPERATION_NAME,
-    GEN_AI_EVENT_CONTENT,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
     GEN_AI_TOOL_DESCRIPTION_KEY,
@@ -130,15 +129,16 @@ class ExecuteToolScope(OpenTelemetryScope):
 
         # Set request metadata if provided
         if request and request.source_metadata:
-            self.set_tag_maybe(GEN_AI_EXECUTION_SOURCE_NAME_KEY, request.source_metadata.name)
-            self.set_tag_maybe(
-                GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, request.source_metadata.description
-            )
+            self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
+            self.set_tag_maybe(CHANNEL_LINK_KEY, request.source_metadata.description)
 
     def record_response(self, response: str) -> None:
         """Records response information for telemetry tracking.
 
+        Note: This method is intentionally a no-op as GEN_AI_EVENT_CONTENT was removed.
+        The method is kept for interface compatibility.
+
         Args:
             response: The response to record
         """
-        self.set_tag_maybe(GEN_AI_EVENT_CONTENT, response)
+        pass

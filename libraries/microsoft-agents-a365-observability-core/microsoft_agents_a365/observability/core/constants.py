@@ -6,6 +6,8 @@
 # Span operation names
 INVOKE_AGENT_OPERATION_NAME = "invoke_agent"
 EXECUTE_TOOL_OPERATION_NAME = "execute_tool"
+OUTPUT_MESSAGES_OPERATION_NAME = "output_messages"
+CHAT_OPERATION_NAME = "chat"
 
 # OpenTelemetry semantic conventions
 ERROR_TYPE_KEY = "error.type"
@@ -30,81 +32,79 @@ GEN_AI_REQUEST_MAX_TOKENS_KEY = "gen_ai.request.max_tokens"
 GEN_AI_REQUEST_MODEL_KEY = "gen_ai.request.model"
 GEN_AI_REQUEST_TEMPERATURE_KEY = "gen_ai.request.temperature"
 GEN_AI_REQUEST_TOP_P_KEY = "gen_ai.request.top_p"
-GEN_AI_RESPONSE_ID_KEY = "gen_ai.response.id"
 GEN_AI_RESPONSE_FINISH_REASONS_KEY = "gen_ai.response.finish_reasons"
 GEN_AI_RESPONSE_MODEL_KEY = "gen_ai.response.model"
-GEN_AI_SYSTEM_KEY = "gen_ai.system"
-GEN_AI_SYSTEM_VALUE = "az.ai.agent365"
-GEN_AI_THOUGHT_PROCESS_KEY = "gen_ai.agent.thought.process"
-
+GEN_AI_RESPONSE_ID_KEY = "gen_ai.response.id"
 GEN_AI_AGENT_ID_KEY = "gen_ai.agent.id"
 GEN_AI_AGENT_NAME_KEY = "gen_ai.agent.name"
 GEN_AI_AGENT_DESCRIPTION_KEY = "gen_ai.agent.description"
+GEN_AI_AGENT_PLATFORM_ID_KEY = "microsoft.a365.agent.platform.id"
+GEN_AI_AGENT_THOUGHT_PROCESS_KEY = "microsoft.a365.agent.thought.process"
 GEN_AI_CONVERSATION_ID_KEY = "gen_ai.conversation.id"
-GEN_AI_CONVERSATION_ITEM_LINK_KEY = "gen_ai.conversation.item.link"
+GEN_AI_CONVERSATION_ITEM_LINK_KEY = "microsoft.conversation.item.link"
 GEN_AI_TOKEN_TYPE_KEY = "gen_ai.token.type"
 GEN_AI_USAGE_INPUT_TOKENS_KEY = "gen_ai.usage.input_tokens"
 GEN_AI_USAGE_OUTPUT_TOKENS_KEY = "gen_ai.usage.output_tokens"
 GEN_AI_CHOICE = "gen_ai.choice"
 GEN_AI_PROVIDER_NAME_KEY = "gen_ai.provider.name"
-GEN_AI_AGENT_TYPE_KEY = "gen_ai.agent.type"
 
 GEN_AI_SYSTEM_INSTRUCTIONS_KEY = "gen_ai.system_instructions"
 GEN_AI_INPUT_MESSAGES_KEY = "gen_ai.input.messages"
 GEN_AI_OUTPUT_MESSAGES_KEY = "gen_ai.output.messages"
-GEN_AI_EVENT_CONTENT = "gen_ai.event.content"
 
 # Tool execution constants
 GEN_AI_TOOL_CALL_ID_KEY = "gen_ai.tool.call.id"
 GEN_AI_TOOL_NAME_KEY = "gen_ai.tool.name"
 GEN_AI_TOOL_DESCRIPTION_KEY = "gen_ai.tool.description"
-GEN_AI_TOOL_ARGS_KEY = "gen_ai.tool.arguments"
-GEN_AI_TOOL_CALL_RESULT_KEY = GEN_AI_EVENT_CONTENT  # GEN_AI_EVENT_CONTENT
+GEN_AI_TOOL_ARGS_KEY = "gen_ai.tool.call.arguments"
+GEN_AI_TOOL_CALL_RESULT_KEY = "gen_ai.tool.call.result"
 GEN_AI_TOOL_TYPE_KEY = "gen_ai.tool.type"
 
-# Agent user(user tied to agent instance during creation) or caller dimensions
-GEN_AI_AGENT_USER_ID_KEY = "gen_ai.agent.userid"
-GEN_AI_CALLER_USER_ID_KEY = "gen_ai.caller.userid"
-GEN_AI_CALLER_TENANT_ID_KEY = "gen_ai.caller.tenantid"
-GEN_AI_CALLER_ID_KEY = "gen_ai.caller.id"
-GEN_AI_CALLER_NAME_KEY = "gen_ai.caller.name"
-GEN_AI_CALLER_UPN_KEY = "gen_ai.caller.upn"
-GEN_AI_CALLER_CLIENT_IP_KEY = "gen_ai.caller.client.ip"
+# Agent user (user tied to agent instance during creation) or caller dimensions
+GEN_AI_CALLER_ID_KEY = "microsoft.caller.id"
+GEN_AI_CALLER_NAME_KEY = "microsoft.caller.name"
+GEN_AI_CALLER_UPN_KEY = "microsoft.caller.upn"
+GEN_AI_CALLER_CLIENT_IP_KEY = "client.address"
 
 # Agent to Agent caller agent dimensions
-GEN_AI_CALLER_AGENT_USER_ID_KEY = "gen_ai.caller.agent.userid"
-GEN_AI_CALLER_AGENT_UPN_KEY = "gen_ai.caller.agent.upn"
-GEN_AI_CALLER_AGENT_TENANT_ID_KEY = "gen_ai.caller.agent.tenantid"
-GEN_AI_CALLER_AGENT_NAME_KEY = "gen_ai.caller.agent.name"
-GEN_AI_CALLER_AGENT_ID_KEY = "gen_ai.caller.agent.id"
-GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY = "gen_ai.caller.agent.applicationid"
-GEN_AI_CALLER_AGENT_TYPE_KEY = "gen_ai.caller.agent.type"
-GEN_AI_CALLER_AGENT_USER_CLIENT_IP = "gen_ai.caller.agent.user.client.ip"
+GEN_AI_CALLER_AGENT_USER_ID_KEY = "microsoft.a365.caller.agent.user.id"
+GEN_AI_CALLER_AGENT_UPN_KEY = "microsoft.a365.caller.agent.user.upn"
+GEN_AI_CALLER_AGENT_NAME_KEY = "microsoft.a365.caller.agent.name"
+GEN_AI_CALLER_AGENT_ID_KEY = "microsoft.a365.caller.agent.id"
+GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY = "microsoft.a365.caller.agent.blueprint.id"
+GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY = "microsoft.a365.caller.agent.platform.id"
 
 # Agent-specific dimensions
 AGENT_ID_KEY = "gen_ai.agent.id"
 GEN_AI_TASK_ID_KEY = "gen_ai.task.id"
-SESSION_ID_KEY = "session.id"
+SESSION_ID_KEY = "microsoft.session.id"
+SESSION_DESCRIPTION_KEY = "microsoft.session.description"
 GEN_AI_ICON_URI_KEY = "gen_ai.agent365.icon_uri"
-TENANT_ID_KEY = "tenant.id"
+TENANT_ID_KEY = "microsoft.tenant.id"
 
 # Baggage keys
-OPERATION_SOURCE_KEY = "operation.source"
-GEN_AI_AGENT_AUID_KEY = "gen_ai.agent.user.id"
-GEN_AI_AGENT_UPN_KEY = "gen_ai.agent.upn"
-GEN_AI_AGENT_BLUEPRINT_ID_KEY = "gen_ai.agent.applicationid"
-CORRELATION_ID_KEY = "correlation.id"
-HIRING_MANAGER_ID_KEY = "hiring.manager.id"
-SESSION_DESCRIPTION_KEY = "session.description"
+GEN_AI_AGENT_AUID_KEY = "microsoft.agent.user.id"
+GEN_AI_AGENT_UPN_KEY = "microsoft.agent.user.upn"
+GEN_AI_AGENT_BLUEPRINT_ID_KEY = "microsoft.a365.agent.blueprint.id"
 
 # Execution context dimensions
 GEN_AI_EXECUTION_TYPE_KEY = "gen_ai.execution.type"
 GEN_AI_EXECUTION_PAYLOAD_KEY = "gen_ai.execution.payload"
 
-# Source metadata dimensions
-GEN_AI_EXECUTION_SOURCE_NAME_KEY = "gen_ai.channel.name"
-GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY = "gen_ai.channel.link"
+# Channel dimensions
+CHANNEL_NAME_KEY = "microsoft.channel.name"
+CHANNEL_LINK_KEY = "microsoft.channel.link"
 
-# custom parent id and parent name key
+# Custom parent id and parent name key
 CUSTOM_PARENT_SPAN_ID_KEY = "custom.parent.span.id"
 CUSTOM_SPAN_NAME_KEY = "custom.span.name"
+
+# Service attributes
+SERVICE_NAME_KEY = "service.name"
+
+# Telemetry SDK attributes
+TELEMETRY_SDK_NAME_KEY = "telemetry.sdk.name"
+TELEMETRY_SDK_LANGUAGE_KEY = "telemetry.sdk.language"
+TELEMETRY_SDK_VERSION_KEY = "telemetry.sdk.version"
+TELEMETRY_SDK_NAME_VALUE = "A365ObservabilitySDK"
+TELEMETRY_SDK_LANGUAGE_VALUE = "python"

@@ -18,7 +18,7 @@ from .exporters.enriching_span_processor import (
     register_span_enricher,
     unregister_span_enricher,
 )
-from .inference_call_details import InferenceCallDetails
+from .inference_call_details import InferenceCallDetails, ServiceEndpoint
 from .inference_operation_type import InferenceOperationType
 from .inference_scope import InferenceScope
 from .invoke_agent_details import InvokeAgentDetails
@@ -61,6 +61,7 @@ __all__ = [
     "SourceMetadata",
     "Request",
     "InferenceCallDetails",
+    "ServiceEndpoint",
     # Enums
     "ExecutionType",
     "InferenceOperationType",
