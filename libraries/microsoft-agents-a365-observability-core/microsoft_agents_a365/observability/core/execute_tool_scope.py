@@ -3,6 +3,8 @@
 
 from datetime import datetime
 
+from opentelemetry.trace import SpanKind
+
 from .agent_details import AgentDetails
 from .constants import (
     EXECUTE_TOOL_OPERATION_NAME,
@@ -35,6 +37,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         parent_id: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        span_kind: SpanKind | None = None,
     ) -> "ExecuteToolScope":
         """Creates and starts a new scope for tool execution tracing.
 
@@ -50,12 +53,21 @@ class ExecuteToolScope(OpenTelemetryScope):
             end_time: Optional explicit end time as a datetime object. When provided,
                 the span will use this timestamp when disposed instead of the
                 current wall-clock time.
+            span_kind: Optional span kind override. Defaults to ``SpanKind.INTERNAL``.
+                Use ``SpanKind.CLIENT`` when the tool calls an external service.
 
         Returns:
             A new ExecuteToolScope instance
         """
         return ExecuteToolScope(
-            details, agent_details, tenant_details, request, parent_id, start_time, end_time
+            details,
+            agent_details,
+            tenant_details,
+            request,
+            parent_id,
+            start_time,
+            end_time,
+            span_kind,
         )
 
     def __init__(
@@ -67,6 +79,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         parent_id: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        span_kind: SpanKind | None = None,
     ):
         """Initialize the tool execution scope.
 
@@ -82,9 +95,11 @@ class ExecuteToolScope(OpenTelemetryScope):
             end_time: Optional explicit end time as a datetime object. When provided,
                 the span will use this timestamp when disposed instead of the
                 current wall-clock time.
+            span_kind: Optional span kind override. Defaults to ``SpanKind.INTERNAL``.
+                Use ``SpanKind.CLIENT`` when the tool calls an external service.
         """
         super().__init__(
-            kind="Internal",
+            kind=span_kind if span_kind is not None else SpanKind.INTERNAL,
             operation_name=EXECUTE_TOOL_OPERATION_NAME,
             activity_name=f"{EXECUTE_TOOL_OPERATION_NAME} {details.tool_name}",
             agent_details=agent_details,

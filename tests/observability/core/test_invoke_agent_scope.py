@@ -33,6 +33,7 @@ from microsoft_agents_a365.observability.core.models.caller_details import Calle
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind
 
 
 class TestInvokeAgentScope(unittest.TestCase):
@@ -267,6 +268,26 @@ class TestInvokeAgentScope(unittest.TestCase):
             span_attributes[GEN_AI_CALLER_AGENT_TYPE_KEY],
             AgentType.DECLARATIVE_AGENT.value,
         )
+
+    def test_span_kind_defaults_to_client(self):
+        """Test that InvokeAgentScope defaults to SpanKind.CLIENT."""
+        scope = InvokeAgentScope.start(self.invoke_details, self.tenant_details)
+        scope.dispose()
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+        self.assertEqual(finished_spans[-1].kind, SpanKind.CLIENT)
+
+    def test_span_kind_override_to_server(self):
+        """Test that InvokeAgentScope accepts SpanKind.SERVER override."""
+        scope = InvokeAgentScope.start(
+            self.invoke_details, self.tenant_details, span_kind=SpanKind.SERVER
+        )
+        scope.dispose()
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+        self.assertEqual(finished_spans[-1].kind, SpanKind.SERVER)
 
 
 if __name__ == "__main__":

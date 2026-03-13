@@ -88,7 +88,7 @@ class OpenTelemetryScope:
 
     def __init__(
         self,
-        kind: str,
+        kind: "str | SpanKind",
         operation_name: str,
         activity_name: str,
         agent_details: "AgentDetails | None" = None,
@@ -100,7 +100,9 @@ class OpenTelemetryScope:
         """Initialize the OpenTelemetry scope.
 
         Args:
-            kind: The kind of activity (Client, Server, Internal, etc.)
+            kind: The kind of activity. Accepts a string (e.g. ``"Client"``,
+                ``"Server"``, ``"Internal"``) or an ``opentelemetry.trace.SpanKind``
+                enum value directly.
             operation_name: The name of the operation being traced
             activity_name: The name of the activity for display purposes
             agent_details: Optional agent details
@@ -124,16 +126,20 @@ class OpenTelemetryScope:
         if self._is_telemetry_enabled():
             tracer = self._get_tracer()
 
-            # Map string kind to SpanKind enum
-            activity_kind = SpanKind.INTERNAL
-            if kind.lower() == "client":
-                activity_kind = SpanKind.CLIENT
-            elif kind.lower() == "server":
-                activity_kind = SpanKind.SERVER
-            elif kind.lower() == "producer":
-                activity_kind = SpanKind.PRODUCER
-            elif kind.lower() == "consumer":
-                activity_kind = SpanKind.CONSUMER
+            # Resolve activity_kind from either a SpanKind enum or a string
+            if isinstance(kind, SpanKind):
+                activity_kind = kind
+            else:
+                # Map string kind to SpanKind enum
+                activity_kind = SpanKind.INTERNAL
+                if kind.lower() == "client":
+                    activity_kind = SpanKind.CLIENT
+                elif kind.lower() == "server":
+                    activity_kind = SpanKind.SERVER
+                elif kind.lower() == "producer":
+                    activity_kind = SpanKind.PRODUCER
+                elif kind.lower() == "consumer":
+                    activity_kind = SpanKind.CONSUMER
 
             # Get context for parent relationship
             # If parent_id is provided, parse it and use it as the parent context

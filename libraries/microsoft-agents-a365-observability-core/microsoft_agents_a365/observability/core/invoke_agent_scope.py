@@ -6,6 +6,8 @@
 import logging
 from datetime import datetime
 
+from opentelemetry.trace import SpanKind
+
 from .agent_details import AgentDetails
 from .constants import (
     GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY,
@@ -53,6 +55,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         caller_details: CallerDetails | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        span_kind: SpanKind | None = None,
     ) -> "InvokeAgentScope":
         """Create and start a new scope for agent invocation tracing.
 
@@ -65,6 +68,8 @@ class InvokeAgentScope(OpenTelemetryScope):
             caller_details: Optional details of the non-agentic caller
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
+            span_kind: Optional span kind override. Defaults to ``SpanKind.CLIENT``.
+                Use ``SpanKind.SERVER`` when the agent is receiving an inbound request.
 
         Returns:
             A new InvokeAgentScope instance
@@ -77,6 +82,7 @@ class InvokeAgentScope(OpenTelemetryScope):
             caller_details,
             start_time,
             end_time,
+            span_kind,
         )
 
     def __init__(
@@ -88,6 +94,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         caller_details: CallerDetails | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        span_kind: SpanKind | None = None,
     ):
         """Initialize the agent invocation scope.
 
@@ -99,6 +106,8 @@ class InvokeAgentScope(OpenTelemetryScope):
             caller_details: Optional details of the non-agentic caller
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
+            span_kind: Optional span kind override. Defaults to ``SpanKind.CLIENT``.
+                Use ``SpanKind.SERVER`` when the agent is receiving an inbound request.
         """
         activity_name = INVOKE_AGENT_OPERATION_NAME
         if invoke_agent_details.details.agent_name:
@@ -107,7 +116,7 @@ class InvokeAgentScope(OpenTelemetryScope):
             )
 
         super().__init__(
-            kind="Client",
+            kind=span_kind if span_kind is not None else SpanKind.CLIENT,
             operation_name=INVOKE_AGENT_OPERATION_NAME,
             activity_name=activity_name,
             agent_details=invoke_agent_details.details,
