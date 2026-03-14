@@ -8,6 +8,9 @@ from collections.abc import Callable
 from typing import Any, Optional
 
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+    OTLPSpanExporter as GrpcOTLPSpanExporter,
+)
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_NAMESPACE, Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -18,6 +21,7 @@ from .exporters.agent365_exporter_options import Agent365ExporterOptions
 from .exporters.enriching_span_processor import (
     _EnrichingBatchSpanProcessor,
 )
+from .exporters.spectra_exporter_options import SpectraExporterOptions
 from .exporters.utils import is_agent365_exporter_enabled
 from .trace_processor.span_processor import SpanProcessor
 
@@ -58,7 +62,7 @@ class TelemetryManager:
         logger_name: str = DEFAULT_LOGGER_NAME,
         token_resolver: Callable[[str, str], str | None] | None = None,
         cluster_category: str = "prod",
-        exporter_options: Optional[Agent365ExporterOptions] = None,
+        exporter_options: Agent365ExporterOptions | SpectraExporterOptions | None = None,
         suppress_invoke_agent_input: bool = False,
         **kwargs: Any,
     ) -> bool:
@@ -72,9 +76,10 @@ class TelemetryManager:
             Use exporter_options instead.
         :param cluster_category: (Deprecated) Environment / cluster category (e.g. "prod").
             Use exporter_options instead.
-        :param exporter_options: Agent365ExporterOptions instance for configuring the exporter.
-            If provided, exporter_options takes precedence. If exporter_options is None, the token_resolver and cluster_category parameters are used as fallback/legacy support to construct a default Agent365ExporterOptions instance.
-        :param suppress_invoke_agent_input: If True, suppress input messages for spans that are children of InvokeAgent spans.
+        :param exporter_options: Exporter configuration. Pass Agent365ExporterOptions for A365 API
+            export, SpectraExporterOptions for Spectra Collector sidecar export, or None (default)
+            to construct Agent365ExporterOptions from legacy parameters.
+        :param suppress_invoke_agent_input: If True, suppress input messages for InvokeAgent spans.
         :return: True if configuration succeeded, False otherwise.
         """
         try:
@@ -100,7 +105,7 @@ class TelemetryManager:
         logger_name: str,
         token_resolver: Callable[[str, str], str | None] | None = None,
         cluster_category: str = "prod",
-        exporter_options: Optional[Agent365ExporterOptions] = None,
+        exporter_options: Agent365ExporterOptions | SpectraExporterOptions | None = None,
         suppress_invoke_agent_input: bool = False,
         **kwargs: Any,
     ) -> bool:
@@ -156,7 +161,21 @@ class TelemetryManager:
             "max_export_batch_size": exporter_options.max_export_batch_size,
         }
 
-        if is_agent365_exporter_enabled() and exporter_options.token_resolver is not None:
+        # Type-based exporter dispatch
+        if isinstance(exporter_options, SpectraExporterOptions):
+            # Spectra path — OTLP exporter to sidecar
+            # ENABLE_A365_OBSERVABILITY_EXPORTER is intentionally ignored.
+            if exporter_options.protocol == "grpc":
+                exporter = GrpcOTLPSpanExporter(
+                    endpoint=exporter_options.endpoint,
+                    insecure=exporter_options.insecure,
+                )
+            else:
+                exporter = OTLPSpanExporter(
+                    endpoint=exporter_options.endpoint,
+                )
+
+        elif is_agent365_exporter_enabled() and exporter_options.token_resolver is not None:
             exporter = _Agent365Exporter(
                 token_resolver=exporter_options.token_resolver,
                 cluster_category=exporter_options.cluster_category,
@@ -166,7 +185,8 @@ class TelemetryManager:
         else:
             exporter = ConsoleSpanExporter()
             self._logger.warning(
-                "is_agent365_exporter_enabled() not enabled or token_resolver not set. Falling back to console exporter."
+                "is_agent365_exporter_enabled() not enabled or token_resolver not set."
+                " Falling back to console exporter."
             )
 
         # Add span processors
@@ -251,7 +271,7 @@ def configure(
     logger_name: str = DEFAULT_LOGGER_NAME,
     token_resolver: Callable[[str, str], str | None] | None = None,
     cluster_category: str = "prod",
-    exporter_options: Optional[Agent365ExporterOptions] = None,
+    exporter_options: Agent365ExporterOptions | SpectraExporterOptions | None = None,
     **kwargs: Any,
 ) -> bool:
     """
@@ -264,8 +284,9 @@ def configure(
         Use exporter_options instead.
     :param cluster_category: (Deprecated) Environment / cluster category (e.g. "prod").
         Use exporter_options instead.
-    :param exporter_options: Agent365ExporterOptions instance for configuring the exporter.
-        If provided, exporter_options takes precedence. If exporter_options is None, the token_resolver and cluster_category parameters are used as fallback/legacy support to construct a default Agent365ExporterOptions instance.
+    :param exporter_options: Exporter configuration. Pass Agent365ExporterOptions for A365 API
+        export, SpectraExporterOptions for Spectra Collector sidecar export, or None (default)
+        to construct Agent365ExporterOptions from legacy parameters.
     :return: True if configuration succeeded, False otherwise.
     """
     return _telemetry_manager.configure(
