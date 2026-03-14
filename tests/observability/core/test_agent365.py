@@ -115,11 +115,11 @@ class TestAgent365Configure(unittest.TestCase):
         self.assertTrue(result, "configure() should return True")
 
         # Verify Agent365Exporter was called with correct parameters
+        # (suppress_invoke_agent_input is now handled by _EnrichingBatchSpanProcessor)
         mock_exporter.assert_called_once_with(
             token_resolver=self.mock_token_resolver,
             cluster_category="staging",
             use_s2s_endpoint=True,
-            suppress_invoke_agent_input=False,
         )
 
         # Verify BatchSpanProcessor was called with correct parameters from exporter_options
