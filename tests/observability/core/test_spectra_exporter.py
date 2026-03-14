@@ -39,6 +39,16 @@ class TestSpectraExporterOptions(unittest.TestCase):
         self.assertEqual(opts.exporter_timeout_ms, 30000)
         self.assertEqual(opts.max_export_batch_size, 512)
 
+    def test_spectra_exporter_options_http_default_endpoint(self):
+        """HTTP protocol defaults to port 4318."""
+        opts = SpectraExporterOptions(protocol="http")
+        self.assertEqual(opts.endpoint, "http://localhost:4318")
+
+    def test_spectra_exporter_options_explicit_endpoint_overrides_default(self):
+        """Explicit endpoint overrides protocol-based default."""
+        opts = SpectraExporterOptions(protocol="http", endpoint="http://custom:9999")
+        self.assertEqual(opts.endpoint, "http://custom:9999")
+
     def test_spectra_options_invalid_protocol_raises(self):
         """ValueError for invalid protocol."""
         with self.assertRaises(ValueError) as ctx:
@@ -102,7 +112,7 @@ class TestConfigureWithSpectraOptions(unittest.TestCase):
         )
         self.assertTrue(result)
         mock_http.assert_called_once_with(
-            endpoint="http://localhost:4317",
+            endpoint="http://localhost:4318",
         )
 
     @patch("microsoft_agents_a365.observability.core.config.GrpcOTLPSpanExporter")

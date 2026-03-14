@@ -272,6 +272,7 @@ def configure(
     token_resolver: Callable[[str, str], str | None] | None = None,
     cluster_category: str = "prod",
     exporter_options: Agent365ExporterOptions | SpectraExporterOptions | None = None,
+    suppress_invoke_agent_input: bool = False,
     **kwargs: Any,
 ) -> bool:
     """
@@ -287,6 +288,7 @@ def configure(
     :param exporter_options: Exporter configuration. Pass Agent365ExporterOptions for A365 API
         export, SpectraExporterOptions for Spectra Collector sidecar export, or None (default)
         to construct Agent365ExporterOptions from legacy parameters.
+    :param suppress_invoke_agent_input: If True, suppress input messages for InvokeAgent spans.
     :return: True if configuration succeeded, False otherwise.
     """
     return _telemetry_manager.configure(
@@ -296,6 +298,7 @@ def configure(
         token_resolver,
         cluster_category,
         exporter_options,
+        suppress_invoke_agent_input,
         **kwargs,
     )
 

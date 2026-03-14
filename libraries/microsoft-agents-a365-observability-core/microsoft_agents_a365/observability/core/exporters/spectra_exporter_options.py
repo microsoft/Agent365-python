@@ -17,9 +17,12 @@ class SpectraExporterOptions:
     options classes have no shared base class per design decision C4.
     """
 
+    _DEFAULT_GRPC_ENDPOINT = "http://localhost:4317"
+    _DEFAULT_HTTP_ENDPOINT = "http://localhost:4318"
+
     def __init__(
         self,
-        endpoint: str = "http://localhost:4317",
+        endpoint: str | None = None,
         protocol: Literal["grpc", "http"] = "grpc",
         insecure: bool = True,
         max_queue_size: int = 2048,
@@ -29,7 +32,8 @@ class SpectraExporterOptions:
     ):
         """
         Args:
-            endpoint: Spectra sidecar OTLP endpoint. Default: http://localhost:4317.
+            endpoint: Spectra sidecar OTLP endpoint. Defaults to
+                http://localhost:4317 for gRPC or http://localhost:4318 for HTTP.
             protocol: OTLP protocol — "grpc" or "http". Default: grpc.
             insecure: Use insecure (no TLS) connection. Default: True (localhost sidecar).
             max_queue_size: Batch processor queue size. Default: 2048.
@@ -39,6 +43,10 @@ class SpectraExporterOptions:
         """
         if protocol not in ("grpc", "http"):
             raise ValueError(f"protocol must be 'grpc' or 'http', got '{protocol}'")
+        if endpoint is None:
+            endpoint = (
+                self._DEFAULT_GRPC_ENDPOINT if protocol == "grpc" else self._DEFAULT_HTTP_ENDPOINT
+            )
         self.endpoint = endpoint
         self.protocol = protocol
         self.insecure = insecure

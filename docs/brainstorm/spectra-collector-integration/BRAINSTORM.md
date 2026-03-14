@@ -110,12 +110,12 @@ The `TelemetryManager.configure()` method (`config.py`) creates the exporter pip
 |------|----------|------------|
 | Sidecar not running → silent failure | Medium | OTLP exporter logs connection errors; document deployment prereqs |
 | Consumer passes both A365 env var + Spectra options | Low | Spectra options take precedence; env var ignored |
-| `insecure=False` default may fail on plain HTTP localhost | Low | Document: set `insecure=True` if sidecar doesn't have TLS |
+| Consumer sets `insecure=False` for remote Spectra endpoint but forgets TLS setup | Low | Only relevant for non-sidecar deployments. Default `insecure=True` is correct for localhost. |
 
 ### Open Questions (Resolved)
 1. **Union type vs separate param** → Union type on `exporter_options`
 2. **A365 env var behavior** → Ignored entirely when SpectraExporterOptions provided
-3. **Insecure config** → Exposed, defaults to `False`
+3. **Insecure config** → Exposed, defaults to `True` (localhost sidecar)
 4. **Protocol config** → Exposed (`"grpc"` or `"http"`), defaults to `"grpc"`
 5. **Package exports** → `SpectraExporterOptions` added to `__init__.py`
 6. **Test strategy** → Mock `OTLPSpanExporter`

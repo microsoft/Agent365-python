@@ -51,7 +51,7 @@ configure(exporter_options=SpectraExporterOptions(...))
 │  │ SpectraExporterOpts │    │ Agent365ExporterOptions  │    │
 │  │ endpoint (4317)     │    │ token_resolver           │    │
 │  │ protocol (gRPC)     │    │ cluster_category         │    │
-│  │ insecure (false)    │    │ use_s2s_endpoint         │    │
+│  │ insecure (true)     │    │ use_s2s_endpoint         │    │
 │  │ batch settings      │    │ batch settings           │    │
 │  └────────┬────────────┘    └────────┬────────────────┘    │
 │           │                          │                      │
@@ -92,7 +92,7 @@ class SpectraExporterOptions:
         self,
         endpoint: str = "http://localhost:4317",
         protocol: str = "grpc",
-        insecure: bool = False,
+        insecure: bool = True,
         max_queue_size: int = 2048,
         scheduled_delay_ms: int = 5000,
         exporter_timeout_ms: int = 30000,
@@ -113,7 +113,7 @@ class SpectraExporterOptions:
 |-------|------|---------|-------------|
 | `endpoint` | `str` | `http://localhost:4317` | Spectra sidecar OTLP endpoint |
 | `protocol` | `str` | `grpc` | OTLP protocol: `"grpc"` or `"http"` |
-| `insecure` | `bool` | `False` | Whether to use insecure (no TLS) connection |
+| `insecure` | `bool` | `True` | Whether to use insecure (no TLS) connection |
 | `max_queue_size` | `int` | `2048` | Batch processor queue size |
 | `scheduled_delay_ms` | `int` | `5000` | Export interval (ms) |
 | `exporter_timeout_ms` | `int` | `30000` | Export timeout (ms) |
@@ -252,4 +252,4 @@ configure(
 | Sidecar not running → silent failure | Medium | OTLP exporter logs connection errors; document deployment prereqs |
 | Consumer passes both A365 env var + Spectra options | Low | Spectra options take precedence; env var ignored. Document. |
 | gRPC dependency not installed | Low | `opentelemetry-exporter-otlp` (core dep) includes both gRPC and HTTP |
-| `insecure=False` default may fail on plain HTTP localhost | Low | Document: set `insecure=True` if sidecar doesn't have TLS |
+| Consumer sets `insecure=False` for remote Spectra endpoint but forgets TLS setup | Low | Only relevant for non-sidecar deployments. Default `insecure=True` is correct for localhost. |

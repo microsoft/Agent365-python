@@ -13,7 +13,7 @@ Weave/Copilot Cowork needs Spectra Collector as their telemetry destination. Spe
 
 ## How
 
-- New `SpectraExporterOptions` class with sensible defaults for K8s sidecar (`http://localhost:4317`, gRPC, insecure=false)
+- New `SpectraExporterOptions` class with sensible defaults for K8s sidecar (`http://localhost:4317`, gRPC, insecure=true)
 - `configure(exporter_options=...)` accepts `Agent365ExporterOptions | SpectraExporterOptions` — type-based dispatch selects the exporter
 - When `SpectraExporterOptions` is provided, `ENABLE_A365_OBSERVABILITY_EXPORTER` env var is ignored
 - Under the hood, creates an `OTLPSpanExporter` pointed at the Spectra endpoint — no new dependencies
