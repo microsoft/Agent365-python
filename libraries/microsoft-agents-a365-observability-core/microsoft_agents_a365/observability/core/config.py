@@ -161,7 +161,6 @@ class TelemetryManager:
                 token_resolver=exporter_options.token_resolver,
                 cluster_category=exporter_options.cluster_category,
                 use_s2s_endpoint=exporter_options.use_s2s_endpoint,
-                suppress_invoke_agent_input=suppress_invoke_agent_input,
             )
 
         else:
@@ -174,7 +173,11 @@ class TelemetryManager:
 
         # Create _EnrichingBatchSpanProcessor with optimized settings
         # This allows extensions to enrich spans before export
-        batch_processor = _EnrichingBatchSpanProcessor(exporter, **batch_processor_kwargs)
+        batch_processor = _EnrichingBatchSpanProcessor(
+            exporter,
+            suppress_invoke_agent_input=suppress_invoke_agent_input,
+            **batch_processor_kwargs,
+        )
         agent_processor = SpanProcessor()
 
         tracer_provider.add_span_processor(batch_processor)
