@@ -155,7 +155,7 @@ The `TelemetryManager.configure()` method (`config.py`) creates the exporter pip
 
 ### 2026-03-14 — Phase 5: Risks & Open Questions
 - All 6 open questions resolved by user
-- Key decisions: union type on exporter_options, env var ignored for Spectra, insecure=False default, gRPC default, mock tests
+- Key decisions: union type on exporter_options, env var ignored for Spectra, insecure=True default, gRPC default, mock tests
 - No blocking risks identified
 
 ### 2026-03-14 — Phase 6: Outputs
