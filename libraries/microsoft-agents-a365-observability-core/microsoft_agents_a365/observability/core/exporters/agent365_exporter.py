@@ -238,8 +238,7 @@ class _Agent365Exporter(SpanExporter):
                     continue
                 # Final attempt failed
                 logger.error(
-                    f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts: "
-                    f"{type(e).__name__}"
+                    f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts: {type(e).__name__}"
                 )
                 return False
         return False

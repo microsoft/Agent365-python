@@ -194,6 +194,13 @@ def get_validated_domain_override() -> str | None:
         logger.warning(f"Invalid domain override '{domain_override}': {e}")
         return None
 
+    # Warn when using insecure HTTP — telemetry data and bearer tokens may be exposed
+    if domain_override.lower().startswith("http://"):
+        logger.warning(
+            "Domain override uses insecure HTTP. Telemetry data (including "
+            "bearer tokens) will be transmitted in cleartext."
+        )
+
     return domain_override
 
 
