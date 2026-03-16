@@ -2,37 +2,42 @@
 # Licensed under the MIT License.
 
 import unittest
+from unittest.mock import Mock
 
-from microsoft_agents_a365.observability.core.exporters.agent365_exporter import _Agent365Exporter
+from microsoft_agents_a365.observability.core.exporters.enriching_span_processor import (
+    _EnrichingBatchSpanProcessor,
+)
 
 
 class TestPromptSuppressionConfiguration(unittest.TestCase):
     """Unit tests for prompt suppression configuration in the core SDK."""
 
-    def test_exporter_default_suppression_is_false(self):
-        """Test that the default value for suppress_invoke_agent_input is False in exporter."""
-        exporter = _Agent365Exporter(token_resolver=lambda x, y: "test")
+    def test_processor_default_suppression_is_false(self):
+        """Test that the default value for suppress_invoke_agent_input is False in processor."""
+        mock_exporter = Mock()
+        processor = _EnrichingBatchSpanProcessor(mock_exporter)
 
         self.assertFalse(
-            exporter._suppress_invoke_agent_input,
+            processor._suppress_invoke_agent_input,
             "Default value for suppress_invoke_agent_input should be False",
         )
+        processor.shutdown()
 
-    def test_exporter_can_enable_suppression(self):
-        """Test that suppression can be enabled via exporter constructor."""
-        exporter = _Agent365Exporter(
-            token_resolver=lambda x, y: "test", suppress_invoke_agent_input=True
-        )
+    def test_processor_can_enable_suppression(self):
+        """Test that suppression can be enabled via processor constructor."""
+        mock_exporter = Mock()
+        processor = _EnrichingBatchSpanProcessor(mock_exporter, suppress_invoke_agent_input=True)
 
         self.assertTrue(
-            exporter._suppress_invoke_agent_input,
+            processor._suppress_invoke_agent_input,
             "suppress_invoke_agent_input should be True when explicitly set",
         )
+        processor.shutdown()
 
 
 def run_tests():
     """Run all prompt suppression configuration tests."""
-    print("🧪 Running prompt suppression configuration tests...")
+    print("Running prompt suppression configuration tests...")
     print("=" * 80)
 
     loader = unittest.TestLoader()
@@ -42,16 +47,16 @@ def run_tests():
     result = runner.run(suite)
 
     print("\n" + "=" * 80)
-    print("🏁 Test Summary:")
+    print("Test Summary:")
     print(f"Tests run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
 
     if result.wasSuccessful():
-        print("🎉 All tests passed!")
+        print("All tests passed!")
         return True
     else:
-        print("🔧 Some tests failed. Check output above.")
+        print("Some tests failed. Check output above.")
         return False
 
 

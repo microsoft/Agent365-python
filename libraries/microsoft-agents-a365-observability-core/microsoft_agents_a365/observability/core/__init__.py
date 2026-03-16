@@ -12,12 +12,14 @@ from .config import (
 )
 from .execute_tool_scope import ExecuteToolScope
 from .execution_type import ExecutionType
+from .exporters.agent365_exporter_options import Agent365ExporterOptions
 from .exporters.enriched_span import EnrichedReadableSpan
 from .exporters.enriching_span_processor import (
     get_span_enricher,
     register_span_enricher,
     unregister_span_enricher,
 )
+from .exporters.spectra_exporter_options import SpectraExporterOptions
 from .inference_call_details import InferenceCallDetails, ServiceEndpoint
 from .inference_operation_type import InferenceOperationType
 from .inference_scope import InferenceScope
@@ -38,6 +40,9 @@ __all__ = [
     "is_configured",
     "get_tracer",
     "get_tracer_provider",
+    # Exporter options
+    "Agent365ExporterOptions",
+    "SpectraExporterOptions",
     # Span enrichment
     "register_span_enricher",
     "unregister_span_enricher",
