@@ -115,12 +115,15 @@ class _Agent365Exporter(SpanExporter):
                                 "This may expose credentials in transit."
                             )
                         headers["authorization"] = f"Bearer {token}"
-                        logger.debug("Token resolved successfully.")
+                        logger.debug(f"Token resolved successfully for agent {agent_id}")
                     else:
-                        logger.debug("No token returned by resolver.")
+                        logger.debug(f"No token returned for agent {agent_id}")
                 except Exception as e:
                     # If token resolution fails, treat as failure for this group
-                    logger.error(f"Token resolution failed: {type(e).__name__}")
+                    logger.error(
+                        f"Token resolution failed for agent {agent_id}, "
+                        f"tenant {tenant_id}: {type(e).__name__}"
+                    )
                     any_failure = True
                     continue
 
@@ -195,9 +198,13 @@ class _Agent365Exporter(SpanExporter):
                 if 200 <= resp.status_code < 300:
                     logger.debug(
                         f"HTTP {resp.status_code} success on attempt {attempt + 1}. "
-                        f"Correlation ID: {correlation_id}."
+                        f"Correlation ID: {correlation_id}. "
+                        f"Response: {self._truncate_text(resp.text, 200)}"
                     )
                     return True
+
+                # Log non-success responses
+                response_text = self._truncate_text(resp.text, 500)
 
                 # Retry transient
                 if resp.status_code in (408, 429) or 500 <= resp.status_code < 600:
@@ -214,13 +221,15 @@ class _Agent365Exporter(SpanExporter):
                     logger.error(
                         f"HTTP {resp.status_code} final failure after "
                         f"{DEFAULT_MAX_RETRIES + 1} attempts. "
-                        f"Correlation ID: {correlation_id}."
+                        f"Correlation ID: {correlation_id}. "
+                        f"Response: {response_text}"
                     )
                 else:
                     # Non-retryable error
                     logger.error(
                         f"HTTP {resp.status_code} non-retryable error. "
-                        f"Correlation ID: {correlation_id}."
+                        f"Correlation ID: {correlation_id}. "
+                        f"Response: {response_text}"
                     )
                 return False
 

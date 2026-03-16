@@ -322,10 +322,13 @@ class TestAgent365Exporter(unittest.TestCase):
                     "(tenant: test-tenant-123, agent: test-agent-456)"
                 ),
                 # Should log token resolution success at DEBUG
-                unittest.mock.call.debug("Token resolved successfully."),
+                unittest.mock.call.debug(
+                    "Token resolved successfully for agent test-agent-456"
+                ),
                 # Should log HTTP success at DEBUG
                 unittest.mock.call.debug(
-                    "HTTP 200 success on attempt 1. Correlation ID: test-correlation-123."
+                    "HTTP 200 success on attempt 1. "
+                    "Correlation ID: test-correlation-123. Response: success"
                 ),
             ]
 
