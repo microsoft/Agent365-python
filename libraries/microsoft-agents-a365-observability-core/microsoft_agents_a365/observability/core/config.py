@@ -190,6 +190,7 @@ class TelemetryManager:
             tracer_provider.add_span_processor(
                 _EnrichingBatchSpanProcessor(otlp_exporter, **batch_processor_kwargs)
             )
+            self._logger.info("OTLP exporter enabled.")
 
         # Configure logging if logger_name is provided
         if logger_name:
