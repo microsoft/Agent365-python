@@ -23,6 +23,7 @@ from .utils import (
     hex_span_id,
     hex_trace_id,
     kind_name,
+    parse_retry_after,
     partition_by_identity,
     status_name,
     truncate_span,
@@ -162,21 +163,6 @@ class _Agent365Exporter(SpanExporter):
             return text[:max_length] + "..."
         return text
 
-    @staticmethod
-    def _parse_retry_after(resp: requests.Response) -> float | None:
-        """Parse the Retry-After header from a response.
-
-        Returns:
-            The number of seconds to wait, or None if the header is absent or invalid.
-        """
-        retry_after = resp.headers.get("Retry-After")
-        if retry_after is None:
-            return None
-        try:
-            return float(retry_after)
-        except (ValueError, TypeError):
-            return None
-
     def _post_with_retries(self, url: str, body: str, headers: dict[str, str]) -> bool:
         for attempt in range(DEFAULT_MAX_RETRIES + 1):
             try:
@@ -209,7 +195,7 @@ class _Agent365Exporter(SpanExporter):
                 # Retry transient
                 if resp.status_code in (408, 429) or 500 <= resp.status_code < 600:
                     # Respect Retry-After header for 429 responses
-                    retry_after = self._parse_retry_after(resp)
+                    retry_after = parse_retry_after(resp.headers)
                     if attempt < DEFAULT_MAX_RETRIES:
                         if retry_after is not None:
                             time.sleep(min(retry_after, 60.0))
