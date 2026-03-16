@@ -315,11 +315,11 @@ def invocation_parameters(run: Run) -> Iterator[tuple[str, str]]:
         return
     if not (extra := run.extra):
         return
-    if not hasattr(extra, "get"):
-        raise TypeError(f"expected Mapping, found {type(extra)}")
+    if not isinstance(extra, Mapping):
+        return
     if invocation_parameters := extra.get("invocation_params"):
         if not isinstance(invocation_parameters, Mapping):
-            raise TypeError(f"expected Mapping, found {type(invocation_parameters)}")
+            return
         tools = invocation_parameters.get("tools", [])
         for idx, tool in enumerate(tools):
             yield f"{GEN_AI_TOOL_ARGS_KEY}.{idx}", safe_json_dumps(tool)
@@ -352,8 +352,8 @@ def model_name(
                 return
     if not extra:
         return
-    if not hasattr(extra, "get"):
-        raise TypeError(f"expected Mapping, found {type(extra)}")
+    if not isinstance(extra, Mapping):
+        return
     if (
         (metadata := extra.get("metadata"))
         and hasattr(metadata, "get")
@@ -458,8 +458,8 @@ def function_calls(outputs: Mapping[str, Any] | None) -> Iterator[tuple[str, str
     """
     if not outputs:
         return
-    if not hasattr(outputs, "get"):
-        raise TypeError(f"expected Mapping, found {type(outputs)}")
+    if not isinstance(outputs, Mapping):
+        return
 
     try:
         # Typical OpenAI LangChain shape:
@@ -514,8 +514,8 @@ def tools(run: Run) -> Iterator[tuple[str, str]]:
         return
     if not (serialized := run.serialized):
         return
-    if not hasattr(serialized, "get"):
-        raise TypeError(f"expected Mapping, found {type(serialized)}")
+    if not isinstance(serialized, Mapping):
+        return
     yield GEN_AI_TOOL_TYPE_KEY, "extension"
     if name := serialized.get("name"):
         yield GEN_AI_TOOL_NAME_KEY, name
@@ -627,8 +627,8 @@ def invoke_agent_input_message(
     if not inputs:
         return
 
-    if not hasattr(inputs, "get"):
-        raise TypeError(f"expected Mapping, found {type(inputs)}")
+    if not isinstance(inputs, Mapping):
+        return
 
     messages = inputs.get("messages")
     if not messages:
@@ -669,8 +669,8 @@ def invoke_agent_output_message(
     if not outputs:
         return
 
-    if not hasattr(outputs, "get"):
-        raise TypeError(f"expected Mapping, found {type(outputs)}")
+    if not isinstance(outputs, Mapping):
+        return
 
     messages = outputs.get("messages")
     if not messages:
