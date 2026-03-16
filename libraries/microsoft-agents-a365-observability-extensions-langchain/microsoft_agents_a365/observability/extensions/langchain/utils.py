@@ -53,8 +53,8 @@ def prompts(inputs: Mapping[str, Any] | None) -> Iterator[tuple[str, list[str]]]
     """Yields prompts if present."""
     if not inputs:
         return
-    if not hasattr(inputs, "get"):
-        raise TypeError(f"expected Mapping, found {type(inputs)}")
+    if not isinstance(inputs, Mapping):
+        return
     if prompts := inputs.get("prompts"):
         yield GEN_AI_SYSTEM_INSTRUCTIONS_KEY, prompts
 
@@ -63,22 +63,20 @@ def prompts(inputs: Mapping[str, Any] | None) -> Iterator[tuple[str, list[str]]]
 def _extract_message_kwargs(message_data: Mapping[str, Any] | None) -> Iterator[[str, Any]]:
     if not message_data:
         return
-    if not hasattr(message_data, "get"):
-        raise TypeError(f"expected Mapping, found {type(message_data)}")
+    if not isinstance(message_data, Mapping):
+        return
     if kwargs := message_data.get("kwargs"):
-        if not hasattr(kwargs, "get"):
-            raise TypeError(f"expected Mapping, found {type(kwargs)}")
+        if not isinstance(kwargs, Mapping):
+            return
         if content := kwargs.get("content"):
             # Just yield as-is (string or list)
             yield "message.content", content
         if tool_call_id := kwargs.get("tool_call_id"):
-            if not isinstance(tool_call_id, str):
-                raise TypeError(f"expected str, found {type(tool_call_id)}")
-            yield GEN_AI_TOOL_CALL_ID_KEY, tool_call_id
+            if isinstance(tool_call_id, str):
+                yield GEN_AI_TOOL_CALL_ID_KEY, tool_call_id
         if name := kwargs.get("name"):
-            if not isinstance(name, str):
-                raise TypeError(f"expected str, found {type(name)}")
-            yield "message.name", name
+            if isinstance(name, str):
+                yield "message.name", name
 
 
 @stop_on_exception
@@ -87,21 +85,20 @@ def _extract_message_additional_kwargs(
 ) -> Iterator[tuple[str, Any]]:
     if not message_data:
         return
-    if not hasattr(message_data, "get"):
-        raise TypeError(f"expected Mapping, found {type(message_data)}")
+    if not isinstance(message_data, Mapping):
+        return
     if kwargs := message_data.get("kwargs"):
-        if not hasattr(kwargs, "get"):
-            raise TypeError(f"expected Mapping, found {type(kwargs)}")
+        if not isinstance(kwargs, Mapping):
+            return
         if additional_kwargs := kwargs.get("additional_kwargs"):
-            if not hasattr(additional_kwargs, "get"):
-                raise TypeError(f"expected Mapping, found {type(additional_kwargs)}")
+            if not isinstance(additional_kwargs, Mapping):
+                return
             if function_call := additional_kwargs.get("function_call"):
-                if not hasattr(function_call, "get"):
-                    raise TypeError(f"expected Mapping, found {type(function_call)}")
+                if not isinstance(function_call, Mapping):
+                    return
                 if name := function_call.get("name"):
-                    if not isinstance(name, str):
-                        raise TypeError(f"expected str, found {type(name)}")
-                    yield GEN_AI_TOOL_NAME_KEY, name
+                    if isinstance(name, str):
+                        yield GEN_AI_TOOL_NAME_KEY, name
                 if arguments := function_call.get("arguments"):
                     if isinstance(arguments, str):
                         yield GEN_AI_TOOL_ARGS_KEY, arguments
@@ -113,8 +110,8 @@ def _extract_message_additional_kwargs(
 def _get_tool_call(tool_call: Mapping[str, Any] | None) -> Iterator[tuple[str, Any]]:
     if not tool_call:
         return
-    if not hasattr(tool_call, "get"):
-        raise TypeError(f"expected Mapping, found {type(tool_call)}")
+    if not isinstance(tool_call, Mapping):
+        return
 
     # id
     id_ = tool_call.get("id")
@@ -125,7 +122,7 @@ def _get_tool_call(tool_call: Mapping[str, Any] | None) -> Iterator[tuple[str, A
     name = None
     arguments = None
 
-    if hasattr(fn, "get"):
+    if isinstance(fn, Mapping):
         name = fn.get("name")
         arguments = fn.get("arguments")
     else:
@@ -133,9 +130,7 @@ def _get_tool_call(tool_call: Mapping[str, Any] | None) -> Iterator[tuple[str, A
         arguments = tool_call.get("args")
 
     # name
-    if name is not None:
-        if not isinstance(name, str):
-            raise TypeError(f"expected str, found {type(name)}")
+    if name is not None and isinstance(name, str):
         yield GEN_AI_TOOL_NAME_KEY, name
 
     # arguments -> always emit a JSON string
@@ -152,7 +147,7 @@ def _process_tool_calls(tool_calls: Any) -> str:
     if not tool_calls:
         return ""
     if not isinstance(tool_calls, Iterable):
-        raise TypeError(f"expected Iterable, found {type(tool_calls)}")
+        return ""
 
     parts: list[str] = []
     for tool_call in tool_calls:
@@ -170,8 +165,8 @@ def _extract_message_tool_calls(
 ) -> Iterator[tuple[str, str]]:
     if not message_data:
         return
-    if not hasattr(message_data, "get"):
-        raise TypeError(f"expected Mapping, found {type(message_data)}")
+    if not isinstance(message_data, Mapping):
+        return
 
     # Collect tool_calls from multiple possible locations
     all_tool_calls: list[str] = []
@@ -188,13 +183,13 @@ def _extract_message_tool_calls(
     collect(message_data.get("tool_calls"))
 
     if kwargs := message_data.get("kwargs"):
-        if not hasattr(kwargs, "get"):
-            raise TypeError(f"expected Mapping, found {type(kwargs)}")
+        if not isinstance(kwargs, Mapping):
+            return
         collect(kwargs.get("tool_calls"))
 
         if additional_kwargs := kwargs.get("additional_kwargs"):
-            if not hasattr(additional_kwargs, "get"):
-                raise TypeError(f"expected Mapping, found {type(additional_kwargs)}")
+            if not isinstance(additional_kwargs, Mapping):
+                return
             collect(additional_kwargs.get("tool_calls"))
 
     if all_tool_calls:
@@ -217,13 +212,13 @@ def input_messages(
     """Yields chat messages as a JSON array of content strings."""
     if not inputs:
         return
-    if not hasattr(inputs, "get"):
-        raise TypeError(f"expected Mapping, found {type(inputs)}")
+    if not isinstance(inputs, Mapping):
+        return
     # There may be more than one set of messages. We'll use just the first set.
     if not (multiple_messages := inputs.get("messages")):
         return
     if not isinstance(multiple_messages, Iterable):
-        raise TypeError(f"expected Iterable, found {type(multiple_messages)}")
+        return
     # This will only get the first set of messages.
     if not (first_messages := next(iter(multiple_messages), None)):
         return
@@ -260,7 +255,7 @@ def metadata(run: Run) -> Iterator[tuple[str, str]]:
     if not run.extra or not (metadata := run.extra.get("metadata")):
         return
     if not isinstance(metadata, Mapping):
-        raise TypeError(f"expected Mapping, found {type(metadata)}")
+        return
     if session_id := (
         metadata.get(LANGCHAIN_SESSION_ID)
         or metadata.get(LANGCHAIN_CONVERSATION_ID)
@@ -276,8 +271,8 @@ def output_messages(
     """Yields chat messages as a JSON array of content strings."""
     if not outputs:
         return
-    if not hasattr(outputs, "get"):
-        raise TypeError(f"expected Mapping, found {type(outputs)}")
+    if not isinstance(outputs, Mapping):
+        return
     output_type = outputs.get("type")
     if output_type and output_type.lower() == "llmresult":
         llm_output = outputs.get("llm_output")
@@ -289,16 +284,16 @@ def output_messages(
     if not (multiple_generations := outputs.get("generations")):
         return
     if not isinstance(multiple_generations, Iterable):
-        raise TypeError(f"expected Iterable, found {type(multiple_generations)}")
+        return
     # This will only get the first set of generations.
     if not (first_generations := next(iter(multiple_generations), None)):
         return
     if not isinstance(first_generations, Iterable):
-        raise TypeError(f"expected Iterable, found {type(first_generations)}")
+        return
     contents: list[str] = []
     for generation in first_generations:
-        if not hasattr(generation, "get"):
-            raise TypeError(f"expected Mapping, found {type(generation)}")
+        if not isinstance(generation, Mapping):
+            continue
         if message_data := generation.get("message"):
             if isinstance(message_data, BaseMessage):
                 if hasattr(message_data, "content") and message_data.content:
