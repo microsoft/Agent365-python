@@ -126,6 +126,7 @@ class OpenTelemetryScope:
         self._error_type: str | None = None
         self._exception: Exception | None = None
         self._context_token = None
+        self._baggage_tokens: list[object] = []
 
         if self._is_telemetry_enabled():
             tracer = self._get_tracer()
@@ -244,6 +245,12 @@ class OpenTelemetryScope:
     def add_baggage(self, key: str, value: str) -> None:
         """Add baggage to the current context.
 
+        .. warning::
+            This method attaches a new context that cannot be detached. Prefer using
+            :class:`~microsoft_agents_a365.observability.core.middleware.baggage_builder.BaggageBuilder`
+            with its context-manager API (``with builder.build(): ...``) which properly
+            restores the previous context on exit.
+
         Args:
             key: The baggage key
             value: The baggage value
@@ -254,7 +261,9 @@ class OpenTelemetryScope:
             # This will be inherited by child spans created within this context
             baggage_context = baggage.set_baggage(key, value)
             # The context needs to be made current for child spans to inherit the baggage
-            context.attach(baggage_context)
+            token = context.attach(baggage_context)
+            # Store the token so it can be detached when the scope ends
+            self._baggage_tokens.append(token)
 
     def record_attributes(self, attributes: dict[str, Any] | list[tuple[str, Any]]) -> None:
         """Record multiple attribute key/value pairs for telemetry tracking.
@@ -293,6 +302,11 @@ class OpenTelemetryScope:
             self._has_ended = True
             span_id = f"{self._span.context.span_id:016x}" if self._span.context else "unknown"
             logger.info(f"Span ended: '{self._span.name}' ({span_id})")
+
+            # Detach any baggage tokens in reverse order
+            for token in reversed(self._baggage_tokens):
+                context.detach(token)
+            self._baggage_tokens.clear()
 
             # Convert custom end time to OTel-compatible format (nanoseconds since epoch)
             otel_end_time = self._datetime_to_ns(self._custom_end_time)

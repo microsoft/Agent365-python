@@ -86,9 +86,9 @@ class _Agent365Exporter(SpanExporter):
                 logger.info("No spans with tenant/agent identity found; nothing exported.")
                 return SpanExportResult.SUCCESS
 
-            # Debug: Log number of groups and total span count
+            # Log number of groups and total span count
             total_spans = sum(len(activities) for activities in groups.values())
-            logger.info(
+            logger.debug(
                 f"Found {len(groups)} identity groups with {total_spans} total spans to export"
             )
 
@@ -105,8 +105,8 @@ class _Agent365Exporter(SpanExporter):
 
                 url = build_export_url(endpoint, agent_id, tenant_id, self._use_s2s_endpoint)
 
-                # Debug: Log endpoint being used
-                logger.info(
+                # Log endpoint details at DEBUG to avoid leaking IDs in production logs
+                logger.debug(
                     f"Exporting {len(activities)} spans to endpoint: {url} "
                     f"(tenant: {tenant_id}, agent: {agent_id})"
                 )
@@ -115,15 +115,19 @@ class _Agent365Exporter(SpanExporter):
                 try:
                     token = self._token_resolver(agent_id, tenant_id)
                     if token:
+                        # Warn if sending bearer token over non-HTTPS connection
+                        if not url.lower().startswith("https://"):
+                            logger.warning(
+                                "Bearer token is being sent over a non-HTTPS connection. "
+                                "This may expose credentials in transit."
+                            )
                         headers["authorization"] = f"Bearer {token}"
-                        logger.info(f"Token resolved successfully for agent {agent_id}")
+                        logger.debug("Token resolved successfully.")
                     else:
-                        logger.info(f"No token returned for agent {agent_id}")
+                        logger.debug("No token returned by resolver.")
                 except Exception as e:
                     # If token resolution fails, treat as failure for this group
-                    logger.error(
-                        f"Token resolution failed for agent {agent_id}, tenant {tenant_id}: {e}"
-                    )
+                    logger.error(f"Token resolution failed: {type(e).__name__}")
                     any_failure = True
                     continue
 
@@ -162,6 +166,21 @@ class _Agent365Exporter(SpanExporter):
             return text[:max_length] + "..."
         return text
 
+    @staticmethod
+    def _parse_retry_after(resp: requests.Response) -> float | None:
+        """Parse the Retry-After header from a response.
+
+        Returns:
+            The number of seconds to wait, or None if the header is absent or invalid.
+        """
+        retry_after = resp.headers.get("Retry-After")
+        if retry_after is None:
+            return None
+        try:
+            return float(retry_after)
+        except (ValueError, TypeError):
+            return None
+
     def _post_with_retries(self, url: str, body: str, headers: dict[str, str]) -> bool:
         for attempt in range(DEFAULT_MAX_RETRIES + 1):
             try:
@@ -181,43 +200,46 @@ class _Agent365Exporter(SpanExporter):
 
                 # 2xx => success
                 if 200 <= resp.status_code < 300:
-                    logger.info(
+                    logger.debug(
                         f"HTTP {resp.status_code} success on attempt {attempt + 1}. "
-                        f"Correlation ID: {correlation_id}. "
-                        f"Response: {self._truncate_text(resp.text, 200)}"
+                        f"Correlation ID: {correlation_id}."
                     )
                     return True
 
-                # Log non-success responses
-                response_text = self._truncate_text(resp.text, 500)
-
                 # Retry transient
                 if resp.status_code in (408, 429) or 500 <= resp.status_code < 600:
+                    # Respect Retry-After header for 429 responses
+                    retry_after = self._parse_retry_after(resp)
                     if attempt < DEFAULT_MAX_RETRIES:
-                        time.sleep(0.2 * (attempt + 1))
+                        if retry_after is not None:
+                            time.sleep(min(retry_after, 60.0))
+                        else:
+                            # Exponential backoff with base 0.5s
+                            time.sleep(0.5 * (2**attempt))
                         continue
                     # Final attempt failed
                     logger.error(
-                        f"HTTP {resp.status_code} final failure after {DEFAULT_MAX_RETRIES + 1} attempts. "
-                        f"Correlation ID: {correlation_id}. "
-                        f"Response: {response_text}"
+                        f"HTTP {resp.status_code} final failure after "
+                        f"{DEFAULT_MAX_RETRIES + 1} attempts. "
+                        f"Correlation ID: {correlation_id}."
                     )
                 else:
                     # Non-retryable error
                     logger.error(
                         f"HTTP {resp.status_code} non-retryable error. "
-                        f"Correlation ID: {correlation_id}. "
-                        f"Response: {response_text}"
+                        f"Correlation ID: {correlation_id}."
                     )
                 return False
 
             except requests.RequestException as e:
                 if attempt < DEFAULT_MAX_RETRIES:
-                    time.sleep(0.2 * (attempt + 1))
+                    # Exponential backoff with base 0.5s
+                    time.sleep(0.5 * (2**attempt))
                     continue
                 # Final attempt failed
                 logger.error(
-                    f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts with exception: {e}"
+                    f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts: "
+                    f"{type(e).__name__}"
                 )
                 return False
         return False
