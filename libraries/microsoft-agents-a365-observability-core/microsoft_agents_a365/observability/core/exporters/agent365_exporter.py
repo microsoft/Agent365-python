@@ -23,6 +23,7 @@ from .utils import (
     hex_span_id,
     hex_trace_id,
     kind_name,
+    parse_retry_after,
     partition_by_identity,
     status_name,
     truncate_span,
@@ -79,9 +80,9 @@ class _Agent365Exporter(SpanExporter):
                 logger.info("No spans with tenant/agent identity found; nothing exported.")
                 return SpanExportResult.SUCCESS
 
-            # Debug: Log number of groups and total span count
+            # Log number of groups and total span count
             total_spans = sum(len(activities) for activities in groups.values())
-            logger.info(
+            logger.debug(
                 f"Found {len(groups)} identity groups with {total_spans} total spans to export"
             )
 
@@ -98,8 +99,8 @@ class _Agent365Exporter(SpanExporter):
 
                 url = build_export_url(endpoint, agent_id, tenant_id, self._use_s2s_endpoint)
 
-                # Debug: Log endpoint being used
-                logger.info(
+                # Log endpoint details at DEBUG to avoid leaking IDs in production logs
+                logger.debug(
                     f"Exporting {len(activities)} spans to endpoint: {url} "
                     f"(tenant: {tenant_id}, agent: {agent_id})"
                 )
@@ -108,10 +109,16 @@ class _Agent365Exporter(SpanExporter):
                 try:
                     token = self._token_resolver(agent_id, tenant_id)
                     if token:
+                        # Warn if sending bearer token over non-HTTPS connection
+                        if not url.lower().startswith("https://"):
+                            logger.warning(
+                                "Bearer token is being sent over a non-HTTPS connection. "
+                                "This may expose credentials in transit."
+                            )
                         headers["authorization"] = f"Bearer {token}"
-                        logger.info(f"Token resolved successfully for agent {agent_id}")
+                        logger.debug(f"Token resolved successfully for agent {agent_id}")
                     else:
-                        logger.info(f"No token returned for agent {agent_id}")
+                        logger.debug(f"No token returned for agent {agent_id}")
                 except Exception as e:
                     # If token resolution fails, treat as failure for this group
                     logger.error(
@@ -174,7 +181,7 @@ class _Agent365Exporter(SpanExporter):
 
                 # 2xx => success
                 if 200 <= resp.status_code < 300:
-                    logger.info(
+                    logger.debug(
                         f"HTTP {resp.status_code} success on attempt {attempt + 1}. "
                         f"Correlation ID: {correlation_id}. "
                         f"Response: {self._truncate_text(resp.text, 200)}"
@@ -186,12 +193,19 @@ class _Agent365Exporter(SpanExporter):
 
                 # Retry transient
                 if resp.status_code in (408, 429) or 500 <= resp.status_code < 600:
+                    # Respect Retry-After header for 429 responses
+                    retry_after = parse_retry_after(resp.headers)
                     if attempt < DEFAULT_MAX_RETRIES:
-                        time.sleep(0.2 * (attempt + 1))
+                        if retry_after is not None:
+                            time.sleep(min(retry_after, 60.0))
+                        else:
+                            # Exponential backoff with base 0.5s
+                            time.sleep(0.5 * (2**attempt))
                         continue
                     # Final attempt failed
                     logger.error(
-                        f"HTTP {resp.status_code} final failure after {DEFAULT_MAX_RETRIES + 1} attempts. "
+                        f"HTTP {resp.status_code} final failure after "
+                        f"{DEFAULT_MAX_RETRIES + 1} attempts. "
                         f"Correlation ID: {correlation_id}. "
                         f"Response: {response_text}"
                     )
@@ -206,12 +220,11 @@ class _Agent365Exporter(SpanExporter):
 
             except requests.RequestException as e:
                 if attempt < DEFAULT_MAX_RETRIES:
-                    time.sleep(0.2 * (attempt + 1))
+                    # Exponential backoff with base 0.5s
+                    time.sleep(0.5 * (2**attempt))
                     continue
                 # Final attempt failed
-                logger.error(
-                    f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts with exception: {e}"
-                )
+                logger.error(f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts: {e}")
                 return False
         return False
 

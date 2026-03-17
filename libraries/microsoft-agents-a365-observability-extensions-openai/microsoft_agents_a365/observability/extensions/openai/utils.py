@@ -611,7 +611,9 @@ def capture_output_message(
 
 
 def find_ancestor_agent_span_id(
-    span_id: str | None, agent_span_ids: set[str], span_parents: dict[str, str]
+    span_id: str | None,
+    agent_span_ids: set[str] | Mapping[str, object],
+    span_parents: Mapping[str, str],
 ) -> str | None:
     """Walk up the parent chain to find the nearest ancestor AgentSpan."""
     current = span_id
