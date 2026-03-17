@@ -26,7 +26,7 @@ members = [
     "microsoft-agents-a365-tooling-extensions-semantickernel",
 ]
 constraints = [
-    { name = "agent-framework-azure-ai", specifier = ">=1.0.0b251114" },
+    { name = "agent-framework-azure-ai", specifier = ">=1.0.0rc4" },
     { name = "aiohttp", specifier = ">=3.8.0" },
     { name = "asyncio-throttle", specifier = ">=1.0.0" },
     { name = "azure-ai-agents", specifier = ">=1.0.0b251001" },
@@ -42,7 +42,7 @@ constraints = [
     { name = "microsoft-agents-activity", specifier = ">=0.4.0" },
     { name = "microsoft-agents-hosting-core", specifier = ">=0.4.0" },
     { name = "mypy", specifier = ">=1.0.0" },
-    { name = "openai", specifier = ">=1.0.0" },
+    { name = "openai", specifier = ">=2.0.0" },
     { name = "openai-agents", specifier = ">=0.2.6" },
     { name = "opentelemetry-api", specifier = ">=1.36.0" },
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.36.0" },
@@ -86,24 +86,25 @@ wheels = [
 
 [[package]]
 name = "agent-framework-azure-ai"
-version = "1.0.0b260130"
+version = "1.0.0rc4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-framework-core" },
     { name = "aiohttp" },
     { name = "azure-ai-agents" },
-    { name = "azure-ai-projects" },
+    { name = "azure-ai-inference" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ac/ef/69ead4fcd2c21608ce35353a507df23df51872552747f803c43d1d81f612/agent_framework_azure_ai-1.0.0b260130.tar.gz", hash = "sha256:c571275089a801f961370ba824568c8b02143b1a6bb5b1d78b97c6debdf4906f", size = 32723, upload-time = "2026-01-30T18:56:41.07Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a7/d4/2641d0584c5859f0054207d0a726a698d82eb3c8cba1d5f9d6d7fcf785ec/agent_framework_azure_ai-1.0.0rc4.tar.gz", hash = "sha256:c397f1bb74d29be4e5842e0989f2006f981f77f7066533899bf977fc79f6e046", size = 48428, upload-time = "2026-03-11T23:19:30.131Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/8f/a1467c352fed5eb6ebb9567109251cc39b5b3ebb5137a2d14c71fea51bc8/agent_framework_azure_ai-1.0.0b260130-py3-none-any.whl", hash = "sha256:87f0248fe6d4f2f4146f0a56a53527af6365d4a377dc2e3d56c37cbb9deae098", size = 38542, upload-time = "2026-01-30T19:01:12.102Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/8c/703220347d2a656c0979dbb7e788a851e3cc7e6396ff6402a4606a0d7555/agent_framework_azure_ai-1.0.0rc4-py3-none-any.whl", hash = "sha256:538c6782a06dcb9df0631379b776018b6b0ddb81804d142eb3787c36a42ab2c8", size = 54269, upload-time = "2026-03-11T23:20:04.856Z" },
 ]
 
 [[package]]
 name = "agent-framework-core"
-version = "1.0.0b260130"
+version = "1.0.0rc4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "azure-ai-projects" },
     { name = "azure-identity" },
     { name = "mcp", extra = ["ws"] },
     { name = "openai" },
@@ -112,12 +113,12 @@ dependencies = [
     { name = "opentelemetry-semantic-conventions-ai" },
     { name = "packaging" },
     { name = "pydantic" },
-    { name = "pydantic-settings" },
+    { name = "python-dotenv" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/39/e508e778219bd6d20e023a6f48235861a639e3cf888776f9e873bbad3c6b/agent_framework_core-1.0.0b260130.tar.gz", hash = "sha256:030a5b2ced796eec6839c2dabad90b4bd1ea33d1026f3ed1813050a56ccfa4ec", size = 301823, upload-time = "2026-01-30T19:01:09.629Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/5a/b472f9a57235bb72899151ec5cd3c925825e16018689e0300cb822cf00f8/agent_framework_core-1.0.0rc4.tar.gz", hash = "sha256:f394eb95ae877ae854aa7a3e499f76f34b26102808009a66b264ded89c6b6dbd", size = 302446, upload-time = "2026-03-11T23:19:29.198Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/36/68/afe66c72951a279e0fe048fd5af1e775528cde40dbdab8ec03b42c545df4/agent_framework_core-1.0.0b260130-py3-none-any.whl", hash = "sha256:75b4dd0ca2ae52574d406cf5c9ed7adf63e187379f72fce891743254d83dfd56", size = 348724, upload-time = "2026-01-30T18:56:47.15Z" },
+    { url = "https://files.pythonhosted.org/packages/06/d7/89776e7e919e46fd83ae464a416966715f4f40083297d42574e3d45214f6/agent_framework_core-1.0.0rc4-py3-none-any.whl", hash = "sha256:f01a6997be0f5e05853eb6be341dbca692c4e5d6999de5f3e8364296de50635f", size = 348882, upload-time = "2026-03-11T23:19:43.158Z" },
 ]
 
 [[package]]
@@ -412,6 +413,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ed/57/8adeed578fa8984856c67b4229e93a58e3f6024417d448d0037aafa4ee9b/azure_ai_agents-1.2.0b5.tar.gz", hash = "sha256:1a16ef3f305898aac552269f01536c34a00473dedee0bca731a21fdb739ff9d5", size = 394876, upload-time = "2025-09-30T01:55:02.328Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6d/6d/15070d23d7a94833a210da09d5d7ed3c24838bb84f0463895e5d159f1695/azure_ai_agents-1.2.0b5-py3-none-any.whl", hash = "sha256:257d0d24a6bf13eed4819cfa5c12fb222e5908deafb3cbfd5711d3a511cc4e88", size = 217948, upload-time = "2025-09-30T01:55:04.155Z" },
+]
+
+[[package]]
+name = "azure-ai-inference"
+version = "1.0.0b9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "azure-core" },
+    { name = "isodate" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4e/6a/ed85592e5c64e08c291992f58b1a94dab6869f28fb0f40fd753dced73ba6/azure_ai_inference-1.0.0b9.tar.gz", hash = "sha256:1feb496bd84b01ee2691befc04358fa25d7c344d8288e99364438859ad7cd5a4", size = 182408, upload-time = "2025-02-15T00:37:28.464Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/0f/27520da74769db6e58327d96c98e7b9a07ce686dff582c9a5ec60b03f9dd/azure_ai_inference-1.0.0b9-py3-none-any.whl", hash = "sha256:49823732e674092dad83bb8b0d1b65aa73111fab924d61349eb2a8cdc0493990", size = 124885, upload-time = "2025-02-15T00:37:29.964Z" },
 ]
 
 [[package]]
@@ -3146,7 +3161,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "1.109.1"
+version = "2.28.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -3158,14 +3173,14 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c6/a1/a303104dc55fc546a3f6914c842d3da471c64eec92043aef8f652eb6c524/openai-1.109.1.tar.gz", hash = "sha256:d173ed8dbca665892a6db099b4a2dfac624f94d20a93f46eb0b56aae940ed869", size = 564133, upload-time = "2025-09-24T13:00:53.075Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/56/87/eb0abb4ef88ddb95b3c13149384c4c288f584f3be17d6a4f63f8c3e3c226/openai-2.28.0.tar.gz", hash = "sha256:bb7fdff384d2a787fa82e8822d1dd3c02e8cf901d60f1df523b7da03cbb6d48d", size = 670334, upload-time = "2026-03-13T19:56:27.306Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/2a/7dd3d207ec669cacc1f186fd856a0f61dbc255d24f6fdc1a6715d6051b0f/openai-1.109.1-py3-none-any.whl", hash = "sha256:6bcaf57086cf59159b8e27447e4e7dd019db5d29a438072fbd49c290c7e65315", size = 948627, upload-time = "2025-09-24T13:00:50.754Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/5a/df122348638885526e53140e9c6b0d844af7312682b3bde9587eebc28b47/openai-2.28.0-py3-none-any.whl", hash = "sha256:79aa5c45dba7fef84085701c235cf13ba88485e1ef4f8dfcedc44fc2a698fc1d", size = 1141218, upload-time = "2026-03-13T19:56:25.46Z" },
 ]
 
 [[package]]
 name = "openai-agents"
-version = "0.3.3"
+version = "0.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "griffe" },
@@ -3176,9 +3191,9 @@ dependencies = [
     { name = "types-requests" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/37/2b4f828840d3ff32d82b813c3371ec9ee26b3b8dc6b4acbb7a4a579f617a/openai_agents-0.3.3.tar.gz", hash = "sha256:b016381a6890e1cb6879eb23c53c35f8c2312be1117f1cd4e4b5e2463150839f", size = 1816230, upload-time = "2025-09-30T23:20:24.22Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/8e/71fd262046587a5b2b097aec6ce677f7bb23c81b3129da31942b7a0d0b26/openai_agents-0.4.2.tar.gz", hash = "sha256:281caff839b3ab2cf3bc52110abe93caca004985c41bf07de8e60d03c4a7528e", size = 1925615, upload-time = "2025-10-24T21:46:34.119Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/65/59/fd49fd2c3184c0d5fedb8c9c456ae9852154828bca7ee69dce004ea83188/openai_agents-0.3.3-py3-none-any.whl", hash = "sha256:aa2c74e010b923c09f166e63a51fae8c850c62df8581b84bafcbe5bd208d1505", size = 210893, upload-time = "2025-09-30T23:20:22.037Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/2e/23dbd9099555a9c7081c2819d00b7e1ee6ddbbd2fba8032f0ca4ddff778f/openai_agents-0.4.2-py3-none-any.whl", hash = "sha256:89fda02002dc0ac90ae177bb2f381a78b73aae329753bffb9276cfbdbfd20dc3", size = 216402, upload-time = "2025-10-24T21:46:32.065Z" },
 ]
 
 [[package]]
@@ -4440,7 +4455,7 @@ wheels = [
 
 [[package]]
 name = "semantic-kernel"
-version = "1.39.4"
+version = "1.41.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -4459,7 +4474,6 @@ dependencies = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-sdk" },
     { name = "prance" },
-    { name = "protobuf" },
     { name = "pybars4" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -4467,9 +4481,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f4/dc/a915e90d755fe601831406f7f77bfa3b44cb7eaacd60aca2722a8414b96a/semantic_kernel-1.39.4.tar.gz", hash = "sha256:9f629919346216f3b48c1ea6da56fa3d1bffd546a6be8fe5b7893a097f0dc798", size = 602392, upload-time = "2026-02-10T10:09:49.223Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/d4/ace5400e37f1f46e7002b144b3a788882aa0e8046146ba92199544a01340/semantic_kernel-1.41.0.tar.gz", hash = "sha256:3139c1fc643512897e585d83279b5a2f5e229cbf8c5f6f37fdd8ee71b7dcb574", size = 609072, upload-time = "2026-03-13T09:02:26.922Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/03/38/edd944f3a5781573a8c965de8940339e0dc90f3fe088a0ca405af676a438/semantic_kernel-1.39.4-py3-none-any.whl", hash = "sha256:a10833e493485f59e22e988975396f234871a4103a424c30ac9569591b43870d", size = 914347, upload-time = "2026-02-10T10:09:47.014Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/65/84af473bb095a3c02273caca44c4aaa1506b32bcd28d4299a0efd9254379/semantic_kernel-1.41.0-py3-none-any.whl", hash = "sha256:cfd782eb2738a18f9bd7e8793fe9d2451a3d17267d5c93a3081162280ebd826d", size = 920361, upload-time = "2026-03-13T09:02:25.082Z" },
 ]
 
 [[package]]
