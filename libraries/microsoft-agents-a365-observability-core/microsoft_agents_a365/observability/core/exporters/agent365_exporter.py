@@ -122,8 +122,7 @@ class _Agent365Exporter(SpanExporter):
                 except Exception as e:
                     # If token resolution fails, treat as failure for this group
                     logger.error(
-                        f"Token resolution failed for agent {agent_id}, "
-                        f"tenant {tenant_id}: {type(e).__name__}"
+                        f"Token resolution failed for agent {agent_id}, tenant {tenant_id}: {e}"
                     )
                     any_failure = True
                     continue
@@ -225,9 +224,7 @@ class _Agent365Exporter(SpanExporter):
                     time.sleep(0.5 * (2**attempt))
                     continue
                 # Final attempt failed
-                logger.error(
-                    f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts: {type(e).__name__}"
-                )
+                logger.error(f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts: {e}")
                 return False
         return False
 
