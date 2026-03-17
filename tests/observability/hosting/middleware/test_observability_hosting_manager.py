@@ -19,9 +19,9 @@ from microsoft_agents_a365.observability.hosting.middleware.output_logging_middl
 @pytest.fixture(autouse=True)
 def _reset_singleton():
     """Reset the singleton before and after each test."""
-    ObservabilityHostingManager.reset()
+    ObservabilityHostingManager._reset()
     yield
-    ObservabilityHostingManager.reset()
+    ObservabilityHostingManager._reset()
 
 
 def test_configure_is_singleton():

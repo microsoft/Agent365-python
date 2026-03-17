@@ -9,7 +9,7 @@ from datetime import datetime
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
-from opentelemetry import baggage, context, trace
+from opentelemetry import context, trace
 from opentelemetry.trace import (
     Span,
     SpanKind,
@@ -240,21 +240,6 @@ class OpenTelemetryScope:
         """
         if value is not None and self._span and self._is_telemetry_enabled():
             self._span.set_attribute(name, value)
-
-    def add_baggage(self, key: str, value: str) -> None:
-        """Add baggage to the current context.
-
-        Args:
-            key: The baggage key
-            value: The baggage value
-        """
-        # Set baggage in the current context
-        if self._is_telemetry_enabled():
-            # Set baggage on the current context
-            # This will be inherited by child spans created within this context
-            baggage_context = baggage.set_baggage(key, value)
-            # The context needs to be made current for child spans to inherit the baggage
-            context.attach(baggage_context)
 
     def record_attributes(self, attributes: dict[str, Any] | list[tuple[str, Any]]) -> None:
         """Record multiple attribute key/value pairs for telemetry tracking.

@@ -96,6 +96,6 @@ class ObservabilityHostingManager:
         return instance
 
     @classmethod
-    def reset(cls) -> None:
+    def _reset(cls) -> None:
         """Reset the singleton instance. Intended for testing only."""
         cls._instance = None
