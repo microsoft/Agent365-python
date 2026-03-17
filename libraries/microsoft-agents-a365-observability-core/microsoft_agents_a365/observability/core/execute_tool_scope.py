@@ -3,12 +3,13 @@
 
 from datetime import datetime
 
+from opentelemetry.trace import SpanKind
+
 from .agent_details import AgentDetails
 from .constants import (
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
     EXECUTE_TOOL_OPERATION_NAME,
-    GEN_AI_EVENT_CONTENT,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
     GEN_AI_TOOL_DESCRIPTION_KEY,
@@ -35,6 +36,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         parent_id: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        span_kind: SpanKind | None = None,
     ) -> "ExecuteToolScope":
         """Creates and starts a new scope for tool execution tracing.
 
@@ -50,12 +52,21 @@ class ExecuteToolScope(OpenTelemetryScope):
             end_time: Optional explicit end time as a datetime object. When provided,
                 the span will use this timestamp when disposed instead of the
                 current wall-clock time.
+            span_kind: Optional span kind override. Defaults to ``SpanKind.INTERNAL``.
+                Use ``SpanKind.CLIENT`` when the tool calls an external service.
 
         Returns:
             A new ExecuteToolScope instance
         """
         return ExecuteToolScope(
-            details, agent_details, tenant_details, request, parent_id, start_time, end_time
+            details,
+            agent_details,
+            tenant_details,
+            request,
+            parent_id,
+            start_time,
+            end_time,
+            span_kind,
         )
 
     def __init__(
@@ -67,6 +78,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         parent_id: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        span_kind: SpanKind | None = None,
     ):
         """Initialize the tool execution scope.
 
@@ -82,9 +94,11 @@ class ExecuteToolScope(OpenTelemetryScope):
             end_time: Optional explicit end time as a datetime object. When provided,
                 the span will use this timestamp when disposed instead of the
                 current wall-clock time.
+            span_kind: Optional span kind override. Defaults to ``SpanKind.INTERNAL``.
+                Use ``SpanKind.CLIENT`` when the tool calls an external service.
         """
         super().__init__(
-            kind="Internal",
+            kind=span_kind if span_kind is not None else SpanKind.INTERNAL,
             operation_name=EXECUTE_TOOL_OPERATION_NAME,
             activity_name=f"{EXECUTE_TOOL_OPERATION_NAME} {details.tool_name}",
             agent_details=agent_details,
@@ -115,15 +129,16 @@ class ExecuteToolScope(OpenTelemetryScope):
 
         # Set request metadata if provided
         if request and request.source_metadata:
-            self.set_tag_maybe(GEN_AI_EXECUTION_SOURCE_NAME_KEY, request.source_metadata.name)
-            self.set_tag_maybe(
-                GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, request.source_metadata.description
-            )
+            self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
+            self.set_tag_maybe(CHANNEL_LINK_KEY, request.source_metadata.description)
 
     def record_response(self, response: str) -> None:
         """Records response information for telemetry tracking.
 
+        Note: This method is intentionally a no-op as GEN_AI_EVENT_CONTENT was removed.
+        The method is kept for interface compatibility.
+
         Args:
             response: The response to record
         """
-        self.set_tag_maybe(GEN_AI_EVENT_CONTENT, response)
+        pass

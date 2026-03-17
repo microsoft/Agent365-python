@@ -6,23 +6,22 @@
 import logging
 from datetime import datetime
 
+from opentelemetry.trace import SpanKind
+
 from .agent_details import AgentDetails
 from .constants import (
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
     GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY,
     GEN_AI_CALLER_AGENT_ID_KEY,
     GEN_AI_CALLER_AGENT_NAME_KEY,
-    GEN_AI_CALLER_AGENT_TENANT_ID_KEY,
-    GEN_AI_CALLER_AGENT_TYPE_KEY,
+    GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,
     GEN_AI_CALLER_AGENT_UPN_KEY,
-    GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
     GEN_AI_CALLER_AGENT_USER_ID_KEY,
+    GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CALLER_ID_KEY,
     GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_TENANT_ID_KEY,
     GEN_AI_CALLER_UPN_KEY,
-    GEN_AI_CALLER_USER_ID_KEY,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -53,6 +52,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         caller_details: CallerDetails | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        span_kind: SpanKind | None = None,
     ) -> "InvokeAgentScope":
         """Create and start a new scope for agent invocation tracing.
 
@@ -65,6 +65,8 @@ class InvokeAgentScope(OpenTelemetryScope):
             caller_details: Optional details of the non-agentic caller
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
+            span_kind: Optional span kind override. Defaults to ``SpanKind.CLIENT``.
+                Use ``SpanKind.SERVER`` when the agent is receiving an inbound request.
 
         Returns:
             A new InvokeAgentScope instance
@@ -77,6 +79,7 @@ class InvokeAgentScope(OpenTelemetryScope):
             caller_details,
             start_time,
             end_time,
+            span_kind,
         )
 
     def __init__(
@@ -88,6 +91,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         caller_details: CallerDetails | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        span_kind: SpanKind | None = None,
     ):
         """Initialize the agent invocation scope.
 
@@ -99,6 +103,8 @@ class InvokeAgentScope(OpenTelemetryScope):
             caller_details: Optional details of the non-agentic caller
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
+            span_kind: Optional span kind override. Defaults to ``SpanKind.CLIENT``.
+                Use ``SpanKind.SERVER`` when the agent is receiving an inbound request.
         """
         activity_name = INVOKE_AGENT_OPERATION_NAME
         if invoke_agent_details.details.agent_name:
@@ -107,7 +113,7 @@ class InvokeAgentScope(OpenTelemetryScope):
             )
 
         super().__init__(
-            kind="Client",
+            kind=span_kind if span_kind is not None else SpanKind.CLIENT,
             operation_name=INVOKE_AGENT_OPERATION_NAME,
             activity_name=activity_name,
             agent_details=invoke_agent_details.details,
@@ -133,10 +139,8 @@ class InvokeAgentScope(OpenTelemetryScope):
         # Set request metadata if provided
         if request:
             if request.source_metadata:
-                self.set_tag_maybe(GEN_AI_EXECUTION_SOURCE_NAME_KEY, request.source_metadata.name)
-                self.set_tag_maybe(
-                    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, request.source_metadata.description
-                )
+                self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
+                self.set_tag_maybe(CHANNEL_LINK_KEY, request.source_metadata.description)
 
             self.set_tag_maybe(
                 GEN_AI_EXECUTION_TYPE_KEY,
@@ -149,27 +153,23 @@ class InvokeAgentScope(OpenTelemetryScope):
             self.set_tag_maybe(GEN_AI_CALLER_ID_KEY, caller_details.caller_id)
             self.set_tag_maybe(GEN_AI_CALLER_UPN_KEY, caller_details.caller_upn)
             self.set_tag_maybe(GEN_AI_CALLER_NAME_KEY, caller_details.caller_name)
-            self.set_tag_maybe(GEN_AI_CALLER_USER_ID_KEY, caller_details.caller_user_id)
-            self.set_tag_maybe(GEN_AI_CALLER_TENANT_ID_KEY, caller_details.tenant_id)
+            # Validate and set caller client IP
+            self.set_tag_maybe(
+                GEN_AI_CALLER_CLIENT_IP_KEY,
+                validate_and_normalize_ip(caller_details.caller_client_ip),
+            )
 
         # Set caller agent details tags
         if caller_agent_details:
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_NAME_KEY, caller_agent_details.agent_name)
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_ID_KEY, caller_agent_details.agent_id)
             self.set_tag_maybe(
-                GEN_AI_CALLER_AGENT_TYPE_KEY,
-                caller_agent_details.agent_type.value if caller_agent_details.agent_type else None,
-            )
-            self.set_tag_maybe(
                 GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY, caller_agent_details.agent_blueprint_id
             )
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_USER_ID_KEY, caller_agent_details.agent_auid)
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_UPN_KEY, caller_agent_details.agent_upn)
-            self.set_tag_maybe(GEN_AI_CALLER_AGENT_TENANT_ID_KEY, caller_agent_details.tenant_id)
-            # Validate and set caller agent client IP
             self.set_tag_maybe(
-                GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
-                validate_and_normalize_ip(caller_agent_details.agent_client_ip),
+                GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY, caller_agent_details.agent_platform_id
             )
 
     def record_response(self, response: str) -> None:

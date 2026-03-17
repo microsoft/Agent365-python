@@ -5,6 +5,8 @@ from typing import Any
 
 from microsoft_agents.activity import Activity
 from microsoft_agents_a365.observability.core.constants import (
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_DESCRIPTION_KEY,
     GEN_AI_AGENT_ID_KEY,
@@ -12,12 +14,9 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_UPN_KEY,
     GEN_AI_CALLER_ID_KEY,
     GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_TENANT_ID_KEY,
     GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     TENANT_ID_KEY,
 )
@@ -42,7 +41,6 @@ def get_caller_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     yield GEN_AI_CALLER_ID_KEY, frm.aad_object_id
     yield GEN_AI_CALLER_NAME_KEY, frm.name
     yield GEN_AI_CALLER_UPN_KEY, frm.agentic_user_id
-    yield GEN_AI_CALLER_TENANT_ID_KEY, frm.tenant_id
 
 
 def get_execution_type_pair(activity: Activity) -> Iterator[tuple[str, Any]]:
@@ -100,8 +98,8 @@ def get_source_metadata_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
             sub_channel = channel_id.sub_channel
 
     # Yield channel name as source name
-    yield GEN_AI_EXECUTION_SOURCE_NAME_KEY, channel_name
-    yield GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, sub_channel
+    yield CHANNEL_NAME_KEY, channel_name
+    yield CHANNEL_LINK_KEY, sub_channel
 
 
 def get_conversation_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:

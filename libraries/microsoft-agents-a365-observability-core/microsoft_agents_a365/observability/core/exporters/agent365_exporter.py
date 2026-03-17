@@ -17,11 +17,6 @@ from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
 
-from ..constants import (
-    GEN_AI_INPUT_MESSAGES_KEY,
-    GEN_AI_OPERATION_NAME_KEY,
-    INVOKE_AGENT_OPERATION_NAME,
-)
 from .utils import (
     build_export_url,
     get_validated_domain_override,
@@ -59,7 +54,6 @@ class _Agent365Exporter(SpanExporter):
         token_resolver: Callable[[str, str], str | None],
         cluster_category: str = "prod",
         use_s2s_endpoint: bool = False,
-        suppress_invoke_agent_input: bool = False,
     ):
         if token_resolver is None:
             raise ValueError("token_resolver must be provided.")
@@ -69,7 +63,6 @@ class _Agent365Exporter(SpanExporter):
         self._token_resolver = token_resolver
         self._cluster_category = cluster_category
         self._use_s2s_endpoint = use_s2s_endpoint
-        self._suppress_invoke_agent_input = suppress_invoke_agent_input
         # Read domain override once at initialization
         self._domain_override = get_validated_domain_override()
 
@@ -269,19 +262,6 @@ class _Agent365Exporter(SpanExporter):
 
         # attributes
         attrs = dict(sp.attributes or {})
-
-        # Suppress input messages if configured and current span is an InvokeAgent span
-        if self._suppress_invoke_agent_input:
-            # Check if current span is an InvokeAgent span by:
-            # 1. Span name starts with "invoke_agent"
-            # 2. Has attribute gen_ai.operation.name set to INVOKE_AGENT_OPERATION_NAME
-            operation_name = attrs.get(GEN_AI_OPERATION_NAME_KEY)
-            if (
-                sp.name.startswith(INVOKE_AGENT_OPERATION_NAME)
-                and operation_name == INVOKE_AGENT_OPERATION_NAME
-            ):
-                # Remove input messages attribute
-                attrs.pop(GEN_AI_INPUT_MESSAGES_KEY, None)
 
         # events
         events = []

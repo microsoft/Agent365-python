@@ -21,18 +21,16 @@ from microsoft_agents_a365.observability.core import (
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.constants import (
-    GEN_AI_CALLER_AGENT_TYPE_KEY,
-    GEN_AI_CALLER_AGENT_USER_CLIENT_IP,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
 )
-from microsoft_agents_a365.observability.core.models.agent_type import AgentType
 from microsoft_agents_a365.observability.core.models.caller_details import CallerDetails
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind
 
 
 class TestInvokeAgentScope(unittest.TestCase):
@@ -82,8 +80,7 @@ class TestInvokeAgentScope(unittest.TestCase):
             caller_id="user-123",
             caller_upn="user@contoso.com",
             caller_name="John Doe",
-            caller_user_id="user-id-456",
-            tenant_id="tenant-789",
+            caller_client_ip="192.168.1.100",
         )
 
         # Create caller agent details (agentic caller)
@@ -95,8 +92,7 @@ class TestInvokeAgentScope(unittest.TestCase):
             agent_auid="auid-123",
             agent_upn="agent@contoso.com",
             tenant_id="tenant-789",
-            agent_client_ip="192.168.1.100",
-            agent_type=AgentType.DECLARATIVE_AGENT,
+            agent_platform_id="platform-123",
         )
 
     def setUp(self):
@@ -176,16 +172,16 @@ class TestInvokeAgentScope(unittest.TestCase):
 
         # Verify mock data request parameters are in span attributes
         # Check source channel name from mock data
-        if GEN_AI_EXECUTION_SOURCE_NAME_KEY in span_attributes:
+        if CHANNEL_NAME_KEY in span_attributes:
             self.assertEqual(
-                span_attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY],
+                span_attributes[CHANNEL_NAME_KEY],
                 self.source_metadata.name,  # From cls.source_metadata.name
             )
 
         # Check source channel description from mock data
-        if GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY in span_attributes:
+        if CHANNEL_LINK_KEY in span_attributes:
             self.assertEqual(
-                span_attributes[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY],
+                span_attributes[CHANNEL_LINK_KEY],
                 self.source_metadata.description,  # From cls.source_metadata.description
             )
 
@@ -204,68 +200,51 @@ class TestInvokeAgentScope(unittest.TestCase):
                 input_messages,
             )
 
-    def test_caller_agent_client_ip_in_scope(self):
-        """Test that caller agent client IP is properly handled when creating InvokeAgentScope."""
-        # Set up tracer to capture spans
-        span_exporter = InMemorySpanExporter()
-        tracer_provider = get_tracer_provider()
-        tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
-
-        # Create scope with caller agent details that include client IP
+    def test_invoke_agent_scope_span_kind(self):
+        """Test that InvokeAgentScope creates spans with the correct SpanKind."""
+        # Create scope
         scope = InvokeAgentScope.start(
             invoke_agent_details=self.invoke_details,
             tenant_details=self.tenant_details,
-            caller_agent_details=self.caller_agent_details,  # Contains agent_client_ip="192.168.1.100"
+            request=self.test_request,
         )
 
         if scope is not None:
-            # Verify the caller agent details contain the expected IP
-            self.assertEqual(self.caller_agent_details.agent_client_ip, "192.168.1.100")
             scope.dispose()
 
-        # Verify the IP is set as a span attribute
-        finished_spans = span_exporter.get_finished_spans()
-        if finished_spans:
-            span = finished_spans[-1]
-            span_attributes = getattr(span, "attributes", {}) or {}
+        # Check that span was created with correct SpanKind
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
 
-            # Verify the caller agent client IP is set as a span attribute
-            if GEN_AI_CALLER_AGENT_USER_CLIENT_IP in span_attributes:
-                self.assertEqual(
-                    span_attributes[GEN_AI_CALLER_AGENT_USER_CLIENT_IP], "192.168.1.100"
-                )
-
-    def test_caller_agent_type_in_scope(self):
-        """Test that caller agent type is properly set when creating InvokeAgentScope."""
-        # Set up tracer to capture spans
-        span_exporter = InMemorySpanExporter()
-        tracer_provider = get_tracer_provider()
-        tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
-
-        # Create scope with caller agent details that include agent_type
-        scope = InvokeAgentScope.start(
-            invoke_agent_details=self.invoke_details,
-            tenant_details=self.tenant_details,
-            caller_agent_details=self.caller_agent_details,
+        # Get the span and verify its kind
+        span = finished_spans[-1]
+        self.assertEqual(
+            span.kind,
+            SpanKind.CLIENT,
+            "InvokeAgentScope defaults to CLIENT spans (can be overridden with span_kind parameter)",
         )
 
-        # Verify scope was created and caller agent details contain the expected type
-        self.assertIsNotNone(scope)
-        self.assertEqual(self.caller_agent_details.agent_type, AgentType.DECLARATIVE_AGENT)
-        scope.dispose()
+        # Test SERVER span kind override
+        scope_server = InvokeAgentScope.start(
+            invoke_agent_details=self.invoke_details,
+            tenant_details=self.tenant_details,
+            request=self.test_request,
+            span_kind=SpanKind.SERVER,
+        )
 
-        # Verify the agent type is set as a span attribute
-        finished_spans = span_exporter.get_finished_spans()
-        self.assertTrue(len(finished_spans) > 0, "Expected at least one span to be created")
+        if scope_server is not None:
+            scope_server.dispose()
 
-        span = finished_spans[-1]
-        span_attributes = getattr(span, "attributes", {}) or {}
+        # Check that SERVER span was created
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(len(finished_spans) >= 2, "Expected at least two spans to be created")
 
-        # Verify the caller agent type is set as a span attribute
-        self.assertIn(GEN_AI_CALLER_AGENT_TYPE_KEY, span_attributes)
+        # Get the most recent span and verify it's SERVER
+        server_span = finished_spans[-1]
         self.assertEqual(
-            span_attributes[GEN_AI_CALLER_AGENT_TYPE_KEY],
-            AgentType.DECLARATIVE_AGENT.value,
+            server_span.kind,
+            SpanKind.SERVER,
+            "InvokeAgentScope should create SERVER spans when span_kind parameter is set",
         )
 
 

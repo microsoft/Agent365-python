@@ -6,18 +6,19 @@ from typing import List
 
 from .agent_details import AgentDetails
 from .constants import (
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
+    GEN_AI_AGENT_THOUGHT_PROCESS_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
     GEN_AI_PROVIDER_NAME_KEY,
     GEN_AI_REQUEST_MODEL_KEY,
     GEN_AI_RESPONSE_FINISH_REASONS_KEY,
-    GEN_AI_RESPONSE_ID_KEY,
-    GEN_AI_THOUGHT_PROCESS_KEY,
     GEN_AI_USAGE_INPUT_TOKENS_KEY,
     GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
+    SERVER_ADDRESS_KEY,
+    SERVER_PORT_KEY,
 )
 from .inference_call_details import InferenceCallDetails
 from .opentelemetry_scope import OpenTelemetryScope
@@ -100,24 +101,28 @@ class InferenceScope(OpenTelemetryScope):
         self.set_tag_maybe(GEN_AI_PROVIDER_NAME_KEY, details.providerName)
         self.set_tag_maybe(
             GEN_AI_USAGE_INPUT_TOKENS_KEY,
-            str(details.inputTokens) if details.inputTokens is not None else None,
+            details.inputTokens if details.inputTokens is not None else None,
         )
         self.set_tag_maybe(
             GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
-            str(details.outputTokens) if details.outputTokens is not None else None,
+            details.outputTokens if details.outputTokens is not None else None,
         )
         self.set_tag_maybe(
             GEN_AI_RESPONSE_FINISH_REASONS_KEY,
             safe_json_dumps(details.finishReasons) if details.finishReasons else None,
         )
-        self.set_tag_maybe(GEN_AI_RESPONSE_ID_KEY, details.responseId)
+        self.set_tag_maybe(GEN_AI_AGENT_THOUGHT_PROCESS_KEY, details.thoughtProcess)
+
+        # Set endpoint information if provided
+        if details.endpoint:
+            self.set_tag_maybe(SERVER_ADDRESS_KEY, details.endpoint.hostname)
+            if details.endpoint.port:
+                self.set_tag_maybe(SERVER_PORT_KEY, str(details.endpoint.port))
 
         # Set request metadata if provided
         if request and request.source_metadata:
-            self.set_tag_maybe(GEN_AI_EXECUTION_SOURCE_NAME_KEY, request.source_metadata.name)
-            self.set_tag_maybe(
-                GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, request.source_metadata.description
-            )
+            self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
+            self.set_tag_maybe(CHANNEL_LINK_KEY, request.source_metadata.description)
 
     def record_input_messages(self, messages: List[str]) -> None:
         """Records the input messages for telemetry tracking.
@@ -141,7 +146,7 @@ class InferenceScope(OpenTelemetryScope):
         Args:
             input_tokens: Number of input tokens
         """
-        self.set_tag_maybe(GEN_AI_USAGE_INPUT_TOKENS_KEY, str(input_tokens))
+        self.set_tag_maybe(GEN_AI_USAGE_INPUT_TOKENS_KEY, input_tokens)
 
     def record_output_tokens(self, output_tokens: int) -> None:
         """Records the number of output tokens for telemetry tracking.
@@ -149,7 +154,7 @@ class InferenceScope(OpenTelemetryScope):
         Args:
             output_tokens: Number of output tokens
         """
-        self.set_tag_maybe(GEN_AI_USAGE_OUTPUT_TOKENS_KEY, str(output_tokens))
+        self.set_tag_maybe(GEN_AI_USAGE_OUTPUT_TOKENS_KEY, output_tokens)
 
     def record_finish_reasons(self, finish_reasons: List[str]) -> None:
         """Records the finish reasons for telemetry tracking.
@@ -166,4 +171,4 @@ class InferenceScope(OpenTelemetryScope):
         Args:
             thought_process: The thought process to record
         """
-        self.set_tag_maybe(GEN_AI_THOUGHT_PROCESS_KEY, thought_process)
+        self.set_tag_maybe(GEN_AI_AGENT_THOUGHT_PROCESS_KEY, thought_process)

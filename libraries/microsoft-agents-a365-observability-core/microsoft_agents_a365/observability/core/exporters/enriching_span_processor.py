@@ -10,6 +10,13 @@ from collections.abc import Callable
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from ..constants import (
+    GEN_AI_INPUT_MESSAGES_KEY,
+    GEN_AI_OPERATION_NAME_KEY,
+    INVOKE_AGENT_OPERATION_NAME,
+)
+from .enriched_span import EnrichedReadableSpan
+
 logger = logging.getLogger(__name__)
 
 # Single span enricher - only one platform instrumentor should be active at a time
@@ -65,6 +72,15 @@ def get_span_enricher() -> Callable[[ReadableSpan], ReadableSpan] | None:
 class _EnrichingBatchSpanProcessor(BatchSpanProcessor):
     """BatchSpanProcessor that applies the registered enricher before batching."""
 
+    def __init__(
+        self,
+        *args: object,
+        suppress_invoke_agent_input: bool = False,
+        **kwargs: object,
+    ):
+        super().__init__(*args, **kwargs)
+        self._suppress_invoke_agent_input = suppress_invoke_agent_input
+
     def on_end(self, span: ReadableSpan) -> None:
         """Apply the span enricher and pass to parent for batching.
 
@@ -81,6 +97,20 @@ class _EnrichingBatchSpanProcessor(BatchSpanProcessor):
                 logger.exception(
                     "Span enricher %s raised an exception, using original span",
                     enricher.__name__,
+                )
+
+        # Apply input message suppression for InvokeAgent spans
+        if self._suppress_invoke_agent_input:
+            attrs = enriched_span.attributes or {}
+            operation_name = attrs.get(GEN_AI_OPERATION_NAME_KEY)
+            if (
+                enriched_span.name.startswith(INVOKE_AGENT_OPERATION_NAME)
+                and operation_name == INVOKE_AGENT_OPERATION_NAME
+            ):
+                enriched_span = EnrichedReadableSpan(
+                    enriched_span,
+                    extra_attributes={},
+                    excluded_attribute_keys={GEN_AI_INPUT_MESSAGES_KEY},
                 )
 
         super().on_end(enriched_span)

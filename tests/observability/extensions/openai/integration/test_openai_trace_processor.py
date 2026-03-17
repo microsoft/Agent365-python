@@ -12,8 +12,8 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
+    GEN_AI_PROVIDER_NAME_KEY,
     GEN_AI_REQUEST_MODEL_KEY,
-    GEN_AI_SYSTEM_KEY,
     INVOKE_AGENT_OPERATION_NAME,
     TENANT_ID_KEY,
 )
@@ -242,7 +242,6 @@ class TestOpenAITraceProcessorIntegration:
                     .caller_client_ip("127.0.0.1")
                     .conversation_id("test-conversation-id")
                     .channel_name("test-channel")
-                    .correlation_id("test-correlation-id")
                     .build()
                 ):
                     result = await Runner.run(agent, "Say hello")
@@ -322,7 +321,10 @@ class TestOpenAITraceProcessorIntegration:
                 assert attributes[GEN_AI_AGENT_ID_KEY] == agent365_config["agent_id"]
 
             # Check for LLM spans (generation spans)
-            if GEN_AI_SYSTEM_KEY in attributes and attributes[GEN_AI_SYSTEM_KEY] == "openai":
+            if (
+                GEN_AI_PROVIDER_NAME_KEY in attributes
+                and attributes[GEN_AI_PROVIDER_NAME_KEY] == "openai"
+            ):
                 if GEN_AI_REQUEST_MODEL_KEY in attributes:
                     llm_spans_found += 1
                     # Validate LLM span attributes
@@ -369,7 +371,10 @@ class TestOpenAITraceProcessorIntegration:
                 assert attributes[GEN_AI_AGENT_ID_KEY] == agent365_config["agent_id"]
 
             # Check for LLM spans (generation spans)
-            if GEN_AI_SYSTEM_KEY in attributes and attributes[GEN_AI_SYSTEM_KEY] == "openai":
+            if (
+                GEN_AI_PROVIDER_NAME_KEY in attributes
+                and attributes[GEN_AI_PROVIDER_NAME_KEY] == "openai"
+            ):
                 if GEN_AI_REQUEST_MODEL_KEY in attributes:
                     llm_spans_found += 1
                     print(f"✓ Found LLM span with model: {attributes[GEN_AI_REQUEST_MODEL_KEY]}")

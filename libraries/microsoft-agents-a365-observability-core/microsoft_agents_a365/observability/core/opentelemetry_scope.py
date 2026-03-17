@@ -28,18 +28,22 @@ from .constants import (
     GEN_AI_AGENT_DESCRIPTION_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
-    GEN_AI_AGENT_TYPE_KEY,
+    GEN_AI_AGENT_PLATFORM_ID_KEY,
     GEN_AI_AGENT_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
-    GEN_AI_EVENT_CONTENT,
     GEN_AI_ICON_URI_KEY,
     GEN_AI_OPERATION_NAME_KEY,
-    GEN_AI_SYSTEM_KEY,
-    GEN_AI_SYSTEM_VALUE,
+    GEN_AI_OUTPUT_MESSAGES_KEY,
+    GEN_AI_PROVIDER_NAME_KEY,
     SOURCE_NAME,
+    TELEMETRY_SDK_LANGUAGE_KEY,
+    TELEMETRY_SDK_LANGUAGE_VALUE,
+    TELEMETRY_SDK_NAME_KEY,
+    TELEMETRY_SDK_NAME_VALUE,
+    TELEMETRY_SDK_VERSION_KEY,
     TENANT_ID_KEY,
 )
-from .utils import parse_parent_id_to_context
+from .utils import get_sdk_version, parse_parent_id_to_context
 
 if TYPE_CHECKING:
     from .agent_details import AgentDetails
@@ -88,7 +92,7 @@ class OpenTelemetryScope:
 
     def __init__(
         self,
-        kind: str,
+        kind: "str | SpanKind",
         operation_name: str,
         activity_name: str,
         agent_details: "AgentDetails | None" = None,
@@ -100,7 +104,9 @@ class OpenTelemetryScope:
         """Initialize the OpenTelemetry scope.
 
         Args:
-            kind: The kind of activity (Client, Server, Internal, etc.)
+            kind: The kind of activity. Accepts a string (e.g. ``"Client"``,
+                ``"Server"``, ``"Internal"``) or an ``opentelemetry.trace.SpanKind``
+                enum value directly.
             operation_name: The name of the operation being traced
             activity_name: The name of the activity for display purposes
             agent_details: Optional agent details
@@ -124,16 +130,20 @@ class OpenTelemetryScope:
         if self._is_telemetry_enabled():
             tracer = self._get_tracer()
 
-            # Map string kind to SpanKind enum
-            activity_kind = SpanKind.INTERNAL
-            if kind.lower() == "client":
-                activity_kind = SpanKind.CLIENT
-            elif kind.lower() == "server":
-                activity_kind = SpanKind.SERVER
-            elif kind.lower() == "producer":
-                activity_kind = SpanKind.PRODUCER
-            elif kind.lower() == "consumer":
-                activity_kind = SpanKind.CONSUMER
+            # Resolve activity_kind from either a SpanKind enum or a string
+            if isinstance(kind, SpanKind):
+                activity_kind = kind
+            else:
+                # Map string kind to SpanKind enum
+                activity_kind = SpanKind.INTERNAL
+                if kind.lower() == "client":
+                    activity_kind = SpanKind.CLIENT
+                elif kind.lower() == "server":
+                    activity_kind = SpanKind.SERVER
+                elif kind.lower() == "producer":
+                    activity_kind = SpanKind.PRODUCER
+                elif kind.lower() == "consumer":
+                    activity_kind = SpanKind.CONSUMER
 
             # Get context for parent relationship
             # If parent_id is provided, parse it and use it as the parent context
@@ -160,8 +170,12 @@ class OpenTelemetryScope:
 
             # Set common tags
             if self._span:
-                self._span.set_attribute(GEN_AI_SYSTEM_KEY, GEN_AI_SYSTEM_VALUE)
                 self._span.set_attribute(GEN_AI_OPERATION_NAME_KEY, operation_name)
+
+                # Set telemetry SDK attributes
+                self._span.set_attribute(TELEMETRY_SDK_NAME_KEY, TELEMETRY_SDK_NAME_VALUE)
+                self._span.set_attribute(TELEMETRY_SDK_LANGUAGE_KEY, TELEMETRY_SDK_LANGUAGE_VALUE)
+                self._span.set_attribute(TELEMETRY_SDK_VERSION_KEY, get_sdk_version())
 
                 # Set agent details if provided
                 if agent_details:
@@ -176,12 +190,13 @@ class OpenTelemetryScope:
                         GEN_AI_AGENT_BLUEPRINT_ID_KEY, agent_details.agent_blueprint_id
                     )
                     self.set_tag_maybe(
-                        GEN_AI_AGENT_TYPE_KEY,
-                        agent_details.agent_type.value if agent_details.agent_type else None,
+                        GEN_AI_AGENT_PLATFORM_ID_KEY, agent_details.agent_platform_id
                     )
                     self.set_tag_maybe(TENANT_ID_KEY, agent_details.tenant_id)
                     self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, agent_details.conversation_id)
                     self.set_tag_maybe(GEN_AI_ICON_URI_KEY, agent_details.icon_uri)
+                    # Set provider name dynamically from agent details
+                    self.set_tag_maybe(GEN_AI_PROVIDER_NAME_KEY, agent_details.provider_name)
 
                 # Set tenant details if provided
                 if tenant_details:
@@ -207,7 +222,7 @@ class OpenTelemetryScope:
             response: The response content to record
         """
         if self._span and self._is_telemetry_enabled():
-            self._span.set_attribute(GEN_AI_EVENT_CONTENT, response)
+            self._span.set_attribute(GEN_AI_OUTPUT_MESSAGES_KEY, response)
 
     def record_cancellation(self) -> None:
         """Record task cancellation."""

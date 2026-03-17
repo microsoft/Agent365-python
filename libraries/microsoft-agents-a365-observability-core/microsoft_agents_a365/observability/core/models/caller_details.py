@@ -18,8 +18,5 @@ class CallerDetails:
     caller_name: Optional[str] = None
     """The human-readable name of the caller."""
 
-    caller_user_id: Optional[str] = None
-    """The user ID of the caller."""
-
-    tenant_id: Optional[str] = None
-    """The tenant ID of the caller."""
+    caller_client_ip: Optional[str] = None
+    """The client IP address of the caller."""

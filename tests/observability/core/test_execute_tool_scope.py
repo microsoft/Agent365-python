@@ -20,12 +20,13 @@ from microsoft_agents_a365.observability.core import (
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.constants import (
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
 )
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind
 
 
 class TestExecuteToolScope(unittest.TestCase):
@@ -112,22 +113,22 @@ class TestExecuteToolScope(unittest.TestCase):
         span_attributes = getattr(span, "attributes", {}) or {}
 
         self.assertIn(
-            GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+            CHANNEL_NAME_KEY,
             span_attributes,
             "Expected source name to be set on span",
         )
         self.assertEqual(
-            span_attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY],
+            span_attributes[CHANNEL_NAME_KEY],
             request.source_metadata.name,
         )
 
         self.assertIn(
-            GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+            CHANNEL_LINK_KEY,
             span_attributes,
             "Expected source description to be set on span",
         )
         self.assertEqual(
-            span_attributes[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY],
+            span_attributes[CHANNEL_LINK_KEY],
             request.source_metadata.description,
         )
 
@@ -156,6 +157,26 @@ class TestExecuteToolScope(unittest.TestCase):
         self.assertTrue(hasattr(span.parent, "span_id"), "Expected parent to have span_id")
         span_parent_id = f"{span.parent.span_id:016x}"
         self.assertEqual(span_parent_id, parent_span_id)
+
+    def test_span_kind_defaults_to_internal(self):
+        """Test that ExecuteToolScope defaults to SpanKind.INTERNAL."""
+        scope = ExecuteToolScope.start(self.tool_details, self.agent_details, self.tenant_details)
+        scope.dispose()
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+        self.assertEqual(finished_spans[-1].kind, SpanKind.INTERNAL)
+
+    def test_span_kind_override_to_client(self):
+        """Test that ExecuteToolScope accepts SpanKind.CLIENT override."""
+        scope = ExecuteToolScope.start(
+            self.tool_details, self.agent_details, self.tenant_details, span_kind=SpanKind.CLIENT
+        )
+        scope.dispose()
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+        self.assertEqual(finished_spans[-1].kind, SpanKind.CLIENT)
 
 
 if __name__ == "__main__":

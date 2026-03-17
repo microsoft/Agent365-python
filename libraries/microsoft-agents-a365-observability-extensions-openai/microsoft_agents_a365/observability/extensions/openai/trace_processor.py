@@ -26,8 +26,8 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
+    GEN_AI_PROVIDER_NAME_KEY,
     GEN_AI_REQUEST_MODEL_KEY,
-    GEN_AI_SYSTEM_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
     GEN_AI_TOOL_TYPE_KEY,
     INVOKE_AGENT_OPERATION_NAME,
@@ -149,7 +149,7 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
             start_time=as_utc_nano(start_time),
             attributes={
                 GEN_AI_OPERATION_NAME_KEY: get_span_kind(span.span_data),
-                GEN_AI_SYSTEM_KEY: "openai",
+                GEN_AI_PROVIDER_NAME_KEY: "openai",
             },
         )
         self._otel_spans[span.span_id] = otel_span
