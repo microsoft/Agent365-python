@@ -11,7 +11,7 @@ from microsoft_agents_a365.observability.core import (
     AgentDetails,
     TenantDetails,
     configure,
-    extract_trace_context,
+    extract_context_from_headers,
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
@@ -116,7 +116,7 @@ class TestOutputScope(unittest.TestCase):
         traceparent = f"00-{parent_trace_id}-{parent_span_id}-01"
 
         # Extract context from traceparent header
-        parent_context = extract_trace_context({"traceparent": traceparent})
+        parent_context = extract_context_from_headers({"traceparent": traceparent})
 
         with OutputScope.start(
             self.agent_details, self.tenant_details, response, parent_context=parent_context

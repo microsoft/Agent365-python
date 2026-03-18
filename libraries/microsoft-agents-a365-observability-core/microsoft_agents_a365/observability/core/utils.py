@@ -30,11 +30,12 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 
-def extract_trace_context(headers: dict[str, str]) -> context.Context:
-    """Extract trace context from HTTP headers.
+def extract_context_from_headers(headers: dict[str, str]) -> context.Context:
+    """Extract an OpenTelemetry Context from W3C trace HTTP headers.
 
-    This function extracts W3C Trace Context from a dictionary of HTTP headers
-    using OpenTelemetry's standard propagation mechanism.
+    Parses ``traceparent`` (and optionally ``tracestate``) headers and returns
+    an OpenTelemetry Context that can be passed as ``parent_context`` to any
+    scope's ``start()`` method.
 
     Args:
         headers: Dictionary of HTTP headers containing trace context.
@@ -51,13 +52,36 @@ def extract_trace_context(headers: dict[str, str]) -> context.Context:
             headers = {
                 "traceparent": "00-1234567890abcdef1234567890abcdef-abcdefabcdef1234-01"
             }
-            parent_context = extract_trace_context(headers)
+            parent_context = extract_context_from_headers(headers)
             with InferenceScope.start(
                 details, agent, tenant, parent_context=parent_context
             ):
                 pass
     """
     return extract(headers)
+
+
+def get_traceparent(headers: dict[str, str]) -> str | None:
+    """Return the W3C ``traceparent`` value from a headers dictionary.
+
+    Args:
+        headers: Dictionary of HTTP headers, typically obtained from
+            :meth:`OpenTelemetryScope.inject_context_to_headers`.
+
+    Returns:
+        The traceparent string (e.g.
+        ``"00-<trace-id>-<span-id>-<flags>"``), or ``None`` if the
+        key is not present.
+
+    Example::
+
+        .. code-block:: python
+
+            # Extract traceparent from incoming HTTP request headers
+            traceparent = get_traceparent(request.headers)
+            turn_context.turn_state[A365_PARENT_TRACEPARENT_KEY] = traceparent
+    """
+    return headers.get("traceparent")
 
 
 def safe_json_dumps(obj: Any, **kwargs: Any) -> str:

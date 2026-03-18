@@ -36,7 +36,7 @@ class OutputScope(OpenTelemetryScope):
             tenant_details: The details of the tenant
             response: The response details from the agent
             parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_trace_context()`` to convert a
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
                 Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
@@ -64,7 +64,7 @@ class OutputScope(OpenTelemetryScope):
             tenant_details: The details of the tenant
             response: The response details from the agent
             parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_trace_context()`` to convert a
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
                 Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.

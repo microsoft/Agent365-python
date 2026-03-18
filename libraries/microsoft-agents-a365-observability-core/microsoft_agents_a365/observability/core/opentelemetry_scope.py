@@ -114,7 +114,7 @@ class OpenTelemetryScope:
             agent_details: Optional agent details
             tenant_details: Optional tenant details
             parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_trace_context()`` to extract a
+                upstream operation. Use ``extract_context_from_headers()`` to extract a
                 Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
                 Useful when recording an operation after it has already completed.
@@ -303,24 +303,19 @@ class OpenTelemetryScope:
             return set_span_in_context(self._span)
         return None
 
-    def inject_trace_context(self) -> dict[str, str]:
-        """Inject trace context headers for distributed tracing propagation.
+    def inject_context_to_headers(self) -> dict[str, str]:
+        """Inject this span's trace context into W3C HTTP headers.
 
-        This method returns a dictionary of headers containing the trace
-        context (traceparent and tracestate) that can be used to propagate
-        the current span's context to downstream services via HTTP headers
-        or other transport mechanisms.
-
-        The headers follow the W3C Trace Context specification and include:
-        - ``traceparent``: Contains version, trace-id, parent-id, and trace-flags
-        - ``tracestate``: Contains vendor-specific trace information (if any)
+        Returns a dictionary of headers containing ``traceparent`` and
+        optionally ``tracestate`` that can be forwarded to downstream services
+        or stored for later context propagation.
 
         Example usage:
 
         .. code-block:: python
 
             scope = OpenTelemetryScope(...)
-            headers = scope.inject_trace_context()
+            headers = scope.inject_context_to_headers()
             # Add headers to outgoing HTTP request
             requests.get("https://downstream-service/api", headers=headers)
 

@@ -47,7 +47,7 @@ class ExecuteToolScope(OpenTelemetryScope):
             tenant_details: The details of the tenant
             request: Optional request details for additional context
             parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_trace_context()`` to convert a
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
                 Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object. Useful when
                 recording a tool call after execution has already completed.
@@ -90,7 +90,7 @@ class ExecuteToolScope(OpenTelemetryScope):
             tenant_details: The details of the tenant
             request: Optional request details for additional context
             parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_trace_context()`` to convert a
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
                 Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object. Useful when
                 recording a tool call after execution has already completed.

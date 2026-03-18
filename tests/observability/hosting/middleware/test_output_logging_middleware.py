@@ -12,7 +12,7 @@ from microsoft_agents.activity import (
 )
 from microsoft_agents.hosting.core import TurnContext
 from microsoft_agents_a365.observability.hosting.middleware.output_logging_middleware import (
-    A365_PARENT_SPAN_KEY,
+    A365_PARENT_TRACEPARENT_KEY,
     OutputLoggingMiddleware,
 )
 
@@ -168,8 +168,8 @@ async def test_send_handler_uses_parent_span_from_turn_state():
     middleware = OutputLoggingMiddleware()
     ctx = _make_turn_context()
 
-    parent_id = "00-1af7651916cd43dd8448eb211c80319c-c7ad6b7169203331-01"
-    ctx.turn_state[A365_PARENT_SPAN_KEY] = parent_id
+    traceparent = "00-1af7651916cd43dd8448eb211c80319c-c7ad6b7169203331-01"
+    ctx.turn_state[A365_PARENT_TRACEPARENT_KEY] = traceparent
 
     await middleware.on_turn(ctx, AsyncMock())
 
