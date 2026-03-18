@@ -426,6 +426,75 @@ class AgentNotification:
         """
         return self.on_lifecycle_notification(AgentLifecycleEvent.USERDELETED, **kwargs)
 
+    def on_user_undeleted(
+        self, **kwargs: Any
+    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+        """Register a handler for user un-deletion lifecycle events.
+
+        This is a convenience decorator that registers a handler specifically for
+        agentic user identity un-deletion events.
+
+        Args:
+            **kwargs: Additional keyword arguments passed to the app's add_route method.
+
+        Returns:
+            A decorator function that registers the handler with the application.
+
+        Example:
+            ```python
+            @notifications.on_user_undeleted()
+            async def handle_user_undeleted(context, state, notification):
+                print("Agentic user identity un-deleted")
+            ```
+        """
+        return self.on_lifecycle_notification(AgentLifecycleEvent.USERUNDELETED, **kwargs)
+
+     def on_user_updated(
+        self, **kwargs: Any
+    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+        """Register a handler for user updated lifecycle events.
+
+        This is a convenience decorator that registers a handler specifically for
+        agentic user identity updated events.
+
+        Args:
+            **kwargs: Additional keyword arguments passed to the app's add_route method.
+
+        Returns:
+            A decorator function that registers the handler with the application.
+
+        Example:
+            ```python
+            @notifications.on_user_updated()
+            async def handle_user_updated(context, state, notification):
+                print("Agentic user identity updated")
+            ```
+        """
+        return self.on_lifecycle_notification(AgentLifecycleEvent.USERUPDATED, **kwargs)
+
+     def on_user_manager_updated(
+        self, **kwargs: Any
+    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+        """Register a handler for user manager updated lifecycle events.
+
+        This is a convenience decorator that registers a handler specifically for
+        agentic user manager updated events.
+
+        Args:
+            **kwargs: Additional keyword arguments passed to the app's add_route method.
+
+        Returns:
+            A decorator function that registers the handler with the application.
+
+        Example:
+            ```python
+            @notifications.on_user_manager_updated()
+            async def handle_user_manager_updated(context, state, notification):
+                print("Agentic user manager updated")
+            ```
+        """
+        return self.on_lifecycle_notification(AgentLifecycleEvent.USERMANAGERUPDATED, **kwargs)   
+
     @staticmethod
     def _normalize_subchannel(value: str | AgentSubChannel | None) -> str:
         """Normalize a subchannel value to a lowercase string.

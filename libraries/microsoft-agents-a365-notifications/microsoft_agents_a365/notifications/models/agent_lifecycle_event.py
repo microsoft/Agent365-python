@@ -19,4 +19,7 @@ class AgentLifecycleEvent(str, Enum):
 
     USERCREATED = "agenticuseridentitycreated"
     USERWORKLOADONBOARDINGUPDATED = "agenticuserworkloadonboardingupdated"
-    USERDELETED = "agenticuseridentitydeleted"
+    USERDELETED = "agenticuserdeleted"
+    USERUNDELETED = "agenticuserundeleted"
+    USERUPDATED = "agenticuseridentityupdated"
+    USERMANAGERUPDATED = "agenticusermanagerupdated"
