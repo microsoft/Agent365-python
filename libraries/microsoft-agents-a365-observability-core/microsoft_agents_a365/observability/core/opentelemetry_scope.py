@@ -315,12 +315,14 @@ class OpenTelemetryScope:
         - ``traceparent``: Contains version, trace-id, parent-id, and trace-flags
         - ``tracestate``: Contains vendor-specific trace information (if any)
 
-        Example usage::
+        Example usage:
 
-            >>> scope = OpenTelemetryScope(...)
-            >>> headers = scope.inject_trace_context()
-            >>> # Add headers to outgoing HTTP request
-            >>> requests.get("https://downstream-service/api", headers=headers)
+        .. code-block:: python
+
+            scope = OpenTelemetryScope(...)
+            headers = scope.inject_trace_context()
+            # Add headers to outgoing HTTP request
+            requests.get("https://downstream-service/api", headers=headers)
 
         Returns:
             A dictionary containing W3C trace context headers. Returns an
