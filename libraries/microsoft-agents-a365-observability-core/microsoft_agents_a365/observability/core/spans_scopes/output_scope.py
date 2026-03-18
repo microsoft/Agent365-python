@@ -16,6 +16,8 @@ OUTPUT_OPERATION_NAME = "output_messages"
 class OutputScope(OpenTelemetryScope):
     """Provides OpenTelemetry tracing scope for output messages."""
 
+    _MAX_OUTPUT_MESSAGES = 5000
+
     @staticmethod
     def start(
         agent_details: AgentDetails,
@@ -82,9 +84,12 @@ class OutputScope(OpenTelemetryScope):
         """Records the output messages for telemetry tracking.
 
         Appends the provided messages to the accumulated output messages list.
+        The list is capped at _MAX_OUTPUT_MESSAGES to prevent unbounded memory growth.
 
         Args:
             messages: List of output messages to append
         """
         self._output_messages.extend(messages)
+        if len(self._output_messages) > self._MAX_OUTPUT_MESSAGES:
+            self._output_messages = self._output_messages[-self._MAX_OUTPUT_MESSAGES :]
         self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(self._output_messages))
