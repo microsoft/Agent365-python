@@ -32,8 +32,8 @@ from ..scope_helpers.utils import (
 
 logger = logging.getLogger(__name__)
 
+# TurnState key for the parent span reference (W3C traceparent string).
 A365_PARENT_SPAN_KEY = "A365ParentSpanId"
-"""TurnState key for the parent span reference (W3C traceparent string)."""
 
 
 def _derive_agent_details(context: TurnContext) -> AgentDetails | None:
