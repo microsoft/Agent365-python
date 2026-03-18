@@ -64,7 +64,7 @@ class McpToolRegistrationService:
         auth_token: Optional[str] = None,
     ) -> Optional[RawAgent]:
         """
-        Add MCP tool servers to a chat agent (mirrors .NET implementation).
+        Add MCP tool servers to a RawAgent (mirrors .NET implementation).
 
         Args:
             chat_client: The chat client instance (Union[OpenAIChatClient, AzureOpenAIChatClient])
