@@ -4,9 +4,8 @@
 """Tests for trace context propagation functionality."""
 
 import os
-import sys
 import unittest
-from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 from microsoft_agents_a365.observability.core import (
@@ -212,12 +211,6 @@ class TestTraceContextPropagation(unittest.TestCase):
             headers = scope.inject_trace_context()
             scope.dispose()
 
-            # Parse the traceparent to get trace_id and span_id
-            traceparent = headers["traceparent"]
-            parts = traceparent.split("-")
-            trace_id = parts[1]
-            span_id = parts[2]
-
             # Simulate receiving these headers and creating a child scope
             parent_ctx = extract_trace_context(headers)
 
@@ -249,8 +242,6 @@ class TestTraceContextPropagation(unittest.TestCase):
 
     def test_invoke_agent_scope_with_parent_context(self):
         """Test InvokeAgentScope with parent_context parameter."""
-        from urllib.parse import urlparse
-
         parent_trace_id = "1234567890abcdef1234567890abcdef"
         parent_span_id = "abcdefabcdef1234"
         traceparent = f"00-{parent_trace_id}-{parent_span_id}-01"
@@ -285,4 +276,7 @@ class TestTraceContextPropagation(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+
     sys.exit(pytest.main([str(Path(__file__))] + sys.argv[1:]))

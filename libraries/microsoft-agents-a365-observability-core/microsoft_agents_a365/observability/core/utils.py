@@ -15,6 +15,7 @@ from threading import RLock
 from typing import Any, Generic, TypeVar, cast
 
 from opentelemetry import context
+from opentelemetry.propagate import extract
 from opentelemetry.semconv.attributes.exception_attributes import (
     EXCEPTION_MESSAGE,
     EXCEPTION_STACKTRACE,
@@ -50,8 +51,6 @@ def extract_trace_context(headers: dict[str, str]) -> context.Context:
         >>> with InferenceScope.start(details, agent, tenant, parent_context=parent_context):
         ...     pass
     """
-    from opentelemetry.propagate import extract
-
     return extract(headers)
 
 
