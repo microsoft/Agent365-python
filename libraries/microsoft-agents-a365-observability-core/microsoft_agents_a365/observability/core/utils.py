@@ -46,10 +46,16 @@ def extract_trace_context(headers: dict[str, str]) -> context.Context:
 
     Example::
 
-        >>> headers = {"traceparent": "00-1234567890abcdef1234567890abcdef-abcdefabcdef1234-01"}
-        >>> parent_context = extract_trace_context(headers)
-        >>> with InferenceScope.start(details, agent, tenant, parent_context=parent_context):
-        ...     pass
+        .. code-block:: python
+
+            headers = {
+                "traceparent": "00-1234567890abcdef1234567890abcdef-abcdefabcdef1234-01"
+            }
+            parent_context = extract_trace_context(headers)
+            with InferenceScope.start(
+                details, agent, tenant, parent_context=parent_context
+            ):
+                pass
     """
     return extract(headers)
 
