@@ -24,6 +24,7 @@ from microsoft_agents_a365.observability.core.models.caller_details import Calle
 from microsoft_agents_a365.observability.core.models.response import Response
 from microsoft_agents_a365.observability.core.spans_scopes.output_scope import OutputScope
 from microsoft_agents_a365.observability.core.tenant_details import TenantDetails
+from microsoft_agents_a365.observability.core.utils import extract_trace_context
 
 from ..scope_helpers.utils import (
     get_execution_type_pair,
@@ -32,7 +33,7 @@ from ..scope_helpers.utils import (
 logger = logging.getLogger(__name__)
 
 A365_PARENT_SPAN_KEY = "A365ParentSpanId"
-"""TurnState key for the parent span reference."""
+"""TurnState key for the parent span reference (W3C traceparent string)."""
 
 
 def _derive_agent_details(context: TurnContext) -> AgentDetails | None:
@@ -176,7 +177,11 @@ class OutputLoggingMiddleware:
                 return
 
             parent_id: str | None = turn_context.turn_state.get(A365_PARENT_SPAN_KEY)
-            if not parent_id:
+            parent_context = None
+            if parent_id:
+                # Convert W3C traceparent string to Context using OpenTelemetry's extract
+                parent_context = extract_trace_context({"traceparent": parent_id})
+            else:
                 logger.warning(
                     "[OutputLoggingMiddleware] No parent span ref in turn_state under "
                     "'%s'. OutputScope will not be linked to a parent.",
@@ -187,7 +192,7 @@ class OutputLoggingMiddleware:
                 agent_details=agent_details,
                 tenant_details=tenant_details,
                 response=Response(messages=messages),
-                parent_id=parent_id,
+                parent_context=parent_context,
             )
 
             # Set additional attributes on the scope

@@ -10,6 +10,8 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import context, trace
+from opentelemetry.context import Context
+from opentelemetry.propagate import inject
 from opentelemetry.trace import (
     Span,
     SpanKind,
@@ -43,7 +45,7 @@ from .constants import (
     TELEMETRY_SDK_VERSION_KEY,
     TENANT_ID_KEY,
 )
-from .utils import get_sdk_version, parse_parent_id_to_context
+from .utils import get_sdk_version
 
 if TYPE_CHECKING:
     from .agent_details import AgentDetails
@@ -97,7 +99,7 @@ class OpenTelemetryScope:
         activity_name: str,
         agent_details: "AgentDetails | None" = None,
         tenant_details: "TenantDetails | None" = None,
-        parent_id: str | None = None,
+        parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
     ):
@@ -111,8 +113,9 @@ class OpenTelemetryScope:
             activity_name: The name of the activity for display purposes
             agent_details: Optional agent details
             tenant_details: Optional tenant details
-            parent_id: Optional parent Activity ID used to link this span to an upstream
-                operation
+            parent_context: Optional OpenTelemetry Context used to link this span to an
+                upstream operation. Use ``extract_trace_context()`` to extract a
+                Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
                 Useful when recording an operation after it has already completed.
             end_time: Optional explicit end time as a datetime object.
@@ -146,9 +149,8 @@ class OpenTelemetryScope:
                     activity_kind = SpanKind.CONSUMER
 
             # Get context for parent relationship
-            # If parent_id is provided, parse it and use it as the parent context
+            # If parent_context is provided, use it directly
             # Otherwise, use the current context
-            parent_context = parse_parent_id_to_context(parent_id)
             span_context = parent_context if parent_context else context.get_current()
 
             # Convert custom start time to OTel-compatible format (nanoseconds since epoch)
@@ -285,6 +287,52 @@ class OpenTelemetryScope:
                 self._span.end(end_time=otel_end_time)
             else:
                 self._span.end()
+
+    def get_context(self) -> Context | None:
+        """Get the OpenTelemetry context for this scope's span.
+
+        This method returns a Context object containing this scope's span,
+        which can be used to propagate trace context to child operations
+        or downstream services.
+
+        Returns:
+            A Context containing this scope's span, or None if telemetry
+            is disabled or no span exists.
+        """
+        if self._span and self._is_telemetry_enabled():
+            return set_span_in_context(self._span)
+        return None
+
+    def inject_trace_context(self) -> dict[str, str]:
+        """Inject trace context headers for distributed tracing propagation.
+
+        This method returns a dictionary of headers containing the trace
+        context (traceparent and tracestate) that can be used to propagate
+        the current span's context to downstream services via HTTP headers
+        or other transport mechanisms.
+
+        The headers follow the W3C Trace Context specification and include:
+        - ``traceparent``: Contains version, trace-id, parent-id, and trace-flags
+        - ``tracestate``: Contains vendor-specific trace information (if any)
+
+        Example usage::
+
+            >>> scope = OpenTelemetryScope(...)
+            >>> headers = scope.inject_trace_context()
+            >>> # Add headers to outgoing HTTP request
+            >>> requests.get("https://downstream-service/api", headers=headers)
+
+        Returns:
+            A dictionary containing W3C trace context headers. Returns an
+            empty dictionary if telemetry is disabled or no span exists.
+        """
+        headers: dict[str, str] = {}
+        if self._span and self._is_telemetry_enabled():
+            # Create a context with the current span
+            ctx = set_span_in_context(self._span)
+            # Use the global propagator to inject trace context into headers
+            inject(headers, context=ctx)
+        return headers
 
     def __enter__(self):
         """Enter the context manager and make span active."""

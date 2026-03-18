@@ -33,6 +33,7 @@ from .tenant_details import TenantDetails
 from .tool_call_details import ToolCallDetails
 from .tool_type import ToolType
 from .trace_processor.span_processor import SpanProcessor
+from .utils import extract_trace_context
 
 __all__ = [
     # Main SDK functions
@@ -71,6 +72,8 @@ __all__ = [
     "ExecutionType",
     "InferenceOperationType",
     "ToolType",
+    # Utility functions
+    "extract_trace_context",
     # Constants
     # all constants from constants.py are exported via *
 ]

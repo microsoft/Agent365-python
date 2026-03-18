@@ -164,7 +164,7 @@ async def test_send_handler_creates_output_scope_for_messages():
 
 @pytest.mark.asyncio
 async def test_send_handler_uses_parent_span_from_turn_state():
-    """Send handler should pass parent_id from turn_state to OutputScope."""
+    """Send handler should pass parent_context from turn_state to OutputScope."""
     middleware = OutputLoggingMiddleware()
     ctx = _make_turn_context()
 
@@ -188,7 +188,9 @@ async def test_send_handler_uses_parent_span_from_turn_state():
         await handler(ctx, activities, send_next)
 
         call_kwargs = mock_output_scope_cls.start.call_args
-        assert call_kwargs.kwargs["parent_id"] == parent_id
+        # parent_context should be set (extracted from traceparent header)
+        assert "parent_context" in call_kwargs.kwargs
+        assert call_kwargs.kwargs["parent_context"] is not None
 
 
 @pytest.mark.asyncio

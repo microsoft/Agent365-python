@@ -3,6 +3,8 @@
 
 from datetime import datetime
 
+from opentelemetry.context import Context
+
 from ..agent_details import AgentDetails
 from ..constants import GEN_AI_OUTPUT_MESSAGES_KEY
 from ..models.response import Response
@@ -23,7 +25,7 @@ class OutputScope(OpenTelemetryScope):
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         response: Response,
-        parent_id: str | None = None,
+        parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
     ) -> "OutputScope":
@@ -33,22 +35,25 @@ class OutputScope(OpenTelemetryScope):
             agent_details: The details of the agent
             tenant_details: The details of the tenant
             response: The response details from the agent
-            parent_id: Optional parent Activity ID used to link this span to an upstream
-                operation
+            parent_context: Optional OpenTelemetry Context used to link this span to an
+                upstream operation. Use ``extract_trace_context()`` to convert a
+                Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
 
         Returns:
             A new OutputScope instance
         """
-        return OutputScope(agent_details, tenant_details, response, parent_id, start_time, end_time)
+        return OutputScope(
+            agent_details, tenant_details, response, parent_context, start_time, end_time
+        )
 
     def __init__(
         self,
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         response: Response,
-        parent_id: str | None = None,
+        parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
     ):
@@ -58,8 +63,9 @@ class OutputScope(OpenTelemetryScope):
             agent_details: The details of the agent
             tenant_details: The details of the tenant
             response: The response details from the agent
-            parent_id: Optional parent Activity ID used to link this span to an upstream
-                operation
+            parent_context: Optional OpenTelemetry Context used to link this span to an
+                upstream operation. Use ``extract_trace_context()`` to convert a
+                Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
         """
@@ -69,7 +75,7 @@ class OutputScope(OpenTelemetryScope):
             activity_name=(f"{OUTPUT_OPERATION_NAME} {agent_details.agent_id}"),
             agent_details=agent_details,
             tenant_details=tenant_details,
-            parent_id=parent_id,
+            parent_context=parent_context,
             start_time=start_time,
             end_time=end_time,
         )

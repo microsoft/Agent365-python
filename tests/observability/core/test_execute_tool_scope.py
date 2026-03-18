@@ -16,6 +16,7 @@ from microsoft_agents_a365.observability.core import (
     TenantDetails,
     ToolCallDetails,
     configure,
+    extract_trace_context,
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
@@ -132,14 +133,17 @@ class TestExecuteToolScope(unittest.TestCase):
             request.source_metadata.description,
         )
 
-    def test_execute_tool_scope_with_parent_id(self):
-        """Test ExecuteToolScope uses parent_id to link span to parent context."""
+    def test_execute_tool_scope_with_parent_context(self):
+        """Test ExecuteToolScope uses parent_context to link span to parent context."""
         parent_trace_id = "1234567890abcdef1234567890abcdef"
         parent_span_id = "abcdefabcdef1234"
-        parent_id = f"00-{parent_trace_id}-{parent_span_id}-01"
+        traceparent = f"00-{parent_trace_id}-{parent_span_id}-01"
+
+        # Extract context from traceparent header
+        parent_context = extract_trace_context({"traceparent": traceparent})
 
         with ExecuteToolScope.start(
-            self.tool_details, self.agent_details, self.tenant_details, parent_id=parent_id
+            self.tool_details, self.agent_details, self.tenant_details, parent_context=parent_context
         ):
             pass
 
