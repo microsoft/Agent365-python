@@ -449,7 +449,7 @@ class AgentNotification:
         """
         return self.on_lifecycle_notification(AgentLifecycleEvent.USERUNDELETED, **kwargs)
 
-     def on_user_updated(
+    def on_user_updated(
         self, **kwargs: Any
     ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
         """Register a handler for user updated lifecycle events.
@@ -472,7 +472,7 @@ class AgentNotification:
         """
         return self.on_lifecycle_notification(AgentLifecycleEvent.USERUPDATED, **kwargs)
 
-     def on_user_manager_updated(
+    def on_user_manager_updated(
         self, **kwargs: Any
     ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
         """Register a handler for user manager updated lifecycle events.
@@ -493,7 +493,7 @@ class AgentNotification:
                 print("Agentic user manager updated")
             ```
         """
-        return self.on_lifecycle_notification(AgentLifecycleEvent.USERMANAGERUPDATED, **kwargs)   
+        return self.on_lifecycle_notification(AgentLifecycleEvent.USERMANAGERUPDATED, **kwargs)
 
     @staticmethod
     def _normalize_subchannel(value: str | AgentSubChannel | None) -> str:

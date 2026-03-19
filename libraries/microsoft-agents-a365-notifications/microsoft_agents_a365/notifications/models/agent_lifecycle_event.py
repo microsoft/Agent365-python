@@ -15,6 +15,9 @@ class AgentLifecycleEvent(str, Enum):
         USERWORKLOADONBOARDINGUPDATED: Event triggered when a user's workload
             onboarding status is updated.
         USERDELETED: Event triggered when an agentic user identity is deleted.
+        USERUNDELETED: Event triggered when an agentic user identity is un-deleted.
+        USERUPDATED: Event triggered when an agentic user identity is updated.
+        USERMANAGERUPDATED: Event triggered when an agentic user's manager is updated.
     """
 
     USERCREATED = "agenticuseridentitycreated"
