@@ -4,6 +4,8 @@
 from datetime import datetime
 from typing import List
 
+from opentelemetry.context import Context
+
 from .agent_details import AgentDetails
 from .constants import (
     CHANNEL_LINK_KEY,
@@ -36,7 +38,7 @@ class InferenceScope(OpenTelemetryScope):
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         request: Request | None = None,
-        parent_id: str | None = None,
+        parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
     ) -> "InferenceScope":
@@ -47,8 +49,9 @@ class InferenceScope(OpenTelemetryScope):
             agent_details: The details of the agent making the call
             tenant_details: The details of the tenant
             request: Optional request details for additional context
-            parent_id: Optional parent Activity ID used to link this span to an upstream
-                operation
+            parent_context: Optional OpenTelemetry Context used to link this span to an
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
+                Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
 
@@ -56,7 +59,7 @@ class InferenceScope(OpenTelemetryScope):
             A new InferenceScope instance
         """
         return InferenceScope(
-            details, agent_details, tenant_details, request, parent_id, start_time, end_time
+            details, agent_details, tenant_details, request, parent_context, start_time, end_time
         )
 
     def __init__(
@@ -65,7 +68,7 @@ class InferenceScope(OpenTelemetryScope):
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         request: Request | None = None,
-        parent_id: str | None = None,
+        parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
     ):
@@ -76,8 +79,9 @@ class InferenceScope(OpenTelemetryScope):
             agent_details: The details of the agent making the call
             tenant_details: The details of the tenant
             request: Optional request details for additional context
-            parent_id: Optional parent Activity ID used to link this span to an upstream
-                operation
+            parent_context: Optional OpenTelemetry Context used to link this span to an
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
+                Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
         """
@@ -88,7 +92,7 @@ class InferenceScope(OpenTelemetryScope):
             activity_name=f"{details.operationName.value} {details.model}",
             agent_details=agent_details,
             tenant_details=tenant_details,
-            parent_id=parent_id,
+            parent_context=parent_context,
             start_time=start_time,
             end_time=end_time,
         )

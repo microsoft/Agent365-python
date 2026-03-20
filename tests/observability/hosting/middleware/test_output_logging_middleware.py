@@ -12,7 +12,7 @@ from microsoft_agents.activity import (
 )
 from microsoft_agents.hosting.core import TurnContext
 from microsoft_agents_a365.observability.hosting.middleware.output_logging_middleware import (
-    A365_PARENT_SPAN_KEY,
+    A365_PARENT_TRACEPARENT_KEY,
     OutputLoggingMiddleware,
 )
 
@@ -164,12 +164,12 @@ async def test_send_handler_creates_output_scope_for_messages():
 
 @pytest.mark.asyncio
 async def test_send_handler_uses_parent_span_from_turn_state():
-    """Send handler should pass parent_id from turn_state to OutputScope."""
+    """Send handler should pass parent_context from turn_state to OutputScope."""
     middleware = OutputLoggingMiddleware()
     ctx = _make_turn_context()
 
-    parent_id = "00-1af7651916cd43dd8448eb211c80319c-c7ad6b7169203331-01"
-    ctx.turn_state[A365_PARENT_SPAN_KEY] = parent_id
+    traceparent = "00-1af7651916cd43dd8448eb211c80319c-c7ad6b7169203331-01"
+    ctx.turn_state[A365_PARENT_TRACEPARENT_KEY] = traceparent
 
     await middleware.on_turn(ctx, AsyncMock())
 
@@ -188,7 +188,9 @@ async def test_send_handler_uses_parent_span_from_turn_state():
         await handler(ctx, activities, send_next)
 
         call_kwargs = mock_output_scope_cls.start.call_args
-        assert call_kwargs.kwargs["parent_id"] == parent_id
+        # parent_context should be set (extracted from traceparent header)
+        assert "parent_context" in call_kwargs.kwargs
+        assert call_kwargs.kwargs["parent_context"] is not None
 
 
 @pytest.mark.asyncio

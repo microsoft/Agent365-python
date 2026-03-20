@@ -19,22 +19,31 @@ class EnrichedReadableSpan(ReadableSpan):
     the original span.
     """
 
-    def __init__(self, span: ReadableSpan, extra_attributes: dict):
+    def __init__(
+        self,
+        span: ReadableSpan,
+        extra_attributes: dict,
+        excluded_attribute_keys: set[str] | None = None,
+    ):
         """
         Initialize the enriched span wrapper.
 
         Args:
             span: The original ReadableSpan to wrap.
             extra_attributes: Additional attributes to merge with the original.
+            excluded_attribute_keys: Attribute keys to remove after merging.
         """
         self._span = span
         self._extra_attributes = extra_attributes
+        self._excluded_attribute_keys = excluded_attribute_keys or set()
 
     @property
     def attributes(self) -> types.Attributes:
         """Return merged attributes from original span and extra attributes."""
         original = dict(self._span.attributes or {})
         original.update(self._extra_attributes)
+        for key in self._excluded_attribute_keys:
+            original.pop(key, None)
         return original
 
     @property

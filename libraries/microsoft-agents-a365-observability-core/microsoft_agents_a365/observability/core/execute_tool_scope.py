@@ -3,6 +3,7 @@
 
 from datetime import datetime
 
+from opentelemetry.context import Context
 from opentelemetry.trace import SpanKind
 
 from .agent_details import AgentDetails
@@ -33,7 +34,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         request: Request | None = None,
-        parent_id: str | None = None,
+        parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         span_kind: SpanKind | None = None,
@@ -45,8 +46,9 @@ class ExecuteToolScope(OpenTelemetryScope):
             agent_details: The details of the agent making the call
             tenant_details: The details of the tenant
             request: Optional request details for additional context
-            parent_id: Optional parent Activity ID used to link this span to an upstream
-                operation
+            parent_context: Optional OpenTelemetry Context used to link this span to an
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
+                Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object. Useful when
                 recording a tool call after execution has already completed.
             end_time: Optional explicit end time as a datetime object. When provided,
@@ -63,7 +65,7 @@ class ExecuteToolScope(OpenTelemetryScope):
             agent_details,
             tenant_details,
             request,
-            parent_id,
+            parent_context,
             start_time,
             end_time,
             span_kind,
@@ -75,7 +77,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         agent_details: AgentDetails,
         tenant_details: TenantDetails,
         request: Request | None = None,
-        parent_id: str | None = None,
+        parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         span_kind: SpanKind | None = None,
@@ -87,8 +89,9 @@ class ExecuteToolScope(OpenTelemetryScope):
             agent_details: The details of the agent making the call
             tenant_details: The details of the tenant
             request: Optional request details for additional context
-            parent_id: Optional parent Activity ID used to link this span to an upstream
-                operation
+            parent_context: Optional OpenTelemetry Context used to link this span to an
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
+                Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object. Useful when
                 recording a tool call after execution has already completed.
             end_time: Optional explicit end time as a datetime object. When provided,
@@ -103,7 +106,7 @@ class ExecuteToolScope(OpenTelemetryScope):
             activity_name=f"{EXECUTE_TOOL_OPERATION_NAME} {details.tool_name}",
             agent_details=agent_details,
             tenant_details=tenant_details,
-            parent_id=parent_id,
+            parent_context=parent_context,
             start_time=start_time,
             end_time=end_time,
         )

@@ -6,6 +6,7 @@
 import logging
 from datetime import datetime
 
+from opentelemetry.context import Context
 from opentelemetry.trace import SpanKind
 
 from .agent_details import AgentDetails
@@ -50,6 +51,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         request: Request | None = None,
         caller_agent_details: AgentDetails | None = None,
         caller_details: CallerDetails | None = None,
+        parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         span_kind: SpanKind | None = None,
@@ -63,6 +65,9 @@ class InvokeAgentScope(OpenTelemetryScope):
             request: Optional request details for additional context
             caller_agent_details: Optional details of the caller agent
             caller_details: Optional details of the non-agentic caller
+            parent_context: Optional OpenTelemetry Context used to link this span to an
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
+                Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
             span_kind: Optional span kind override. Defaults to ``SpanKind.CLIENT``.
@@ -77,6 +82,7 @@ class InvokeAgentScope(OpenTelemetryScope):
             request,
             caller_agent_details,
             caller_details,
+            parent_context,
             start_time,
             end_time,
             span_kind,
@@ -89,6 +95,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         request: Request | None = None,
         caller_agent_details: AgentDetails | None = None,
         caller_details: CallerDetails | None = None,
+        parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         span_kind: SpanKind | None = None,
@@ -101,6 +108,9 @@ class InvokeAgentScope(OpenTelemetryScope):
             request: Optional request details for additional context
             caller_agent_details: Optional details of the caller agent
             caller_details: Optional details of the non-agentic caller
+            parent_context: Optional OpenTelemetry Context used to link this span to an
+                upstream operation. Use ``extract_context_from_headers()`` to convert a
+                Context from HTTP headers containing W3C traceparent.
             start_time: Optional explicit start time as a datetime object.
             end_time: Optional explicit end time as a datetime object.
             span_kind: Optional span kind override. Defaults to ``SpanKind.CLIENT``.
@@ -118,6 +128,7 @@ class InvokeAgentScope(OpenTelemetryScope):
             activity_name=activity_name,
             agent_details=invoke_agent_details.details,
             tenant_details=tenant_details,
+            parent_context=parent_context,
             start_time=start_time,
             end_time=end_time,
         )
