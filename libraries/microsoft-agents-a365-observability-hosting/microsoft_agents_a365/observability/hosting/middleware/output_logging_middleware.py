@@ -14,11 +14,11 @@ from microsoft_agents_a365.observability.core.agent_details import AgentDetails
 from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
-    GEN_AI_CALLER_ID_KEY,
-    GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
+    USER_EMAIL_KEY,
+    USER_ID_KEY,
+    USER_NAME_KEY,
 )
 from microsoft_agents_a365.observability.core.models.caller_details import CallerDetails
 from microsoft_agents_a365.observability.core.models.response import Response
@@ -201,9 +201,9 @@ class OutputLoggingMiddleware:
             output_scope.set_tag_maybe(CHANNEL_LINK_KEY, source_metadata.get("description"))
 
             if caller_details:
-                output_scope.set_tag_maybe(GEN_AI_CALLER_ID_KEY, caller_details.caller_id)
-                output_scope.set_tag_maybe(GEN_AI_CALLER_UPN_KEY, caller_details.caller_upn)
-                output_scope.set_tag_maybe(GEN_AI_CALLER_NAME_KEY, caller_details.caller_name)
+                output_scope.set_tag_maybe(USER_ID_KEY, caller_details.caller_id)
+                output_scope.set_tag_maybe(USER_EMAIL_KEY, caller_details.caller_upn)
+                output_scope.set_tag_maybe(USER_NAME_KEY, caller_details.caller_name)
 
             try:
                 await send_next()

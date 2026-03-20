@@ -14,19 +14,19 @@ from ..constants import (
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_DESCRIPTION_KEY,
+    GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
-    GEN_AI_AGENT_UPN_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
-    GEN_AI_CALLER_ID_KEY,
-    GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
     SERVICE_NAME_KEY,
     SESSION_DESCRIPTION_KEY,
     SESSION_ID_KEY,
     TENANT_ID_KEY,
+    USER_EMAIL_KEY,
+    USER_ID_KEY,
+    USER_NAME_KEY,
 )
 from ..utils import deprecated, validate_and_normalize_ip
 
@@ -115,7 +115,7 @@ class BaggageBuilder:
         Returns:
             Self for method chaining
         """
-        self._set(GEN_AI_AGENT_UPN_KEY, value)
+        self._set(GEN_AI_AGENT_EMAIL_KEY, value)
         return self
 
     def agent_blueprint_id(self, value: str | None) -> "BaggageBuilder":
@@ -139,7 +139,7 @@ class BaggageBuilder:
         Returns:
             Self for method chaining
         """
-        self._set(GEN_AI_CALLER_ID_KEY, value)
+        self._set(USER_ID_KEY, value)
         return self
 
     def agent_name(self, value: str | None) -> "BaggageBuilder":
@@ -154,12 +154,12 @@ class BaggageBuilder:
 
     def caller_name(self, value: str | None) -> "BaggageBuilder":
         """Set the caller name baggage value."""
-        self._set(GEN_AI_CALLER_NAME_KEY, value)
+        self._set(USER_NAME_KEY, value)
         return self
 
     def caller_upn(self, value: str | None) -> "BaggageBuilder":
         """Set the caller UPN baggage value."""
-        self._set(GEN_AI_CALLER_UPN_KEY, value)
+        self._set(USER_EMAIL_KEY, value)
         return self
 
     def caller_client_ip(self, value: str | None) -> "BaggageBuilder":

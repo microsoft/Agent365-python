@@ -9,14 +9,14 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_DESCRIPTION_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
-    GEN_AI_AGENT_UPN_KEY,
-    GEN_AI_CALLER_ID_KEY,
-    GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_UPN_KEY,
+    GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     TENANT_ID_KEY,
+    USER_EMAIL_KEY,
+    USER_ID_KEY,
+    USER_NAME_KEY,
 )
 from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.hosting.scope_helpers.utils import (
@@ -41,9 +41,9 @@ def test_get_caller_pairs():
 
     result = list(get_caller_pairs(activity))
 
-    assert (GEN_AI_CALLER_ID_KEY, "caller-aad-id") in result
-    assert (GEN_AI_CALLER_NAME_KEY, "Test Caller") in result
-    assert (GEN_AI_CALLER_UPN_KEY, "caller-upn") in result
+    assert (USER_ID_KEY, "caller-aad-id") in result
+    assert (USER_NAME_KEY, "Test Caller") in result
+    assert (USER_EMAIL_KEY, "caller-upn") in result
 
 
 def test_get_execution_type_pair():
@@ -73,7 +73,7 @@ def test_get_target_agent_pairs():
     assert (GEN_AI_AGENT_ID_KEY, "agent-app-id") in result
     assert (GEN_AI_AGENT_NAME_KEY, "Test Agent") in result
     assert (GEN_AI_AGENT_AUID_KEY, "agent-auid") in result
-    assert (GEN_AI_AGENT_UPN_KEY, "agent-upn") in result
+    assert (GEN_AI_AGENT_EMAIL_KEY, "agent-upn") in result
     assert (GEN_AI_AGENT_DESCRIPTION_KEY, "agenticAppInstance") in result
 
 

@@ -10,9 +10,9 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_ID_KEY,
-    GEN_AI_AGENT_UPN_KEY,
+    GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
-    GEN_AI_CALLER_ID_KEY,
+    USER_ID_KEY,
     SERVICE_NAME_KEY,
     SESSION_DESCRIPTION_KEY,
     SESSION_ID_KEY,
@@ -94,9 +94,9 @@ class TestBaggageBuilder(unittest.TestCase):
             self.assertEqual(current_baggage.get(TENANT_ID_KEY), "tenant-1")
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_ID_KEY), "agent-1")
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_AUID_KEY), "auid-1")
-            self.assertEqual(current_baggage.get(GEN_AI_AGENT_UPN_KEY), "upn-1")
+            self.assertEqual(current_baggage.get(GEN_AI_AGENT_EMAIL_KEY), "upn-1")
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_BLUEPRINT_ID_KEY), "blueprint-1")
-            self.assertEqual(current_baggage.get(GEN_AI_CALLER_ID_KEY), "caller-1")
+            self.assertEqual(current_baggage.get(USER_ID_KEY), "caller-1")
             self.assertEqual(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY), "192.168.1.100")
         print("✅ All baggage keys work correctly!")
 
@@ -164,9 +164,9 @@ class TestBaggageBuilder(unittest.TestCase):
             self.assertEqual(scoped_baggage.get(TENANT_ID_KEY), "test-tenant")
             self.assertEqual(scoped_baggage.get(GEN_AI_AGENT_ID_KEY), "test-agent")
             self.assertEqual(scoped_baggage.get(GEN_AI_AGENT_AUID_KEY), "test-auid")
-            self.assertEqual(scoped_baggage.get(GEN_AI_AGENT_UPN_KEY), "test-upn")
+            self.assertEqual(scoped_baggage.get(GEN_AI_AGENT_EMAIL_KEY), "test-upn")
             self.assertEqual(scoped_baggage.get(GEN_AI_AGENT_BLUEPRINT_ID_KEY), "test-blueprint")
-            self.assertEqual(scoped_baggage.get(GEN_AI_CALLER_ID_KEY), "test-caller")
+            self.assertEqual(scoped_baggage.get(USER_ID_KEY), "test-caller")
             # Original baggage should still exist
             self.assertEqual(scoped_baggage.get("existing_key"), "existing_value")
 
@@ -177,9 +177,9 @@ class TestBaggageBuilder(unittest.TestCase):
         self.assertIsNone(final_baggage.get(TENANT_ID_KEY))
         self.assertIsNone(final_baggage.get(GEN_AI_AGENT_ID_KEY))
         self.assertIsNone(final_baggage.get(GEN_AI_AGENT_AUID_KEY))
-        self.assertIsNone(final_baggage.get(GEN_AI_AGENT_UPN_KEY))
+        self.assertIsNone(final_baggage.get(GEN_AI_AGENT_EMAIL_KEY))
         self.assertIsNone(final_baggage.get(GEN_AI_AGENT_BLUEPRINT_ID_KEY))
-        self.assertIsNone(final_baggage.get(GEN_AI_CALLER_ID_KEY))
+        self.assertIsNone(final_baggage.get(USER_ID_KEY))
 
         # Original baggage should be restored
         self.assertEqual(final_baggage.get("existing_key"), "existing_value")
@@ -194,12 +194,12 @@ class TestBaggageBuilder(unittest.TestCase):
         }
         iter_pairs = [
             (GEN_AI_AGENT_AUID_KEY, "auid-x"),
-            (GEN_AI_AGENT_UPN_KEY, "upn-x"),
+            (GEN_AI_AGENT_EMAIL_KEY, "upn-x"),
         ]
 
         # Also verify that None / whitespace values are ignored
         dict_pairs_with_ignored = {
-            GEN_AI_CALLER_ID_KEY: None,  # ignored
+            USER_ID_KEY: None,  # ignored
         }
         iter_pairs_with_ignored = [
             (SESSION_ID_KEY, "  "),  # ignored (whitespace)
@@ -217,9 +217,9 @@ class TestBaggageBuilder(unittest.TestCase):
             self.assertEqual(baggage_contents.get(TENANT_ID_KEY), "tenant-x")
             self.assertEqual(baggage_contents.get(GEN_AI_AGENT_ID_KEY), "agent-x")
             self.assertEqual(baggage_contents.get(GEN_AI_AGENT_AUID_KEY), "auid-x")
-            self.assertEqual(baggage_contents.get(GEN_AI_AGENT_UPN_KEY), "upn-x")
+            self.assertEqual(baggage_contents.get(GEN_AI_AGENT_EMAIL_KEY), "upn-x")
             # Ignored values should not be present
-            self.assertIsNone(baggage_contents.get(GEN_AI_CALLER_ID_KEY))
+            self.assertIsNone(baggage_contents.get(USER_ID_KEY))
             self.assertIsNone(baggage_contents.get(SESSION_ID_KEY))
 
     def test_source_metadata_name_method(self):

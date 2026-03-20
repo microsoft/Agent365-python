@@ -28,10 +28,10 @@ from .constants import (
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_DESCRIPTION_KEY,
+    GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
     GEN_AI_AGENT_PLATFORM_ID_KEY,
-    GEN_AI_AGENT_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_ICON_URI_KEY,
     GEN_AI_OPERATION_NAME_KEY,
@@ -187,7 +187,7 @@ class OpenTelemetryScope:
                         GEN_AI_AGENT_DESCRIPTION_KEY, agent_details.agent_description
                     )
                     self.set_tag_maybe(GEN_AI_AGENT_AUID_KEY, agent_details.agent_auid)
-                    self.set_tag_maybe(GEN_AI_AGENT_UPN_KEY, agent_details.agent_upn)
+                    self.set_tag_maybe(GEN_AI_AGENT_EMAIL_KEY, agent_details.agent_upn)
                     self.set_tag_maybe(
                         GEN_AI_AGENT_BLUEPRINT_ID_KEY, agent_details.agent_blueprint_id
                     )
