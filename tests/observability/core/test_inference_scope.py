@@ -16,6 +16,7 @@ from microsoft_agents_a365.observability.core import (
     SourceMetadata,
     TenantDetails,
     configure,
+    extract_context_from_headers,
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.agent_details import AgentDetails
@@ -337,8 +338,8 @@ class TestInferenceScope(unittest.TestCase):
             # Should not raise an exception
             self.assertTrue(hasattr(scope, "record_thought_process"))
 
-    def test_inference_scope_with_parent_id(self):
-        """Test InferenceScope uses parent_id to link span to parent context."""
+    def test_inference_scope_with_parent_context(self):
+        """Test InferenceScope uses parent_context to link span to parent context."""
         details = InferenceCallDetails(
             operationName=InferenceOperationType.CHAT,
             model="gpt-4",
@@ -347,10 +348,13 @@ class TestInferenceScope(unittest.TestCase):
 
         parent_trace_id = "1234567890abcdef1234567890abcdef"
         parent_span_id = "abcdefabcdef1234"
-        parent_id = f"00-{parent_trace_id}-{parent_span_id}-01"
+        traceparent = f"00-{parent_trace_id}-{parent_span_id}-01"
+
+        # Extract context from traceparent header
+        parent_context = extract_context_from_headers({"traceparent": traceparent})
 
         with InferenceScope.start(
-            details, self.agent_details, self.tenant_details, parent_id=parent_id
+            details, self.agent_details, self.tenant_details, parent_context=parent_context
         ):
             pass
 

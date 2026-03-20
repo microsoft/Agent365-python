@@ -11,6 +11,7 @@ from microsoft_agents_a365.observability.core import (
     AgentDetails,
     TenantDetails,
     configure,
+    extract_context_from_headers,
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
@@ -107,15 +108,18 @@ class TestOutputScope(unittest.TestCase):
         self.assertIn("Appended 2", output_value)
         self.assertIn("Appended 3", output_value)
 
-    def test_output_scope_with_parent_id(self):
-        """Test OutputScope uses parent_id to link span to parent context."""
+    def test_output_scope_with_parent_context(self):
+        """Test OutputScope uses parent_context to link span to parent context."""
         response = Response(messages=["Test"])
         parent_trace_id = "1234567890abcdef1234567890abcdef"
         parent_span_id = "abcdefabcdef1234"
-        parent_id = f"00-{parent_trace_id}-{parent_span_id}-01"
+        traceparent = f"00-{parent_trace_id}-{parent_span_id}-01"
+
+        # Extract context from traceparent header
+        parent_context = extract_context_from_headers({"traceparent": traceparent})
 
         with OutputScope.start(
-            self.agent_details, self.tenant_details, response, parent_id=parent_id
+            self.agent_details, self.tenant_details, response, parent_context=parent_context
         ):
             pass
 

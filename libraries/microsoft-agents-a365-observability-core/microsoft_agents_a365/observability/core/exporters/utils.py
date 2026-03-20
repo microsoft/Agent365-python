@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -194,6 +196,13 @@ def get_validated_domain_override() -> str | None:
         logger.warning(f"Invalid domain override '{domain_override}': {e}")
         return None
 
+    # Warn when using insecure HTTP — telemetry data and bearer tokens may be exposed
+    if domain_override.lower().startswith("http://"):
+        logger.warning(
+            "Domain override uses insecure HTTP. Telemetry data (including "
+            "bearer tokens) will be transmitted in cleartext."
+        )
+
     return domain_override
 
 
@@ -221,6 +230,31 @@ def build_export_url(
     if parsed.scheme and "://" in endpoint:
         return f"{endpoint}{endpoint_path}?api-version=1"
     return f"https://{endpoint}{endpoint_path}?api-version=1"
+
+
+def parse_retry_after(headers: dict[str, str]) -> float | None:
+    """Parse the ``Retry-After`` header value.
+
+    Only numeric (seconds) values are supported.  HTTP-date values
+    (e.g. ``Wed, 21 Oct 2025 07:28:00 GMT``) are intentionally ignored
+    and treated as absent, falling back to exponential backoff.
+
+    Args:
+        headers: Response headers mapping.
+
+    Returns:
+        The number of seconds to wait, or ``None`` if the header is
+        absent, non-numeric, or otherwise invalid.
+    """
+    retry_after = headers.get("Retry-After")
+    if retry_after is None:
+        return None
+    try:
+        return float(retry_after)
+    except (ValueError, TypeError):
+        # Intentionally ignore HTTP-date formatted Retry-After values;
+        # callers should fall back to exponential backoff.
+        return None
 
 
 def is_agent365_exporter_enabled() -> bool:

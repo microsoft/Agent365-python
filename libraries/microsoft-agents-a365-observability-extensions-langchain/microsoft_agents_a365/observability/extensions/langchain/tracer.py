@@ -3,6 +3,7 @@
 
 import logging
 import re
+from collections import OrderedDict
 from collections.abc import Iterator
 from itertools import chain
 from threading import RLock
@@ -69,6 +70,8 @@ CONTEXT_ATTRIBUTES = (
 
 
 class CustomLangChainTracer(BaseTracer):
+    _MAX_TRACKED_RUNS = 10000
+
     __slots__ = (
         "_tracer",
         "_separate_trace_from_runtime_context",
@@ -98,11 +101,18 @@ class CustomLangChainTracer(BaseTracer):
         self.run_map = DictWithLock[str, Run](self.run_map)
         self._tracer = tracer
         self._separate_trace_from_runtime_context = separate_trace_from_runtime_context
-        self._spans_by_run: dict[UUID, Span] = DictWithLock[UUID, Span]()
+        self._spans_by_run: OrderedDict[UUID, Span] = OrderedDict()
         self._lock = RLock()  # handlers may be run in a thread by langchain
 
     def get_span(self, run_id: UUID) -> Span | None:
-        return self._spans_by_run.get(run_id)
+        with self._lock:
+            return self._spans_by_run.get(run_id)
+
+    @staticmethod
+    def _cap_ordered_dict(d: OrderedDict, max_size: int) -> None:
+        """Evict oldest entries from an OrderedDict to stay within max_size."""
+        while len(d) > max_size:
+            d.popitem(last=False)
 
     def _start_trace(self, run: Run) -> None:
         self.run_map[str(run.id)] = run
@@ -142,12 +152,14 @@ class CustomLangChainTracer(BaseTracer):
         # token = context_api.attach(context)
         with self._lock:
             self._spans_by_run[run.id] = span
+            self._cap_ordered_dict(self._spans_by_run, self._MAX_TRACKED_RUNS)
 
     def _end_trace(self, run: Run) -> None:
         self.run_map.pop(str(run.id), None)
         if context_api.get_value(_SUPPRESS_INSTRUMENTATION_KEY):
             return
-        span = self._spans_by_run.pop(run.id, None)
+        with self._lock:
+            span = self._spans_by_run.pop(run.id, None)
         if span:
             try:
                 _update_span(span, run)
@@ -162,24 +174,32 @@ class CustomLangChainTracer(BaseTracer):
         pass
 
     def on_llm_error(self, error: BaseException, *args: Any, run_id: UUID, **kwargs: Any) -> Run:
-        if span := self._spans_by_run.get(run_id):
+        with self._lock:
+            span = self._spans_by_run.get(run_id)
+        if span:
             record_exception(span, error)
         return super().on_llm_error(error, *args, run_id=run_id, **kwargs)
 
     def on_chain_error(self, error: BaseException, *args: Any, run_id: UUID, **kwargs: Any) -> Run:
-        if span := self._spans_by_run.get(run_id):
+        with self._lock:
+            span = self._spans_by_run.get(run_id)
+        if span:
             record_exception(span, error)
         return super().on_chain_error(error, *args, run_id=run_id, **kwargs)
 
     def on_retriever_error(
         self, error: BaseException, *args: Any, run_id: UUID, **kwargs: Any
     ) -> Run:
-        if span := self._spans_by_run.get(run_id):
+        with self._lock:
+            span = self._spans_by_run.get(run_id)
+        if span:
             record_exception(span, error)
         return super().on_retriever_error(error, *args, run_id=run_id, **kwargs)
 
     def on_tool_error(self, error: BaseException, *args: Any, run_id: UUID, **kwargs: Any) -> Run:
-        if span := self._spans_by_run.get(run_id):
+        with self._lock:
+            span = self._spans_by_run.get(run_id)
+        if span:
             record_exception(span, error)
         return super().on_tool_error(error, *args, run_id=run_id, **kwargs)
 

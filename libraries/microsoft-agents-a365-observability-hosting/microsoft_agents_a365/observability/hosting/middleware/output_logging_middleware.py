@@ -24,6 +24,7 @@ from microsoft_agents_a365.observability.core.models.caller_details import Calle
 from microsoft_agents_a365.observability.core.models.response import Response
 from microsoft_agents_a365.observability.core.spans_scopes.output_scope import OutputScope
 from microsoft_agents_a365.observability.core.tenant_details import TenantDetails
+from microsoft_agents_a365.observability.core.utils import extract_context_from_headers
 
 from ..scope_helpers.utils import (
     get_execution_type_pair,
@@ -31,8 +32,8 @@ from ..scope_helpers.utils import (
 
 logger = logging.getLogger(__name__)
 
-A365_PARENT_SPAN_KEY = "A365ParentSpanId"
-"""TurnState key for the parent span reference."""
+# TurnState key for the parent trace context (W3C traceparent string).
+A365_PARENT_TRACEPARENT_KEY = "A365ParentTraceparent"
 
 
 def _derive_agent_details(context: TurnContext) -> AgentDetails | None:
@@ -109,7 +110,7 @@ def _derive_execution_type(context: TurnContext) -> str | None:
 class OutputLoggingMiddleware:
     """Middleware that creates :class:`OutputScope` spans for outgoing messages.
 
-    Links to a parent span when :data:`A365_PARENT_SPAN_KEY` is set in
+    Links to a parent span when :data:`A365_PARENT_TRACEPARENT_KEY` is set in
     ``turn_state``.
 
     **Privacy note:** Outgoing message content is captured verbatim as span
@@ -175,19 +176,22 @@ class OutputLoggingMiddleware:
                 await send_next()
                 return
 
-            parent_id: str | None = turn_context.turn_state.get(A365_PARENT_SPAN_KEY)
-            if not parent_id:
+            traceparent: str | None = turn_context.turn_state.get(A365_PARENT_TRACEPARENT_KEY)
+            parent_context = None
+            if traceparent:
+                parent_context = extract_context_from_headers({"traceparent": traceparent})
+            else:
                 logger.warning(
-                    "[OutputLoggingMiddleware] No parent span ref in turn_state under "
+                    "[OutputLoggingMiddleware] No traceparent in turn_state under "
                     "'%s'. OutputScope will not be linked to a parent.",
-                    A365_PARENT_SPAN_KEY,
+                    A365_PARENT_TRACEPARENT_KEY,
                 )
 
             output_scope = OutputScope.start(
                 agent_details=agent_details,
                 tenant_details=tenant_details,
                 response=Response(messages=messages),
-                parent_id=parent_id,
+                parent_context=parent_context,
             )
 
             # Set additional attributes on the scope
