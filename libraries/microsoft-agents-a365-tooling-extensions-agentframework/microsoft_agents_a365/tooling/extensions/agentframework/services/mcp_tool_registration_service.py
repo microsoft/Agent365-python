@@ -62,7 +62,7 @@ class McpToolRegistrationService:
         auth_handler_name: str,
         turn_context: TurnContext,
         auth_token: Optional[str] = None,
-    ) -> Optional[RawAgent]:
+    ) -> RawAgent:
         """
         Add MCP tool servers to a RawAgent (mirrors .NET implementation).
 
@@ -76,7 +76,10 @@ class McpToolRegistrationService:
             auth_token: Optional bearer token for authentication
 
         Returns:
-            RawAgent instance with MCP tools registered, or None if creation failed
+            RawAgent instance with MCP tools registered.
+
+        Raises:
+            Exception: If agent creation fails.
         """
         try:
             # Exchange token if not provided
@@ -257,7 +260,7 @@ class McpToolRegistrationService:
 
         Example:
             >>> service = McpToolRegistrationService()
-            >>> messages = [Message(role=Role.USER, text="Hello")]
+            >>> messages = [Message(role="user", text="Hello")]
             >>> result = await service.send_chat_history_messages(messages, turn_context)
             >>> if result.succeeded:
             ...     print("Chat history sent successfully")
