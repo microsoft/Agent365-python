@@ -13,8 +13,8 @@ from microsoft_agents.activity import (
 )
 from microsoft_agents.hosting.core import TurnContext
 from microsoft_agents_a365.observability.core.constants import (
-    USER_ID_KEY,
     TENANT_ID_KEY,
+    USER_ID_KEY,
 )
 from microsoft_agents_a365.observability.hosting.middleware.baggage_middleware import (
     BaggageMiddleware,

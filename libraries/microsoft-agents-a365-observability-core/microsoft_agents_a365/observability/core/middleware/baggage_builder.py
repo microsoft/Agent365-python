@@ -28,7 +28,7 @@ from ..constants import (
     USER_ID_KEY,
     USER_NAME_KEY,
 )
-from ..utils import deprecated, validate_and_normalize_ip
+from ..utils import validate_and_normalize_ip
 
 logger = logging.getLogger(__name__)
 
@@ -177,16 +177,6 @@ class BaggageBuilder:
         self._set(GEN_AI_CONVERSATION_ITEM_LINK_KEY, value)
         return self
 
-    @deprecated("Use channel_name() instead")
-    def source_metadata_name(self, value: str | None) -> "BaggageBuilder":
-        """Set the execution source metadata name (e.g., channel name)."""
-        return self.channel_name(value)
-
-    @deprecated("Use channel_links() instead")
-    def source_metadata_description(self, value: str | None) -> "BaggageBuilder":
-        """Set the execution source metadata description (e.g., channel description)."""
-        return self.channel_links(value)
-
     def session_id(self, value: str | None) -> "BaggageBuilder":
         """Set the session ID baggage value."""
         self._set(SESSION_ID_KEY, value)
@@ -203,7 +193,7 @@ class BaggageBuilder:
         return self
 
     def channel_links(self, value: str | None) -> "BaggageBuilder":
-        """Sets the channel link baggage value. (e.g., channel links or description)."""
+        """Sets the channel link baggage value."""
         self._set(CHANNEL_LINK_KEY, value)
         return self
 

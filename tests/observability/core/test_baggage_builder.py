@@ -9,14 +9,14 @@ from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_NAME_KEY,
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
-    GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_EMAIL_KEY,
+    GEN_AI_AGENT_ID_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
-    USER_ID_KEY,
     SERVICE_NAME_KEY,
     SESSION_DESCRIPTION_KEY,
     SESSION_ID_KEY,
     TENANT_ID_KEY,
+    USER_ID_KEY,
 )
 from microsoft_agents_a365.observability.core.middleware.baggage_builder import BaggageBuilder
 from opentelemetry import baggage, context, trace
@@ -221,28 +221,6 @@ class TestBaggageBuilder(unittest.TestCase):
             # Ignored values should not be present
             self.assertIsNone(baggage_contents.get(USER_ID_KEY))
             self.assertIsNone(baggage_contents.get(SESSION_ID_KEY))
-
-    def test_source_metadata_name_method(self):
-        """Test deprecated source_metadata_name method - should delegate to channel_name."""
-        # Should exist and be callable
-        self.assertTrue(hasattr(self.builder, "source_metadata_name"))
-        self.assertTrue(callable(self.builder.source_metadata_name))
-
-        # Should set channel name baggage through delegation
-        with self.builder.source_metadata_name("test-channel").build():
-            current_baggage = baggage.get_all()
-            self.assertEqual(current_baggage.get(CHANNEL_NAME_KEY), "test-channel")
-
-    def test_source_metadata_description_method(self):
-        """Test deprecated source_metadata_description method - should delegate to channel_links."""
-        # Should exist and be callable
-        self.assertTrue(hasattr(self.builder, "source_metadata_description"))
-        self.assertTrue(callable(self.builder.source_metadata_description))
-
-        # Should set channel description baggage through delegation
-        with self.builder.source_metadata_description("test-description").build():
-            current_baggage = baggage.get_all()
-            self.assertEqual(current_baggage.get(CHANNEL_LINK_KEY), "test-description")
 
     def test_session_id_method(self):
         """Test session_id method sets session ID baggage."""

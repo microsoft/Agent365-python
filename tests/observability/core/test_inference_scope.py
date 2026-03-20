@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 from microsoft_agents_a365.observability.core import (
+    Channel,
     ExecutionType,
     InferenceCallDetails,
     InferenceOperationType,
     InferenceScope,
     Request,
-    SourceMetadata,
     TenantDetails,
     configure,
     extract_context_from_headers,
@@ -161,7 +161,7 @@ class TestInferenceScope(unittest.TestCase):
             content="Inference request with source metadata",
             execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-meta",
-            source_metadata=SourceMetadata(name="Channel 1", description="Link to channel"),
+            channel=Channel(name="Channel 1", link="Link to channel"),
         )
 
         scope = InferenceScope.start(details, self.agent_details, self.tenant_details, request)
@@ -182,7 +182,7 @@ class TestInferenceScope(unittest.TestCase):
         )
         self.assertEqual(
             span_attributes[CHANNEL_NAME_KEY],
-            request.source_metadata.name,
+            request.channel.name,
         )
 
         self.assertIn(
@@ -192,7 +192,7 @@ class TestInferenceScope(unittest.TestCase):
         )
         self.assertEqual(
             span_attributes[CHANNEL_LINK_KEY],
-            request.source_metadata.description,
+            request.channel.link,
         )
 
     def test_inference_scope_context_manager(self):

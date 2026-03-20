@@ -7,9 +7,9 @@ from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_NAME_KEY,
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_DESCRIPTION_KEY,
+    GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
-    GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
@@ -21,9 +21,9 @@ from microsoft_agents_a365.observability.core.constants import (
 from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.hosting.scope_helpers.utils import (
     get_caller_pairs,
+    get_channel_pairs,
     get_conversation_pairs,
     get_execution_type_pair,
-    get_source_metadata_pairs,
     get_target_agent_pairs,
     get_tenant_id_pair,
 )
@@ -87,11 +87,11 @@ def test_get_tenant_id_pair():
     assert (TENANT_ID_KEY, "test-tenant-id") in result
 
 
-def test_get_source_metadata_pairs():
-    """Test get_source_metadata_pairs extracts channel metadata."""
+def test_get_channel_pairs():
+    """Test get_channel_pairs extracts channel metadata."""
     activity = Activity(type="message", channel_id="test-channel")
 
-    result = list(get_source_metadata_pairs(activity))
+    result = list(get_channel_pairs(activity))
 
     assert (CHANNEL_NAME_KEY, "test-channel") in result
     assert (CHANNEL_LINK_KEY, None) in result

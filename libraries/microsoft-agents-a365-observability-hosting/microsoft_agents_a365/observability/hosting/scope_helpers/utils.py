@@ -74,12 +74,12 @@ def get_tenant_id_pair(activity: Activity) -> Iterator[tuple[str, Any]]:
     yield TENANT_ID_KEY, activity.recipient.tenant_id
 
 
-def get_source_metadata_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
+def get_channel_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     """
-    Generate source metadata pairs from activity, handling both string and ChannelId object cases.
+    Generate channel pairs from activity, handling both string and ChannelId object cases.
 
     :param activity: The activity object (Activity instance or dict)
-    :return: Iterator of (key, value) tuples for source metadata
+    :return: Iterator of (key, value) tuples for channel information
     """
     # Handle channel_id (can be string or ChannelId object)
     channel_id = activity.channel_id

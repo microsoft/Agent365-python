@@ -149,9 +149,9 @@ class InvokeAgentScope(OpenTelemetryScope):
 
         # Set request metadata if provided
         if request:
-            if request.source_metadata:
-                self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
-                self.set_tag_maybe(CHANNEL_LINK_KEY, request.source_metadata.description)
+            if request.channel:
+                self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
+                self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
 
             self.set_tag_maybe(
                 GEN_AI_EXECUTION_TYPE_KEY,

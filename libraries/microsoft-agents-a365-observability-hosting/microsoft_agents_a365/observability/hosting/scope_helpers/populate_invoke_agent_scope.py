@@ -9,9 +9,9 @@ from microsoft_agents_a365.observability.core.invoke_agent_scope import InvokeAg
 
 from .utils import (
     get_caller_pairs,
+    get_channel_pairs,
     get_conversation_pairs,
     get_execution_type_pair,
-    get_source_metadata_pairs,
     get_target_agent_pairs,
     get_tenant_id_pair,
 )
@@ -39,7 +39,7 @@ def populate(scope: InvokeAgentScope, turn_context: TurnContext) -> InvokeAgentS
     scope.record_attributes(get_execution_type_pair(activity))
     scope.record_attributes(get_target_agent_pairs(activity))
     scope.record_attributes(get_tenant_id_pair(activity))
-    scope.record_attributes(get_source_metadata_pairs(activity))
+    scope.record_attributes(get_channel_pairs(activity))
     scope.record_attributes(get_conversation_pairs(activity))
 
     if activity.text:

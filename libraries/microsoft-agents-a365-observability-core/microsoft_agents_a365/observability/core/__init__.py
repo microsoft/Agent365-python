@@ -28,7 +28,7 @@ from .invoke_agent_scope import InvokeAgentScope
 from .middleware.baggage_builder import BaggageBuilder
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
-from .source_metadata import SourceMetadata
+from .channel import Channel
 from .tenant_details import TenantDetails
 from .tool_call_details import ToolCallDetails
 from .tool_type import ToolType
@@ -64,7 +64,7 @@ __all__ = [
     "AgentDetails",
     "TenantDetails",
     "ToolCallDetails",
-    "SourceMetadata",
+    "Channel",
     "Request",
     "InferenceCallDetails",
     "ServiceEndpoint",

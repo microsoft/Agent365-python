@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from microsoft_agents_a365.observability.core import (
     AgentDetails,
+    Channel,
     ExecuteToolScope,
     ExecutionType,
     Request,
-    SourceMetadata,
     TenantDetails,
     ToolCallDetails,
     configure,
@@ -97,7 +97,7 @@ class TestExecuteToolScope(unittest.TestCase):
             content="Execute tool with request metadata",
             execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-xyz",
-            source_metadata=SourceMetadata(name="Channel 1", description="Link to channel"),
+            channel=Channel(name="Channel 1", link="Link to channel"),
         )
 
         scope = ExecuteToolScope.start(
@@ -120,7 +120,7 @@ class TestExecuteToolScope(unittest.TestCase):
         )
         self.assertEqual(
             span_attributes[CHANNEL_NAME_KEY],
-            request.source_metadata.name,
+            request.channel.name,
         )
 
         self.assertIn(
@@ -130,7 +130,7 @@ class TestExecuteToolScope(unittest.TestCase):
         )
         self.assertEqual(
             span_attributes[CHANNEL_LINK_KEY],
-            request.source_metadata.description,
+            request.channel.link,
         )
 
     def test_execute_tool_scope_with_parent_context(self):
