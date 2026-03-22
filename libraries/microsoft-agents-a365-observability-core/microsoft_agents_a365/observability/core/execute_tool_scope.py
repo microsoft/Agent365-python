@@ -131,9 +131,9 @@ class ExecuteToolScope(OpenTelemetryScope):
                 self.set_tag_maybe(SERVER_PORT_KEY, endpoint.port)
 
         # Set request metadata if provided
-        if request and request.source_metadata:
-            self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
-            self.set_tag_maybe(CHANNEL_LINK_KEY, request.source_metadata.description)
+        if request and request.channel:
+            self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
+            self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
 
     def record_response(self, response: str) -> None:
         """Records response information for telemetry tracking.

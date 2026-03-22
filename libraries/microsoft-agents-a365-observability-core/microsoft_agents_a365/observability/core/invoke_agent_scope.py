@@ -14,15 +14,12 @@ from .constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
     GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY,
+    GEN_AI_CALLER_AGENT_EMAIL_KEY,
     GEN_AI_CALLER_AGENT_ID_KEY,
     GEN_AI_CALLER_AGENT_NAME_KEY,
     GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,
-    GEN_AI_CALLER_AGENT_UPN_KEY,
     GEN_AI_CALLER_AGENT_USER_ID_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
-    GEN_AI_CALLER_ID_KEY,
-    GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_UPN_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -30,6 +27,9 @@ from .constants import (
     SERVER_ADDRESS_KEY,
     SERVER_PORT_KEY,
     SESSION_ID_KEY,
+    USER_EMAIL_KEY,
+    USER_ID_KEY,
+    USER_NAME_KEY,
 )
 from .invoke_agent_details import InvokeAgentDetails
 from .models.caller_details import CallerDetails
@@ -149,9 +149,9 @@ class InvokeAgentScope(OpenTelemetryScope):
 
         # Set request metadata if provided
         if request:
-            if request.source_metadata:
-                self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
-                self.set_tag_maybe(CHANNEL_LINK_KEY, request.source_metadata.description)
+            if request.channel:
+                self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
+                self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
 
             self.set_tag_maybe(
                 GEN_AI_EXECUTION_TYPE_KEY,
@@ -161,9 +161,9 @@ class InvokeAgentScope(OpenTelemetryScope):
 
         # Set caller details tags
         if caller_details:
-            self.set_tag_maybe(GEN_AI_CALLER_ID_KEY, caller_details.caller_id)
-            self.set_tag_maybe(GEN_AI_CALLER_UPN_KEY, caller_details.caller_upn)
-            self.set_tag_maybe(GEN_AI_CALLER_NAME_KEY, caller_details.caller_name)
+            self.set_tag_maybe(USER_ID_KEY, caller_details.caller_id)
+            self.set_tag_maybe(USER_EMAIL_KEY, caller_details.caller_upn)
+            self.set_tag_maybe(USER_NAME_KEY, caller_details.caller_name)
             # Validate and set caller client IP
             self.set_tag_maybe(
                 GEN_AI_CALLER_CLIENT_IP_KEY,
@@ -178,7 +178,7 @@ class InvokeAgentScope(OpenTelemetryScope):
                 GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY, caller_agent_details.agent_blueprint_id
             )
             self.set_tag_maybe(GEN_AI_CALLER_AGENT_USER_ID_KEY, caller_agent_details.agent_auid)
-            self.set_tag_maybe(GEN_AI_CALLER_AGENT_UPN_KEY, caller_agent_details.agent_upn)
+            self.set_tag_maybe(GEN_AI_CALLER_AGENT_EMAIL_KEY, caller_agent_details.agent_upn)
             self.set_tag_maybe(
                 GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY, caller_agent_details.agent_platform_id
             )

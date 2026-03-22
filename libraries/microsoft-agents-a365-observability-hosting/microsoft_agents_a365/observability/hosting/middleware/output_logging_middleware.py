@@ -14,11 +14,11 @@ from microsoft_agents_a365.observability.core.agent_details import AgentDetails
 from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
-    GEN_AI_CALLER_ID_KEY,
-    GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
+    USER_EMAIL_KEY,
+    USER_ID_KEY,
+    USER_NAME_KEY,
 )
 from microsoft_agents_a365.observability.core.models.caller_details import CallerDetails
 from microsoft_agents_a365.observability.core.models.response import Response
@@ -83,10 +83,10 @@ def _derive_conversation_id(context: TurnContext) -> str | None:
     return conv.id if conv else None
 
 
-def _derive_source_metadata(
+def _derive_channel(
     context: TurnContext,
 ) -> dict[str, str | None]:
-    """Derive source metadata (channel name and description) from TurnContext."""
+    """Derive channel (name and link) from TurnContext."""
     channel_id = getattr(context.activity, "channel_id", None)
     channel_name: str | None = None
     sub_channel: str | None = None
@@ -96,7 +96,7 @@ def _derive_source_metadata(
         elif hasattr(channel_id, "channel"):
             channel_name = channel_id.channel
             sub_channel = channel_id.sub_channel
-    return {"name": channel_name, "description": sub_channel}
+    return {"name": channel_name, "link": sub_channel}
 
 
 def _derive_execution_type(context: TurnContext) -> str | None:
@@ -131,7 +131,7 @@ class OutputLoggingMiddleware:
 
         caller_details = _derive_caller_details(context)
         conversation_id = _derive_conversation_id(context)
-        source_metadata = _derive_source_metadata(context)
+        channel = _derive_channel(context)
         execution_type = _derive_execution_type(context)
 
         context.on_send_activities(
@@ -141,7 +141,7 @@ class OutputLoggingMiddleware:
                 tenant_details,
                 caller_details,
                 conversation_id,
-                source_metadata,
+                channel,
                 execution_type,
             )
         )
@@ -155,7 +155,7 @@ class OutputLoggingMiddleware:
         tenant_details: TenantDetails,
         caller_details: CallerDetails | None,
         conversation_id: str | None,
-        source_metadata: dict[str, str | None],
+        channel: dict[str, str | None],
         execution_type: str | None,
     ) -> Callable:
         """Create a send handler that wraps outgoing messages in OutputScope spans.
@@ -197,13 +197,13 @@ class OutputLoggingMiddleware:
             # Set additional attributes on the scope
             output_scope.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, conversation_id)
             output_scope.set_tag_maybe(GEN_AI_EXECUTION_TYPE_KEY, execution_type)
-            output_scope.set_tag_maybe(CHANNEL_NAME_KEY, source_metadata.get("name"))
-            output_scope.set_tag_maybe(CHANNEL_LINK_KEY, source_metadata.get("description"))
+            output_scope.set_tag_maybe(CHANNEL_NAME_KEY, channel.get("name"))
+            output_scope.set_tag_maybe(CHANNEL_LINK_KEY, channel.get("link"))
 
             if caller_details:
-                output_scope.set_tag_maybe(GEN_AI_CALLER_ID_KEY, caller_details.caller_id)
-                output_scope.set_tag_maybe(GEN_AI_CALLER_UPN_KEY, caller_details.caller_upn)
-                output_scope.set_tag_maybe(GEN_AI_CALLER_NAME_KEY, caller_details.caller_name)
+                output_scope.set_tag_maybe(USER_ID_KEY, caller_details.caller_id)
+                output_scope.set_tag_maybe(USER_EMAIL_KEY, caller_details.caller_upn)
+                output_scope.set_tag_maybe(USER_NAME_KEY, caller_details.caller_name)
 
             try:
                 await send_next()

@@ -10,10 +10,10 @@ from microsoft_agents.hosting.core import TurnContext
 from microsoft_agents_a365.observability.core.agent_details import AgentDetails
 from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_NAME_KEY,
-    GEN_AI_CALLER_ID_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
+    USER_ID_KEY,
 )
 from microsoft_agents_a365.observability.core.invoke_agent_details import InvokeAgentDetails
 from microsoft_agents_a365.observability.core.invoke_agent_scope import InvokeAgentScope
@@ -73,8 +73,8 @@ def test_populate():
     attributes = scope._span._attributes
 
     # Check caller attributes
-    assert GEN_AI_CALLER_ID_KEY in attributes
-    assert attributes[GEN_AI_CALLER_ID_KEY] == "caller-aad-id"
+    assert USER_ID_KEY in attributes
+    assert attributes[USER_ID_KEY] == "caller-aad-id"
 
     # Check execution type
     assert GEN_AI_EXECUTION_TYPE_KEY in attributes

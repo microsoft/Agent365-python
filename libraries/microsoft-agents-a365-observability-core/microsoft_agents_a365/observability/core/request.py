@@ -6,7 +6,7 @@
 from dataclasses import dataclass
 
 from .execution_type import ExecutionType
-from .source_metadata import SourceMetadata
+from .channel import Channel
 
 
 @dataclass
@@ -16,4 +16,4 @@ class Request:
     content: str
     execution_type: ExecutionType
     session_id: str | None = None
-    source_metadata: SourceMetadata | None = None
+    channel: Channel | None = None

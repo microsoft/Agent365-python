@@ -124,9 +124,9 @@ class InferenceScope(OpenTelemetryScope):
                 self.set_tag_maybe(SERVER_PORT_KEY, str(details.endpoint.port))
 
         # Set request metadata if provided
-        if request and request.source_metadata:
-            self.set_tag_maybe(CHANNEL_NAME_KEY, request.source_metadata.name)
-            self.set_tag_maybe(CHANNEL_LINK_KEY, request.source_metadata.description)
+        if request and request.channel:
+            self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
+            self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
 
     def record_input_messages(self, messages: List[str]) -> None:
         """Records the input messages for telemetry tracking.

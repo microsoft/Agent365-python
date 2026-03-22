@@ -10,11 +10,11 @@ from urllib.parse import urlparse
 import pytest
 from microsoft_agents_a365.observability.core import (
     AgentDetails,
+    Channel,
     ExecutionType,
     InvokeAgentDetails,
     InvokeAgentScope,
     Request,
-    SourceMetadata,
     TenantDetails,
     configure,
     get_tracer_provider,
@@ -59,12 +59,10 @@ class TestInvokeAgentScope(unittest.TestCase):
             session_id="session-123",
         )
 
-        # Create source metadata for requests
-        cls.source_metadata = SourceMetadata(
-            id="source-agent-456",
+        # Create channel for requests
+        cls.channel = Channel(
             name="Source Channel",
-            icon_uri="https://example.com/source-icon.png",
-            description="Source channel description",
+            link="Source channel link",
         )
 
         # Create a comprehensive request object
@@ -72,7 +70,7 @@ class TestInvokeAgentScope(unittest.TestCase):
             content="Process customer inquiry about order status",
             execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-abc123",
-            source_metadata=cls.source_metadata,
+            channel=cls.channel,
         )
 
         # Create caller details (non-agentic caller)
@@ -175,14 +173,14 @@ class TestInvokeAgentScope(unittest.TestCase):
         if CHANNEL_NAME_KEY in span_attributes:
             self.assertEqual(
                 span_attributes[CHANNEL_NAME_KEY],
-                self.source_metadata.name,  # From cls.source_metadata.name
+                self.channel.name,  # From cls.channel.name
             )
 
-        # Check source channel description from mock data
+        # Check source channel link from mock data
         if CHANNEL_LINK_KEY in span_attributes:
             self.assertEqual(
                 span_attributes[CHANNEL_LINK_KEY],
-                self.source_metadata.description,  # From cls.source_metadata.description
+                self.channel.link,  # From cls.channel.link
             )
 
         # Check execution type from mock data

@@ -16,11 +16,11 @@ def main():
     # Import the updated SDK classes
     from microsoft_agents_a365.observability.core import (
         AgentDetails,
+        Channel,
         ExecutionType,
         InvokeAgentDetails,
         InvokeAgentScope,
         Request,
-        SourceMetadata,
         configure,
     )
 
@@ -31,15 +31,13 @@ def main():
     configure("my-service", "my-namespace")
     print("✅ Telemetry configured")
 
-    # Example 1: Enhanced Agent Execution with Session and Source Metadata
+    # Example 1: Enhanced Agent Execution with Session and Channel
     print("\n📋 Example 1: Enhanced Agent Execution")
 
-    # Create source metadata (from calling agent)
-    source_metadata = SourceMetadata(
-        id="calling-agent-456",
+    # Create channel (from calling agent)
+    channel = Channel(
         name="Calling Agent",
-        icon_uri="https://example.com/calling-agent-icon.png",
-        description="The agent that initiated this request",
+        link="The agent that initiated this request",
     )
 
     # Create a rich request object
@@ -47,7 +45,7 @@ def main():
         content="Process customer inquiry about order status",
         execution_type=ExecutionType.AGENT_TO_AGENT,
         session_id="session-abc123",
-        source_metadata=source_metadata,
+        channel=channel,
         payload="Customer ID: 12345, Order ID: 67890",
     )
 
@@ -86,7 +84,7 @@ def main():
         content="Check inventory for product SKU: ABC-123",
         execution_type=ExecutionType.AGENT_TO_AGENT,
         session_id="session-abc123",
-        source_metadata=source_metadata,
+        channel=channel,
     )
 
     # Use InvokeAgentScope with enhanced details (like .NET SDK)
@@ -113,7 +111,7 @@ def main():
     print("   ✅ InvokeAgentDetails now includes session_id")
     print("   ✅ ExecuteAgentScope has been removed from Python SDK")
     print("   ✅ Constants aligned: gen_ai.agent.id, session.id, gen_ai.agent365.icon_uri")
-    print("   ✅ New classes: SourceMetadata, Request, ExecutionType")
+    print("   ✅ New classes: Channel, Request, ExecutionType")
     print("   ✅ Baggage propagation from parent to child spans")
     print("   ✅ Backward compatibility maintained")
 
