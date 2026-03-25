@@ -19,14 +19,10 @@ class TestOutputScopeBounded(unittest.TestCase):
         agent_details.agent_name = "Test Agent"
         agent_details.agent_description = None
         agent_details.platform_id = None
-        agent_details.conversation_id = None
         agent_details.icon_uri = None
-        agent_details.agent_auid = None
-        agent_details.agent_upn = None
+        agent_details.agentic_user_id = None
+        agent_details.agentic_user_email = None
         agent_details.agent_blueprint_id = None
-
-        tenant_details = MagicMock()
-        tenant_details.tenant_id = "test-tenant"
 
         response = MagicMock()
         response.messages = initial_messages or ["hello"]

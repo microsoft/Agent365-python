@@ -99,7 +99,7 @@ async def test_output_logging_passes_through_without_recipient():
 
 @pytest.mark.asyncio
 async def test_output_logging_passes_through_without_tenant():
-    """Should pass through without registering handlers if no tenant id."""
+    """Should still register handlers even if no tenant id — tenant is optional."""
     middleware = OutputLoggingMiddleware()
     ctx = _make_turn_context(recipient_tenant_id=None)
 
@@ -112,7 +112,8 @@ async def test_output_logging_passes_through_without_tenant():
     await middleware.on_turn(ctx, logic)
 
     assert logic_called is True
-    assert len(ctx._on_send_activities) == 0
+    # Handlers should still be registered — tenant_id is optional now
+    assert len(ctx._on_send_activities) == 1
 
 
 @pytest.mark.asyncio
@@ -188,9 +189,10 @@ async def test_send_handler_uses_parent_span_from_turn_state():
         await handler(ctx, activities, send_next)
 
         call_kwargs = mock_output_scope_cls.start.call_args
-        # parent_context should be set (extracted from traceparent header)
-        assert "parent_context" in call_kwargs.kwargs
-        assert call_kwargs.kwargs["parent_context"] is not None
+        # span_details should be set with parent_context (extracted from traceparent header)
+        assert "span_details" in call_kwargs.kwargs
+        assert call_kwargs.kwargs["span_details"] is not None
+        assert call_kwargs.kwargs["span_details"].parent_context is not None
 
 
 @pytest.mark.asyncio

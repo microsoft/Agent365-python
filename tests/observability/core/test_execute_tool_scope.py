@@ -11,9 +11,8 @@ from microsoft_agents_a365.observability.core import (
     AgentDetails,
     Channel,
     ExecuteToolScope,
-    ExecutionType,
     Request,
-    TenantDetails,
+    SpanDetails,
     ToolCallDetails,
     configure,
     extract_context_from_headers,
@@ -44,7 +43,6 @@ class TestExecuteToolScope(unittest.TestCase):
             service_namespace="test-namespace",
         )
         # Create test data
-        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
         cls.agent_details = AgentDetails(
             agent_id="test-agent-123",
             agent_name="Test Agent",
@@ -83,7 +81,7 @@ class TestExecuteToolScope(unittest.TestCase):
 
     def test_record_response_method_exists(self):
         """Test that record_response method exists on ExecuteToolScope."""
-        scope = ExecuteToolScope.start(self.tool_details, self.agent_details, self.tenant_details)
+        scope = ExecuteToolScope.start(Request(), self.tool_details, self.agent_details)
 
         if scope is not None:
             # Test that the method exists
@@ -95,14 +93,11 @@ class TestExecuteToolScope(unittest.TestCase):
         """Test that request source metadata is set on span attributes."""
         request = Request(
             content="Execute tool with request metadata",
-            execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-xyz",
             channel=Channel(name="Channel 1", link="Link to channel"),
         )
 
-        scope = ExecuteToolScope.start(
-            self.tool_details, self.agent_details, self.tenant_details, request
-        )
+        scope = ExecuteToolScope.start(request, self.tool_details, self.agent_details)
 
         if scope is not None:
             scope.dispose()
@@ -143,10 +138,10 @@ class TestExecuteToolScope(unittest.TestCase):
         parent_context = extract_context_from_headers({"traceparent": traceparent})
 
         with ExecuteToolScope.start(
+            Request(),
             self.tool_details,
             self.agent_details,
-            self.tenant_details,
-            parent_context=parent_context,
+            span_details=SpanDetails(parent_context=parent_context),
         ):
             pass
 
@@ -167,7 +162,7 @@ class TestExecuteToolScope(unittest.TestCase):
 
     def test_span_kind_defaults_to_internal(self):
         """Test that ExecuteToolScope defaults to SpanKind.INTERNAL."""
-        scope = ExecuteToolScope.start(self.tool_details, self.agent_details, self.tenant_details)
+        scope = ExecuteToolScope.start(Request(), self.tool_details, self.agent_details)
         scope.dispose()
 
         finished_spans = self.span_exporter.get_finished_spans()
@@ -177,7 +172,10 @@ class TestExecuteToolScope(unittest.TestCase):
     def test_span_kind_override_to_client(self):
         """Test that ExecuteToolScope accepts SpanKind.CLIENT override."""
         scope = ExecuteToolScope.start(
-            self.tool_details, self.agent_details, self.tenant_details, span_kind=SpanKind.CLIENT
+            Request(),
+            self.tool_details,
+            self.agent_details,
+            span_details=SpanDetails(span_kind=SpanKind.CLIENT),
         )
         scope.dispose()
 

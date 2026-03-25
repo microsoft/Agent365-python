@@ -83,11 +83,11 @@ class TestBaggageBuilder(unittest.TestCase):
             BaggageBuilder()
             .tenant_id("tenant-1")
             .agent_id("agent-1")
-            .agent_auid("auid-1")
-            .agent_upn("upn-1")
+            .agentic_user_id("auid-1")
+            .agentic_user_email("upn-1")
             .agent_blueprint_id("blueprint-1")
-            .caller_id("caller-1")
-            .caller_client_ip("192.168.1.100")
+            .user_id("caller-1")
+            .user_client_ip("192.168.1.100")
             .build()
         ):
             current_baggage = baggage.get_all()
@@ -153,10 +153,10 @@ class TestBaggageBuilder(unittest.TestCase):
             BaggageBuilder()
             .tenant_id("test-tenant")
             .agent_id("test-agent")
-            .agent_auid("test-auid")
-            .agent_upn("test-upn")
+            .agentic_user_id("test-auid")
+            .agentic_user_email("test-upn")
             .agent_blueprint_id("test-blueprint")
-            .caller_id("test-caller")
+            .user_id("test-caller")
             .build()
         ):
             # Inside scope - verify all baggage values are set
@@ -271,29 +271,29 @@ class TestBaggageBuilder(unittest.TestCase):
                 "https://teams.microsoft.com/channel/123",
             )
 
-    def test_caller_client_ip_method(self):
-        """Test caller_client_ip method sets client IP baggage with validation."""
+    def test_user_client_ip_method(self):
+        """Test user_client_ip method sets client IP baggage with validation."""
         # Should exist and be callable
-        self.assertTrue(hasattr(self.builder, "caller_client_ip"))
-        self.assertTrue(callable(self.builder.caller_client_ip))
+        self.assertTrue(hasattr(self.builder, "user_client_ip"))
+        self.assertTrue(callable(self.builder.user_client_ip))
 
         # Test valid IPv4 address
-        with BaggageBuilder().caller_client_ip("192.168.1.100").build():
+        with BaggageBuilder().user_client_ip("192.168.1.100").build():
             current_baggage = baggage.get_all()
             self.assertEqual(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY), "192.168.1.100")
 
         # Test valid IPv6 address
-        with BaggageBuilder().caller_client_ip("2001:db8::1").build():
+        with BaggageBuilder().user_client_ip("2001:db8::1").build():
             current_baggage = baggage.get_all()
             self.assertEqual(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY), "2001:db8::1")
 
         # Test None value (should not set baggage)
-        with BaggageBuilder().caller_client_ip(None).build():
+        with BaggageBuilder().user_client_ip(None).build():
             current_baggage = baggage.get_all()
             self.assertIsNone(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY))
 
         # Test invalid IP address (should be handled gracefully now)
-        with BaggageBuilder().caller_client_ip("not.an.ip.address").build():
+        with BaggageBuilder().user_client_ip("not.an.ip.address").build():
             current_baggage = baggage.get_all()
             # Should be None due to proper exception handling
             self.assertIsNone(current_baggage.get(GEN_AI_CALLER_CLIENT_IP_KEY))

@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 from microsoft_agents_a365.observability.core import (
     AgentDetails,
-    TenantDetails,
+    Request,
+    SpanDetails,
     configure,
     extract_context_from_headers,
     get_tracer_provider,
@@ -36,7 +37,6 @@ class TestOutputScope(unittest.TestCase):
             service_namespace="test-namespace",
         )
 
-        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
         cls.agent_details = AgentDetails(
             agent_id="test-agent-123",
             agent_name="Test Agent",
@@ -76,7 +76,7 @@ class TestOutputScope(unittest.TestCase):
         """Test OutputScope creates span with output messages attribute."""
         response = Response(messages=["First message", "Second message"])
 
-        with OutputScope.start(self.agent_details, self.tenant_details, response):
+        with OutputScope.start(Request(), response, self.agent_details):
             pass
 
         span, attributes = self._get_last_span()
@@ -95,7 +95,7 @@ class TestOutputScope(unittest.TestCase):
         """Test record_output_messages appends to accumulated messages."""
         response = Response(messages=["Initial"])
 
-        with OutputScope.start(self.agent_details, self.tenant_details, response) as scope:
+        with OutputScope.start(Request(), response, self.agent_details) as scope:
             scope.record_output_messages(["Appended 1"])
             scope.record_output_messages(["Appended 2", "Appended 3"])
 
@@ -119,7 +119,10 @@ class TestOutputScope(unittest.TestCase):
         parent_context = extract_context_from_headers({"traceparent": traceparent})
 
         with OutputScope.start(
-            self.agent_details, self.tenant_details, response, parent_context=parent_context
+            Request(),
+            response,
+            self.agent_details,
+            span_details=SpanDetails(parent_context=parent_context),
         ):
             pass
 
@@ -139,7 +142,7 @@ class TestOutputScope(unittest.TestCase):
         """Test OutputScope dispose method ends the span."""
         response = Response(messages=["Test"])
 
-        scope = OutputScope.start(self.agent_details, self.tenant_details, response)
+        scope = OutputScope.start(Request(), response, self.agent_details)
         self.assertIsNotNone(scope)
         scope.dispose()
 

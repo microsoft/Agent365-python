@@ -10,12 +10,13 @@ from urllib.parse import urlparse
 import pytest
 from microsoft_agents_a365.observability.core import (
     AgentDetails,
+    CallerDetails,
     Channel,
-    ExecutionType,
-    InvokeAgentDetails,
     InvokeAgentScope,
+    InvokeAgentScopeDetails,
     Request,
-    TenantDetails,
+    SpanDetails,
+    UserDetails,
     configure,
     get_tracer_provider,
 )
@@ -23,10 +24,8 @@ from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
-    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
 )
-from microsoft_agents_a365.observability.core.models.caller_details import CallerDetails
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -47,16 +46,13 @@ class TestInvokeAgentScope(unittest.TestCase):
             service_namespace="test-namespace",
         )
         # Create test data
-        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
         cls.agent_details = AgentDetails(
             agent_id="test-agent-123",
             agent_name="Test Agent",
             agent_description="A test agent for invoke scope testing",
         )
-        cls.invoke_details = InvokeAgentDetails(
+        cls.invoke_scope_details = InvokeAgentScopeDetails(
             endpoint=urlparse("https://example.com/agent"),
-            details=cls.agent_details,
-            session_id="session-123",
         )
 
         # Create channel for requests
@@ -68,17 +64,20 @@ class TestInvokeAgentScope(unittest.TestCase):
         # Create a comprehensive request object
         cls.test_request = Request(
             content="Process customer inquiry about order status",
-            execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-abc123",
             channel=cls.channel,
+            conversation_id="conv-abc123",
         )
 
         # Create caller details (non-agentic caller)
+        cls.user_details = UserDetails(
+            user_id="user-123",
+            user_email="user@contoso.com",
+            user_name="John Doe",
+            user_client_ip="192.168.1.100",
+        )
         cls.caller_details = CallerDetails(
-            caller_id="user-123",
-            caller_upn="user@contoso.com",
-            caller_name="John Doe",
-            caller_client_ip="192.168.1.100",
+            user_details=cls.user_details,
         )
 
         # Create caller agent details (agentic caller)
@@ -87,8 +86,8 @@ class TestInvokeAgentScope(unittest.TestCase):
             agent_name="Caller Agent",
             agent_description="The agent that initiated this request",
             agent_blueprint_id="blueprint-456",
-            agent_auid="auid-123",
-            agent_upn="agent@contoso.com",
+            agentic_user_id="auid-123",
+            agentic_user_email="agent@contoso.com",
             tenant_id="tenant-789",
             agent_platform_id="platform-123",
         )
@@ -120,7 +119,7 @@ class TestInvokeAgentScope(unittest.TestCase):
 
     def test_record_response_method_exists(self):
         """Test that record_response method exists on InvokeAgentScope."""
-        scope = InvokeAgentScope.start(self.invoke_details, self.tenant_details)
+        scope = InvokeAgentScope.start(Request(), self.invoke_scope_details, self.agent_details)
 
         if scope is not None:
             # Test that the method exists
@@ -130,7 +129,7 @@ class TestInvokeAgentScope(unittest.TestCase):
 
     def test_record_input_messages_method_exists(self):
         """Test that record_input_messages method exists on InvokeAgentScope."""
-        scope = InvokeAgentScope.start(self.invoke_details, self.tenant_details)
+        scope = InvokeAgentScope.start(Request(), self.invoke_scope_details, self.agent_details)
 
         if scope is not None:
             # Test that the method exists
@@ -140,7 +139,7 @@ class TestInvokeAgentScope(unittest.TestCase):
 
     def test_record_output_messages_method_exists(self):
         """Test that record_output_messages method exists on InvokeAgentScope."""
-        scope = InvokeAgentScope.start(self.invoke_details, self.tenant_details)
+        scope = InvokeAgentScope.start(Request(), self.invoke_scope_details, self.agent_details)
 
         if scope is not None:
             # Test that the method exists
@@ -152,9 +151,9 @@ class TestInvokeAgentScope(unittest.TestCase):
         """Test that request parameters from mock data are available on span attributes."""
         # Create scope with request
         scope = InvokeAgentScope.start(
-            invoke_agent_details=self.invoke_details,
-            tenant_details=self.tenant_details,
-            request=self.test_request,
+            self.test_request,
+            self.invoke_scope_details,
+            self.agent_details,
         )
 
         if scope is not None:
@@ -183,13 +182,6 @@ class TestInvokeAgentScope(unittest.TestCase):
                 self.channel.link,  # From cls.channel.link
             )
 
-        # Check execution type from mock data
-        if GEN_AI_EXECUTION_TYPE_KEY in span_attributes:
-            self.assertEqual(
-                span_attributes[GEN_AI_EXECUTION_TYPE_KEY],
-                self.test_request.execution_type.value,  # From cls.test_request.execution_type
-            )
-
         # Check input messages contain request content from mock data
         if GEN_AI_INPUT_MESSAGES_KEY in span_attributes:
             input_messages = span_attributes[GEN_AI_INPUT_MESSAGES_KEY]
@@ -202,9 +194,9 @@ class TestInvokeAgentScope(unittest.TestCase):
         """Test that InvokeAgentScope creates spans with the correct SpanKind."""
         # Create scope
         scope = InvokeAgentScope.start(
-            invoke_agent_details=self.invoke_details,
-            tenant_details=self.tenant_details,
-            request=self.test_request,
+            self.test_request,
+            self.invoke_scope_details,
+            self.agent_details,
         )
 
         if scope is not None:
@@ -224,10 +216,10 @@ class TestInvokeAgentScope(unittest.TestCase):
 
         # Test SERVER span kind override
         scope_server = InvokeAgentScope.start(
-            invoke_agent_details=self.invoke_details,
-            tenant_details=self.tenant_details,
-            request=self.test_request,
-            span_kind=SpanKind.SERVER,
+            self.test_request,
+            self.invoke_scope_details,
+            self.agent_details,
+            span_details=SpanDetails(span_kind=SpanKind.SERVER),
         )
 
         if scope_server is not None:

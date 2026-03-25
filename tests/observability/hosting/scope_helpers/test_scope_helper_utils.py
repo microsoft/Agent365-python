@@ -12,18 +12,15 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_NAME_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
-    GEN_AI_EXECUTION_TYPE_KEY,
     TENANT_ID_KEY,
     USER_EMAIL_KEY,
     USER_ID_KEY,
     USER_NAME_KEY,
 )
-from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.hosting.scope_helpers.utils import (
     get_caller_pairs,
     get_channel_pairs,
     get_conversation_pairs,
-    get_execution_type_pair,
     get_target_agent_pairs,
     get_tenant_id_pair,
 )
@@ -44,17 +41,6 @@ def test_get_caller_pairs():
     assert (USER_ID_KEY, "caller-aad-id") in result
     assert (USER_NAME_KEY, "Test Caller") in result
     assert (USER_EMAIL_KEY, "caller-upn") in result
-
-
-def test_get_execution_type_pair():
-    """Test get_execution_type_pair determines execution type correctly."""
-    from_account = ChannelAccount(role="agenticUser")
-    recipient = ChannelAccount(role="agenticUser")
-    activity = Activity(type="message", from_property=from_account, recipient=recipient)
-
-    result = list(get_execution_type_pair(activity))
-
-    assert (GEN_AI_EXECUTION_TYPE_KEY, ExecutionType.AGENT_TO_AGENT.value) in result
 
 
 def test_get_target_agent_pairs():

@@ -6,7 +6,7 @@ import unittest
 import unittest.mock
 from unittest.mock import Mock, patch
 
-from microsoft_agents_a365.observability.core import AgentDetails, TenantDetails
+from microsoft_agents_a365.observability.core import AgentDetails
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry import trace
@@ -77,14 +77,12 @@ class TestRecordAttributes(unittest.TestCase):
         agent_details = AgentDetails(
             agent_id="test-agent", agent_name="Test Agent", agent_description="A test agent"
         )
-        tenant_details = TenantDetails(tenant_id="test-tenant")
 
         with OpenTelemetryScope(
             kind="Internal",
             operation_name="test_operation",
             activity_name="test_activity",
             agent_details=agent_details,
-            tenant_details=tenant_details,
         ) as scope:
             # Record custom attributes using a dictionary
             attributes = {

@@ -14,9 +14,10 @@ from microsoft_agents_a365.observability.core import (
     InferenceCallDetails,
     InferenceOperationType,
     InferenceScope,
-    InvokeAgentDetails,
     InvokeAgentScope,
-    TenantDetails,
+    InvokeAgentScopeDetails,
+    Request,
+    SpanDetails,
     ToolCallDetails,
     configure,
     extract_context_from_headers,
@@ -41,7 +42,6 @@ class TestTraceContextPropagation(unittest.TestCase):
             service_namespace="test-namespace",
         )
 
-        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
         cls.agent_details = AgentDetails(
             agent_id="test-agent-123",
             agent_name="Test Agent",
@@ -76,7 +76,7 @@ class TestTraceContextPropagation(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             headers = scope.inject_context_to_headers()
@@ -103,7 +103,7 @@ class TestTraceContextPropagation(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             headers = scope.inject_context_to_headers()
@@ -129,7 +129,7 @@ class TestTraceContextPropagation(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             ctx = scope.get_context()
@@ -148,7 +148,7 @@ class TestTraceContextPropagation(unittest.TestCase):
             providerName="openai",
         )
 
-        parent_scope = InferenceScope.start(parent_details, self.agent_details, self.tenant_details)
+        parent_scope = InferenceScope.start(Request(), parent_details, self.agent_details)
 
         # Get injected headers from parent
         headers = parent_scope.inject_context_to_headers()
@@ -165,10 +165,10 @@ class TestTraceContextPropagation(unittest.TestCase):
         )
 
         child_scope = ExecuteToolScope.start(
+            Request(),
             tool_details,
             self.agent_details,
-            self.tenant_details,
-            parent_context=parent_context,
+            span_details=SpanDetails(parent_context=parent_context),
         )
         child_scope.dispose()
 
@@ -203,7 +203,7 @@ class TestTraceContextPropagation(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             headers = scope.inject_context_to_headers()
@@ -220,7 +220,10 @@ class TestTraceContextPropagation(unittest.TestCase):
             )
 
             child_scope = InferenceScope.start(
-                child_details, self.agent_details, self.tenant_details, parent_context=parent_ctx
+                Request(),
+                child_details,
+                self.agent_details,
+                span_details=SpanDetails(parent_context=parent_ctx),
             )
             if child_scope is not None:
                 child_scope.dispose()
@@ -246,14 +249,15 @@ class TestTraceContextPropagation(unittest.TestCase):
 
         parent_context = extract_context_from_headers({"traceparent": traceparent})
 
-        invoke_details = InvokeAgentDetails(
+        invoke_scope_details = InvokeAgentScopeDetails(
             endpoint=urlparse("https://example.com/agent"),
-            details=self.agent_details,
-            session_id="session-123",
         )
 
         with InvokeAgentScope.start(
-            invoke_details, self.tenant_details, parent_context=parent_context
+            Request(),
+            invoke_scope_details,
+            self.agent_details,
+            span_details=SpanDetails(parent_context=parent_context),
         ) as scope:
             headers = scope.inject_context_to_headers()
             self.assertIn("traceparent", headers)

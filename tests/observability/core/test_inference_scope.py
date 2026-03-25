@@ -9,12 +9,11 @@ from pathlib import Path
 import pytest
 from microsoft_agents_a365.observability.core import (
     Channel,
-    ExecutionType,
     InferenceCallDetails,
     InferenceOperationType,
     InferenceScope,
     Request,
-    TenantDetails,
+    SpanDetails,
     configure,
     extract_context_from_headers,
     get_tracer_provider,
@@ -43,9 +42,8 @@ class TestInferenceScope(unittest.TestCase):
             service_name="test-inference-service",
             service_namespace="test-namespace",
         )
-        # Create test agent and tenant details
+        # Create test agent details
         cls.agent_details = AgentDetails(agent_id="test-inference-agent")
-        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
 
     def setUp(self):
         super().setUp()
@@ -119,7 +117,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         # Scope might be None if telemetry is disabled
         if scope is not None:
@@ -139,11 +137,10 @@ class TestInferenceScope(unittest.TestCase):
 
         request = Request(
             content="What is the weather like?",
-            execution_type=ExecutionType.EVENT_TO_AGENT,
             session_id="test-session-123",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details, request)
+        scope = InferenceScope.start(request, details, self.agent_details)
 
         # Test that scope can be created with request
         if scope is not None:
@@ -159,12 +156,11 @@ class TestInferenceScope(unittest.TestCase):
 
         request = Request(
             content="Inference request with source metadata",
-            execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-meta",
             channel=Channel(name="Channel 1", link="Link to channel"),
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details, request)
+        scope = InferenceScope.start(request, details, self.agent_details)
 
         if scope is not None:
             scope.dispose()
@@ -205,7 +201,7 @@ class TestInferenceScope(unittest.TestCase):
             outputTokens=50,
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test context manager usage
@@ -230,7 +226,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test manual dispose
@@ -246,7 +242,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording input messages
@@ -263,7 +259,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording output messages
@@ -280,7 +276,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording input tokens
@@ -296,7 +292,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording output tokens
@@ -312,7 +308,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording finish reasons
@@ -329,7 +325,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording thought process
@@ -354,7 +350,10 @@ class TestInferenceScope(unittest.TestCase):
         parent_context = extract_context_from_headers({"traceparent": traceparent})
 
         with InferenceScope.start(
-            details, self.agent_details, self.tenant_details, parent_context=parent_context
+            Request(),
+            details,
+            self.agent_details,
+            span_details=SpanDetails(parent_context=parent_context),
         ):
             pass
 

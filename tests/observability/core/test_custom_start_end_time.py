@@ -14,7 +14,8 @@ import pytest
 from microsoft_agents_a365.observability.core import (
     AgentDetails,
     ExecuteToolScope,
-    TenantDetails,
+    Request,
+    SpanDetails,
     ToolCallDetails,
     configure,
     get_tracer_provider,
@@ -38,7 +39,6 @@ class TestCustomStartEndTime(unittest.TestCase):
             service_namespace="test-namespace",
         )
         # Create test data
-        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
         cls.agent_details = AgentDetails(
             agent_id="test-agent-123",
             agent_name="Test Agent",
@@ -85,11 +85,10 @@ class TestCustomStartEndTime(unittest.TestCase):
         custom_end = datetime(2023, 11, 14, 22, 13, 25, tzinfo=UTC)  # 5 seconds later
 
         scope = ExecuteToolScope.start(
+            Request(),
             self.tool_details,
             self.agent_details,
-            self.tenant_details,
-            start_time=custom_start,
-            end_time=custom_end,
+            span_details=SpanDetails(start_time=custom_start, end_time=custom_end),
         )
         scope.dispose()
 
@@ -111,11 +110,10 @@ class TestCustomStartEndTime(unittest.TestCase):
         later_end = datetime(2023, 11, 14, 22, 13, 48, tzinfo=UTC)  # 8 seconds after start
 
         scope = ExecuteToolScope.start(
+            Request(),
             self.tool_details,
             self.agent_details,
-            self.tenant_details,
-            start_time=custom_start,
-            end_time=initial_end,
+            span_details=SpanDetails(start_time=custom_start, end_time=initial_end),
         )
         # Override the end time
         scope.set_end_time(later_end)
@@ -131,9 +129,9 @@ class TestCustomStartEndTime(unittest.TestCase):
         """Test that wall-clock time is used when no custom times are provided."""
         before = time.time_ns()
         scope = ExecuteToolScope.start(
+            Request(),
             self.tool_details,
             self.agent_details,
-            self.tenant_details,
         )
         scope.dispose()
         after = time.time_ns()
@@ -153,10 +151,10 @@ class TestCustomStartEndTime(unittest.TestCase):
         custom_start = datetime(2023, 11, 14, 22, 13, 20, tzinfo=UTC)
 
         scope = ExecuteToolScope.start(
+            Request(),
             self.tool_details,
             self.agent_details,
-            self.tenant_details,
-            start_time=custom_start,
+            span_details=SpanDetails(start_time=custom_start),
         )
         scope.dispose()
 
