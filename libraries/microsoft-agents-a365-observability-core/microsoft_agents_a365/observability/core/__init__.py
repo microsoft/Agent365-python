@@ -11,7 +11,6 @@ from .config import (
     is_configured,
 )
 from .execute_tool_scope import ExecuteToolScope
-from .execution_type import ExecutionType
 from .exporters.agent365_exporter_options import Agent365ExporterOptions
 from .exporters.enriched_span import EnrichedReadableSpan
 from .exporters.enriching_span_processor import (
@@ -23,13 +22,16 @@ from .exporters.spectra_exporter_options import SpectraExporterOptions
 from .inference_call_details import InferenceCallDetails, ServiceEndpoint
 from .inference_operation_type import InferenceOperationType
 from .inference_scope import InferenceScope
-from .invoke_agent_details import InvokeAgentDetails
+from .invoke_agent_details import InvokeAgentScopeDetails
 from .invoke_agent_scope import InvokeAgentScope
 from .middleware.baggage_builder import BaggageBuilder
+from .models.caller_details import CallerDetails
+from .models.user_details import UserDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .channel import Channel
-from .tenant_details import TenantDetails
+from .span_details import SpanDetails
+from .spans_scopes.output_scope import OutputScope
 from .tool_call_details import ToolCallDetails
 from .tool_type import ToolType
 from .trace_processor.span_processor import SpanProcessor
@@ -57,26 +59,26 @@ __all__ = [
     "ExecuteToolScope",
     "InvokeAgentScope",
     "InferenceScope",
+    "OutputScope",
     # Middleware
     "BaggageBuilder",
     # Data classes
-    "InvokeAgentDetails",
+    "InvokeAgentScopeDetails",
     "AgentDetails",
-    "TenantDetails",
+    "CallerDetails",
+    "UserDetails",
     "ToolCallDetails",
     "Channel",
     "Request",
+    "SpanDetails",
     "InferenceCallDetails",
     "ServiceEndpoint",
     # Enums
-    "ExecutionType",
     "InferenceOperationType",
     "ToolType",
     # Utility functions
     "extract_context_from_headers",
     "get_traceparent",
-    # Constants
-    # all constants from constants.py are exported via *
 ]
 
 # This is a namespace package

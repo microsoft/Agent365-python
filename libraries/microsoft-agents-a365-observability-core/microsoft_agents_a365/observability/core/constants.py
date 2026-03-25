@@ -87,8 +87,10 @@ GEN_AI_AGENT_AUID_KEY = "microsoft.agent.user.id"
 GEN_AI_AGENT_EMAIL_KEY = "microsoft.agent.user.email"
 GEN_AI_AGENT_BLUEPRINT_ID_KEY = "microsoft.a365.agent.blueprint.id"
 
+# Error type constants
+ERROR_TYPE_CANCELLED = "TaskCanceledException"
+
 # Execution context dimensions
-GEN_AI_EXECUTION_TYPE_KEY = "gen_ai.execution.type"
 GEN_AI_EXECUTION_PAYLOAD_KEY = "gen_ai.execution.payload"
 
 # Channel dimensions

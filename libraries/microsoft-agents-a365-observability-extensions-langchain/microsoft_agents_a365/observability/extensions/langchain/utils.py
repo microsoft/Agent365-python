@@ -10,7 +10,6 @@ from langchain_core.messages import BaseMessage
 from langchain_core.tracers.schemas import Run
 from microsoft_agents_a365.observability.core.constants import (
     EXECUTE_TOOL_OPERATION_NAME,
-    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -30,7 +29,6 @@ from microsoft_agents_a365.observability.core.constants import (
     INVOKE_AGENT_OPERATION_NAME,
     SESSION_ID_KEY,
 )
-from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.core.inference_operation_type import InferenceOperationType
 from microsoft_agents_a365.observability.core.utils import (
     get_first_value,
@@ -693,8 +691,3 @@ def invoke_agent_output_message(
                 if content and isinstance(content, str) and content.strip():
                     yield GEN_AI_OUTPUT_MESSAGES_KEY, content
                     return
-
-
-def set_execution_type() -> Iterator[tuple[str, str]]:
-    """Yields the execution type as human_to_agent."""
-    yield GEN_AI_EXECUTION_TYPE_KEY, ExecutionType.HUMAN_TO_AGENT.value

@@ -49,7 +49,6 @@ from microsoft_agents_a365.observability.extensions.langchain.utils import (
     model_name,
     output_messages,
     prompts,
-    set_execution_type,
     token_counts,
     tools,
 )
@@ -253,7 +252,6 @@ def _update_span(span: Span, run: Run) -> None:
             dict(
                 flatten(
                     chain(
-                        set_execution_type(),
                         add_operation_type(run),
                         invoke_agent_input_message(run.inputs),
                         invoke_agent_output_message(run.outputs),

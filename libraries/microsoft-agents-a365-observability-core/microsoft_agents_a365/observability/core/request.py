@@ -5,7 +5,6 @@
 
 from dataclasses import dataclass
 
-from .execution_type import ExecutionType
 from .channel import Channel
 
 
@@ -13,7 +12,7 @@ from .channel import Channel
 class Request:
     """Request details for agent execution."""
 
-    content: str
-    execution_type: ExecutionType
+    content: str | None = None
     session_id: str | None = None
     channel: Channel | None = None
+    conversation_id: str | None = None

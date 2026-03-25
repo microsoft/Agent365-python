@@ -11,7 +11,6 @@ from .utils import (
     get_caller_pairs,
     get_channel_pairs,
     get_conversation_pairs,
-    get_execution_type_pair,
     get_target_agent_pairs,
     get_tenant_id_pair,
 )
@@ -36,7 +35,6 @@ def populate(scope: InvokeAgentScope, turn_context: TurnContext) -> InvokeAgentS
     activity = turn_context.activity
 
     scope.record_attributes(get_caller_pairs(activity))
-    scope.record_attributes(get_execution_type_pair(activity))
     scope.record_attributes(get_target_agent_pairs(activity))
     scope.record_attributes(get_tenant_id_pair(activity))
     scope.record_attributes(get_channel_pairs(activity))

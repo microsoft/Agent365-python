@@ -22,7 +22,6 @@ from agents.tracing.span_data import (
 from microsoft_agents_a365.observability.core.constants import (
     CUSTOM_PARENT_SPAN_ID_KEY,
     EXECUTE_TOOL_OPERATION_NAME,
-    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -32,7 +31,6 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_TOOL_TYPE_KEY,
     INVOKE_AGENT_OPERATION_NAME,
 )
-from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.core.utils import as_utc_nano, safe_json_dumps
 from opentelemetry import trace as ot_trace
 from opentelemetry.context import attach, detach
@@ -247,7 +245,6 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 while len(self._reverse_handoffs_dict) > self._MAX_HANDOFFS_IN_FLIGHT:
                     self._reverse_handoffs_dict.popitem(last=False)
         elif isinstance(data, AgentSpanData):
-            otel_span.set_attribute(GEN_AI_EXECUTION_TYPE_KEY, ExecutionType.HUMAN_TO_AGENT.value)
             # Lookup the parent node if exists
             key = f"{data.name}:{span.trace_id}"
             if parent_node := self._reverse_handoffs_dict.pop(key, None):

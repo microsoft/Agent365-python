@@ -39,5 +39,4 @@ INVOKE_AGENT_ATTRIBUTES = [
     consts.GEN_AI_CALLER_AGENT_EMAIL_KEY,  # microsoft.a365.caller.agent.user.email
     consts.GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY,  # microsoft.a365.caller.agent.blueprint.id
     consts.GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,  # microsoft.a365.caller.agent.platform.id
-    consts.GEN_AI_EXECUTION_TYPE_KEY,  # gen_ai.execution.type
 ]

@@ -14,13 +14,11 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_NAME_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
-    GEN_AI_EXECUTION_TYPE_KEY,
     TENANT_ID_KEY,
     USER_EMAIL_KEY,
     USER_ID_KEY,
     USER_NAME_KEY,
 )
-from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 
 AGENT_ROLE = "agenticUser"
 
@@ -41,19 +39,6 @@ def get_caller_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     yield USER_ID_KEY, frm.aad_object_id
     yield USER_NAME_KEY, frm.name
     yield USER_EMAIL_KEY, frm.agentic_user_id
-
-
-def get_execution_type_pair(activity: Activity) -> Iterator[tuple[str, Any]]:
-    frm = activity.from_property
-    rec = activity.recipient
-    is_agentic_caller = _is_agentic(frm)
-    is_agentic_recipient = _is_agentic(rec)
-    exec_type = (
-        ExecutionType.AGENT_TO_AGENT.value
-        if (is_agentic_caller and is_agentic_recipient)
-        else ExecutionType.HUMAN_TO_AGENT.value
-    )
-    yield GEN_AI_EXECUTION_TYPE_KEY, exec_type
 
 
 def get_target_agent_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:

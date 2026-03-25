@@ -94,11 +94,11 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_ID_KEY, value)
         return self
 
-    def agent_auid(self, value: str | None) -> "BaggageBuilder":
-        """Set the agent AUID baggage value.
+    def agentic_user_id(self, value: str | None) -> "BaggageBuilder":
+        """Set the agentic user ID baggage value.
 
         Args:
-            value: The agent AUID
+            value: The agentic user ID
 
         Returns:
             Self for method chaining
@@ -106,11 +106,11 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_AUID_KEY, value)
         return self
 
-    def agent_upn(self, value: str | None) -> "BaggageBuilder":
-        """Set the agent UPN baggage value.
+    def agentic_user_email(self, value: str | None) -> "BaggageBuilder":
+        """Set the agentic user email baggage value.
 
         Args:
-            value: The agent UPN
+            value: The agentic user email
 
         Returns:
             Self for method chaining
@@ -130,11 +130,11 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_BLUEPRINT_ID_KEY, value)
         return self
 
-    def caller_id(self, value: str | None) -> "BaggageBuilder":
-        """Set the caller ID baggage value.
+    def user_id(self, value: str | None) -> "BaggageBuilder":
+        """Set the user ID baggage value.
 
         Args:
-            value: The caller ID
+            value: The user ID
 
         Returns:
             Self for method chaining
@@ -152,18 +152,18 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_DESCRIPTION_KEY, value)
         return self
 
-    def caller_name(self, value: str | None) -> "BaggageBuilder":
-        """Set the caller name baggage value."""
+    def user_name(self, value: str | None) -> "BaggageBuilder":
+        """Set the user name baggage value."""
         self._set(USER_NAME_KEY, value)
         return self
 
-    def caller_upn(self, value: str | None) -> "BaggageBuilder":
-        """Set the caller UPN baggage value."""
+    def user_email(self, value: str | None) -> "BaggageBuilder":
+        """Set the user email baggage value."""
         self._set(USER_EMAIL_KEY, value)
         return self
 
-    def caller_client_ip(self, value: str | None) -> "BaggageBuilder":
-        """Set the caller client IP baggage value."""
+    def user_client_ip(self, value: str | None) -> "BaggageBuilder":
+        """Set the user client IP baggage value."""
         self._set(GEN_AI_CALLER_CLIENT_IP_KEY, validate_and_normalize_ip(value))
         return self
 

@@ -24,6 +24,7 @@ from opentelemetry.trace import (
 from .constants import (
     ENABLE_A365_OBSERVABILITY,
     ENABLE_OBSERVABILITY,
+    ERROR_TYPE_CANCELLED,
     ERROR_TYPE_KEY,
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
@@ -32,7 +33,6 @@ from .constants import (
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
     GEN_AI_AGENT_PLATFORM_ID_KEY,
-    GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_ICON_URI_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -49,7 +49,6 @@ from .utils import get_sdk_version
 
 if TYPE_CHECKING:
     from .agent_details import AgentDetails
-    from .tenant_details import TenantDetails
 
 # Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
 logger = logging.getLogger(__name__)
@@ -98,7 +97,6 @@ class OpenTelemetryScope:
         operation_name: str,
         activity_name: str,
         agent_details: "AgentDetails | None" = None,
-        tenant_details: "TenantDetails | None" = None,
         parent_context: Context | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
@@ -112,7 +110,6 @@ class OpenTelemetryScope:
             operation_name: The name of the operation being traced
             activity_name: The name of the activity for display purposes
             agent_details: Optional agent details
-            tenant_details: Optional tenant details
             parent_context: Optional OpenTelemetry Context used to link this span to an
                 upstream operation. Use ``extract_context_from_headers()`` to extract a
                 Context from HTTP headers containing W3C traceparent.
@@ -186,8 +183,8 @@ class OpenTelemetryScope:
                     self.set_tag_maybe(
                         GEN_AI_AGENT_DESCRIPTION_KEY, agent_details.agent_description
                     )
-                    self.set_tag_maybe(GEN_AI_AGENT_AUID_KEY, agent_details.agent_auid)
-                    self.set_tag_maybe(GEN_AI_AGENT_EMAIL_KEY, agent_details.agent_upn)
+                    self.set_tag_maybe(GEN_AI_AGENT_AUID_KEY, agent_details.agentic_user_id)
+                    self.set_tag_maybe(GEN_AI_AGENT_EMAIL_KEY, agent_details.agentic_user_email)
                     self.set_tag_maybe(
                         GEN_AI_AGENT_BLUEPRINT_ID_KEY, agent_details.agent_blueprint_id
                     )
@@ -195,14 +192,9 @@ class OpenTelemetryScope:
                         GEN_AI_AGENT_PLATFORM_ID_KEY, agent_details.agent_platform_id
                     )
                     self.set_tag_maybe(TENANT_ID_KEY, agent_details.tenant_id)
-                    self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, agent_details.conversation_id)
                     self.set_tag_maybe(GEN_AI_ICON_URI_KEY, agent_details.icon_uri)
                     # Set provider name dynamically from agent details
                     self.set_tag_maybe(GEN_AI_PROVIDER_NAME_KEY, agent_details.provider_name)
-
-                # Set tenant details if provided
-                if tenant_details:
-                    self.set_tag_maybe(TENANT_ID_KEY, str(tenant_details.tenant_id))
 
     def record_error(self, exception: Exception) -> None:
         """Record an error in the span.
@@ -229,7 +221,7 @@ class OpenTelemetryScope:
     def record_cancellation(self) -> None:
         """Record task cancellation."""
         if self._span and self._is_telemetry_enabled():
-            self._error_type = "TaskCanceledException"
+            self._error_type = ERROR_TYPE_CANCELLED
             self._span.set_attribute(ERROR_TYPE_KEY, self._error_type)
             self._span.set_status(Status(StatusCode.ERROR, "Task was cancelled"))
 

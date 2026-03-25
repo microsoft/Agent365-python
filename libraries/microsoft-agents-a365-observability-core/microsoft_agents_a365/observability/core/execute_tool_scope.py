@@ -1,9 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from datetime import datetime
-
-from opentelemetry.context import Context
 from opentelemetry.trace import SpanKind
 
 from .agent_details import AgentDetails
@@ -11,6 +8,8 @@ from .constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
     EXECUTE_TOOL_OPERATION_NAME,
+    GEN_AI_CALLER_CLIENT_IP_KEY,
+    GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
     GEN_AI_TOOL_DESCRIPTION_KEY,
@@ -18,11 +17,16 @@ from .constants import (
     GEN_AI_TOOL_TYPE_KEY,
     SERVER_ADDRESS_KEY,
     SERVER_PORT_KEY,
+    USER_EMAIL_KEY,
+    USER_ID_KEY,
+    USER_NAME_KEY,
 )
+from .models.user_details import UserDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
-from .tenant_details import TenantDetails
+from .span_details import SpanDetails
 from .tool_call_details import ToolCallDetails
+from .utils import validate_and_normalize_ip
 
 
 class ExecuteToolScope(OpenTelemetryScope):
@@ -30,88 +34,71 @@ class ExecuteToolScope(OpenTelemetryScope):
 
     @staticmethod
     def start(
+        request: Request,
         details: ToolCallDetails,
         agent_details: AgentDetails,
-        tenant_details: TenantDetails,
-        request: Request | None = None,
-        parent_context: Context | None = None,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
-        span_kind: SpanKind | None = None,
+        user_details: UserDetails | None = None,
+        span_details: SpanDetails | None = None,
     ) -> "ExecuteToolScope":
         """Creates and starts a new scope for tool execution tracing.
 
         Args:
+            request: Request details for the tool execution
             details: The details of the tool call
             agent_details: The details of the agent making the call
-            tenant_details: The details of the tenant
-            request: Optional request details for additional context
-            parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_context_from_headers()`` to convert a
-                Context from HTTP headers containing W3C traceparent.
-            start_time: Optional explicit start time as a datetime object. Useful when
-                recording a tool call after execution has already completed.
-            end_time: Optional explicit end time as a datetime object. When provided,
-                the span will use this timestamp when disposed instead of the
-                current wall-clock time.
-            span_kind: Optional span kind override. Defaults to ``SpanKind.INTERNAL``.
-                Use ``SpanKind.CLIENT`` when the tool calls an external service.
+            user_details: Optional human user details
+            span_details: Optional span configuration (parent context, timing, kind)
 
         Returns:
             A new ExecuteToolScope instance
         """
         return ExecuteToolScope(
+            request,
             details,
             agent_details,
-            tenant_details,
-            request,
-            parent_context,
-            start_time,
-            end_time,
-            span_kind,
+            user_details,
+            span_details,
         )
 
     def __init__(
         self,
+        request: Request,
         details: ToolCallDetails,
         agent_details: AgentDetails,
-        tenant_details: TenantDetails,
-        request: Request | None = None,
-        parent_context: Context | None = None,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
-        span_kind: SpanKind | None = None,
+        user_details: UserDetails | None = None,
+        span_details: SpanDetails | None = None,
     ):
         """Initialize the tool execution scope.
 
         Args:
+            request: Request details for the tool execution
             details: The details of the tool call
             agent_details: The details of the agent making the call
-            tenant_details: The details of the tenant
-            request: Optional request details for additional context
-            parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_context_from_headers()`` to convert a
-                Context from HTTP headers containing W3C traceparent.
-            start_time: Optional explicit start time as a datetime object. Useful when
-                recording a tool call after execution has already completed.
-            end_time: Optional explicit end time as a datetime object. When provided,
-                the span will use this timestamp when disposed instead of the
-                current wall-clock time.
-            span_kind: Optional span kind override. Defaults to ``SpanKind.INTERNAL``.
-                Use ``SpanKind.CLIENT`` when the tool calls an external service.
+            user_details: Optional human user details
+            span_details: Optional span configuration (parent context, timing, kind)
         """
+        kind = SpanKind.INTERNAL
+        parent_context = None
+        start_time = None
+        end_time = None
+        if span_details is not None:
+            if span_details.span_kind is not None:
+                kind = span_details.span_kind
+            parent_context = span_details.parent_context
+            start_time = span_details.start_time
+            end_time = span_details.end_time
+
         super().__init__(
-            kind=span_kind if span_kind is not None else SpanKind.INTERNAL,
+            kind=kind,
             operation_name=EXECUTE_TOOL_OPERATION_NAME,
             activity_name=f"{EXECUTE_TOOL_OPERATION_NAME} {details.tool_name}",
             agent_details=agent_details,
-            tenant_details=tenant_details,
             parent_context=parent_context,
             start_time=start_time,
             end_time=end_time,
         )
 
-        # Extract details using deconstruction-like approach
+        # Extract details
         tool_name = details.tool_name
         arguments = details.arguments
         tool_call_id = details.tool_call_id
@@ -124,6 +111,7 @@ class ExecuteToolScope(OpenTelemetryScope):
         self.set_tag_maybe(GEN_AI_TOOL_TYPE_KEY, tool_type)
         self.set_tag_maybe(GEN_AI_TOOL_CALL_ID_KEY, tool_call_id)
         self.set_tag_maybe(GEN_AI_TOOL_DESCRIPTION_KEY, description)
+        self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
 
         if endpoint:
             self.set_tag_maybe(SERVER_ADDRESS_KEY, endpoint.hostname)
@@ -131,9 +119,19 @@ class ExecuteToolScope(OpenTelemetryScope):
                 self.set_tag_maybe(SERVER_PORT_KEY, endpoint.port)
 
         # Set request metadata if provided
-        if request and request.channel:
+        if request.channel:
             self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
             self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
+
+        # Set user details if provided
+        if user_details:
+            self.set_tag_maybe(USER_ID_KEY, user_details.user_id)
+            self.set_tag_maybe(USER_EMAIL_KEY, user_details.user_email)
+            self.set_tag_maybe(USER_NAME_KEY, user_details.user_name)
+            self.set_tag_maybe(
+                GEN_AI_CALLER_CLIENT_IP_KEY,
+                validate_and_normalize_ip(user_details.user_client_ip),
+            )
 
     def record_response(self, response: str) -> None:
         """Records response information for telemetry tracking.

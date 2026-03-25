@@ -4,9 +4,7 @@
 # Invoke agent scope for tracing agent invocation.
 
 import logging
-from datetime import datetime
 
-from opentelemetry.context import Context
 from opentelemetry.trace import SpanKind
 
 from .agent_details import AgentDetails
@@ -20,7 +18,7 @@ from .constants import (
     GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,
     GEN_AI_CALLER_AGENT_USER_ID_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
-    GEN_AI_EXECUTION_TYPE_KEY,
+    GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
     INVOKE_AGENT_OPERATION_NAME,
@@ -31,11 +29,11 @@ from .constants import (
     USER_ID_KEY,
     USER_NAME_KEY,
 )
-from .invoke_agent_details import InvokeAgentDetails
+from .invoke_agent_details import InvokeAgentScopeDetails
 from .models.caller_details import CallerDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
-from .tenant_details import TenantDetails
+from .span_details import SpanDetails
 from .utils import safe_json_dumps, validate_and_normalize_ip
 
 logger = logging.getLogger(__name__)
@@ -46,142 +44,122 @@ class InvokeAgentScope(OpenTelemetryScope):
 
     @staticmethod
     def start(
-        invoke_agent_details: InvokeAgentDetails,
-        tenant_details: TenantDetails,
-        request: Request | None = None,
-        caller_agent_details: AgentDetails | None = None,
+        request: Request,
+        invoke_scope_details: InvokeAgentScopeDetails,
+        agent_details: AgentDetails,
         caller_details: CallerDetails | None = None,
-        parent_context: Context | None = None,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
-        span_kind: SpanKind | None = None,
+        span_details: SpanDetails | None = None,
     ) -> "InvokeAgentScope":
         """Create and start a new scope for agent invocation tracing.
 
         Args:
-            invoke_agent_details: The details of the agent invocation including endpoint,
-                                agent information, and session context
-            tenant_details: The details of the tenant
-            request: Optional request details for additional context
-            caller_agent_details: Optional details of the caller agent
-            caller_details: Optional details of the non-agentic caller
-            parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_context_from_headers()`` to convert a
-                Context from HTTP headers containing W3C traceparent.
-            start_time: Optional explicit start time as a datetime object.
-            end_time: Optional explicit end time as a datetime object.
-            span_kind: Optional span kind override. Defaults to ``SpanKind.CLIENT``.
-                Use ``SpanKind.SERVER`` when the agent is receiving an inbound request.
+            request: Request details for the invocation
+            invoke_scope_details: Scope-level configuration (endpoint)
+            agent_details: The details of the agent being invoked
+            caller_details: Optional composite caller details (human user and/or
+                calling agent for A2A scenarios)
+            span_details: Optional span configuration (parent context, timing, kind)
 
         Returns:
             A new InvokeAgentScope instance
         """
         return InvokeAgentScope(
-            invoke_agent_details,
-            tenant_details,
             request,
-            caller_agent_details,
+            invoke_scope_details,
+            agent_details,
             caller_details,
-            parent_context,
-            start_time,
-            end_time,
-            span_kind,
+            span_details,
         )
 
     def __init__(
         self,
-        invoke_agent_details: InvokeAgentDetails,
-        tenant_details: TenantDetails,
-        request: Request | None = None,
-        caller_agent_details: AgentDetails | None = None,
+        request: Request,
+        invoke_scope_details: InvokeAgentScopeDetails,
+        agent_details: AgentDetails,
         caller_details: CallerDetails | None = None,
-        parent_context: Context | None = None,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
-        span_kind: SpanKind | None = None,
+        span_details: SpanDetails | None = None,
     ):
         """Initialize the agent invocation scope.
 
         Args:
-            invoke_agent_details: The details of the agent invocation
-            tenant_details: The details of the tenant
-            request: Optional request details for additional context
-            caller_agent_details: Optional details of the caller agent
-            caller_details: Optional details of the non-agentic caller
-            parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_context_from_headers()`` to convert a
-                Context from HTTP headers containing W3C traceparent.
-            start_time: Optional explicit start time as a datetime object.
-            end_time: Optional explicit end time as a datetime object.
-            span_kind: Optional span kind override. Defaults to ``SpanKind.CLIENT``.
-                Use ``SpanKind.SERVER`` when the agent is receiving an inbound request.
+            request: Request details for the invocation
+            invoke_scope_details: Scope-level configuration (endpoint)
+            agent_details: The details of the agent being invoked
+            caller_details: Optional composite caller details (human user and/or
+                calling agent for A2A scenarios)
+            span_details: Optional span configuration (parent context, timing, kind)
         """
         activity_name = INVOKE_AGENT_OPERATION_NAME
-        if invoke_agent_details.details.agent_name:
-            activity_name = (
-                f"{INVOKE_AGENT_OPERATION_NAME} {invoke_agent_details.details.agent_name}"
-            )
+        if agent_details.agent_name:
+            activity_name = f"{INVOKE_AGENT_OPERATION_NAME} {agent_details.agent_name}"
+
+        kind = SpanKind.CLIENT
+        parent_context = None
+        start_time = None
+        end_time = None
+        if span_details is not None:
+            if span_details.span_kind is not None:
+                kind = span_details.span_kind
+            parent_context = span_details.parent_context
+            start_time = span_details.start_time
+            end_time = span_details.end_time
 
         super().__init__(
-            kind=span_kind if span_kind is not None else SpanKind.CLIENT,
+            kind=kind,
             operation_name=INVOKE_AGENT_OPERATION_NAME,
             activity_name=activity_name,
-            agent_details=invoke_agent_details.details,
-            tenant_details=tenant_details,
+            agent_details=agent_details,
             parent_context=parent_context,
             start_time=start_time,
             end_time=end_time,
         )
 
-        endpoint, _, session_id = (
-            invoke_agent_details.endpoint,
-            invoke_agent_details.details,
-            invoke_agent_details.session_id,
-        )
+        self.set_tag_maybe(SESSION_ID_KEY, request.session_id)
+        self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
 
-        self.set_tag_maybe(SESSION_ID_KEY, session_id)
+        endpoint = invoke_scope_details.endpoint
         if endpoint:
             self.set_tag_maybe(SERVER_ADDRESS_KEY, endpoint.hostname)
-
-            # Only record port if it is different from 443
             if endpoint.port and endpoint.port != 443:
                 self.set_tag_maybe(SERVER_PORT_KEY, endpoint.port)
 
-        # Set request metadata if provided
-        if request:
-            if request.channel:
-                self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
-                self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
-
-            self.set_tag_maybe(
-                GEN_AI_EXECUTION_TYPE_KEY,
-                request.execution_type.value if request.execution_type else None,
-            )
-            self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps([request.content]))
+        # Set request metadata
+        if request.channel:
+            self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
+            self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
+        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps([request.content]))
 
         # Set caller details tags
         if caller_details:
-            self.set_tag_maybe(USER_ID_KEY, caller_details.caller_id)
-            self.set_tag_maybe(USER_EMAIL_KEY, caller_details.caller_upn)
-            self.set_tag_maybe(USER_NAME_KEY, caller_details.caller_name)
-            # Validate and set caller client IP
-            self.set_tag_maybe(
-                GEN_AI_CALLER_CLIENT_IP_KEY,
-                validate_and_normalize_ip(caller_details.caller_client_ip),
-            )
+            user_details = caller_details.user_details
+            if user_details:
+                self.set_tag_maybe(USER_ID_KEY, user_details.user_id)
+                self.set_tag_maybe(USER_EMAIL_KEY, user_details.user_email)
+                self.set_tag_maybe(USER_NAME_KEY, user_details.user_name)
+                self.set_tag_maybe(
+                    GEN_AI_CALLER_CLIENT_IP_KEY,
+                    validate_and_normalize_ip(user_details.user_client_ip),
+                )
 
-        # Set caller agent details tags
-        if caller_agent_details:
-            self.set_tag_maybe(GEN_AI_CALLER_AGENT_NAME_KEY, caller_agent_details.agent_name)
-            self.set_tag_maybe(GEN_AI_CALLER_AGENT_ID_KEY, caller_agent_details.agent_id)
-            self.set_tag_maybe(
-                GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY, caller_agent_details.agent_blueprint_id
-            )
-            self.set_tag_maybe(GEN_AI_CALLER_AGENT_USER_ID_KEY, caller_agent_details.agent_auid)
-            self.set_tag_maybe(GEN_AI_CALLER_AGENT_EMAIL_KEY, caller_agent_details.agent_upn)
-            self.set_tag_maybe(
-                GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY, caller_agent_details.agent_platform_id
-            )
+            # Set caller agent details tags
+            caller_agent_details = caller_details.caller_agent_details
+            if caller_agent_details:
+                self.set_tag_maybe(GEN_AI_CALLER_AGENT_NAME_KEY, caller_agent_details.agent_name)
+                self.set_tag_maybe(GEN_AI_CALLER_AGENT_ID_KEY, caller_agent_details.agent_id)
+                self.set_tag_maybe(
+                    GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY,
+                    caller_agent_details.agent_blueprint_id,
+                )
+                self.set_tag_maybe(
+                    GEN_AI_CALLER_AGENT_USER_ID_KEY, caller_agent_details.agentic_user_id
+                )
+                self.set_tag_maybe(
+                    GEN_AI_CALLER_AGENT_EMAIL_KEY, caller_agent_details.agentic_user_email
+                )
+                self.set_tag_maybe(
+                    GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,
+                    caller_agent_details.agent_platform_id,
+                )
 
     def record_response(self, response: str) -> None:
         """Record response information for telemetry tracking.
