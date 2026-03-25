@@ -127,7 +127,8 @@ class InvokeAgentScope(OpenTelemetryScope):
         if request.channel:
             self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
             self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
-        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps([request.content]))
+        if request.content:
+            self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps([request.content]))
 
         # Set caller details tags
         if caller_details:
