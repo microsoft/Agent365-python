@@ -45,7 +45,7 @@ class InvokeAgentScope(OpenTelemetryScope):
     @staticmethod
     def start(
         request: Request,
-        invoke_scope_details: InvokeAgentScopeDetails,
+        scope_details: InvokeAgentScopeDetails,
         agent_details: AgentDetails,
         caller_details: CallerDetails | None = None,
         span_details: SpanDetails | None = None,
@@ -54,7 +54,7 @@ class InvokeAgentScope(OpenTelemetryScope):
 
         Args:
             request: Request details for the invocation
-            invoke_scope_details: Scope-level configuration (endpoint)
+            scope_details: Scope-level configuration (endpoint)
             agent_details: The details of the agent being invoked
             caller_details: Optional composite caller details (human user and/or
                 calling agent for A2A scenarios)
@@ -65,7 +65,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         """
         return InvokeAgentScope(
             request,
-            invoke_scope_details,
+            scope_details,
             agent_details,
             caller_details,
             span_details,
@@ -74,7 +74,7 @@ class InvokeAgentScope(OpenTelemetryScope):
     def __init__(
         self,
         request: Request,
-        invoke_scope_details: InvokeAgentScopeDetails,
+        scope_details: InvokeAgentScopeDetails,
         agent_details: AgentDetails,
         caller_details: CallerDetails | None = None,
         span_details: SpanDetails | None = None,
@@ -83,7 +83,7 @@ class InvokeAgentScope(OpenTelemetryScope):
 
         Args:
             request: Request details for the invocation
-            invoke_scope_details: Scope-level configuration (endpoint)
+            scope_details: Scope-level configuration (endpoint)
             agent_details: The details of the agent being invoked
             caller_details: Optional composite caller details (human user and/or
                 calling agent for A2A scenarios)
@@ -117,7 +117,7 @@ class InvokeAgentScope(OpenTelemetryScope):
         self.set_tag_maybe(SESSION_ID_KEY, request.session_id)
         self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
 
-        endpoint = invoke_scope_details.endpoint
+        endpoint = scope_details.endpoint
         if endpoint:
             self.set_tag_maybe(SERVER_ADDRESS_KEY, endpoint.hostname)
             if endpoint.port and endpoint.port != 443:
