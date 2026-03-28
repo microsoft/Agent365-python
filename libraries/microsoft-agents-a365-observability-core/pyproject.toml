@@ -30,6 +30,7 @@ dependencies = [
     "opentelemetry-exporter-otlp",
     "pydantic",
     "typing-extensions",
+    "wrapt",
     "microsoft-agents-a365-runtime",
 ]
 

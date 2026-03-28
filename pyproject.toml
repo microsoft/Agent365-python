@@ -92,6 +92,9 @@ constraint-dependencies = [
     "microsoft-agents-activity >= 0.4.0",
     "microsoft-agents-hosting-core >= 0.4.0",
 
+    # --- Monkey-patching / wrapping ---
+    "wrapt >= 1.14",
+
     # --- Data Validation & Utilities ---
     "aiohttp >= 3.8.0",
     "asyncio-throttle >= 1.0.0",
