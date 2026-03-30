@@ -48,6 +48,8 @@ dev-dependencies = [
     "pytest-asyncio",
     "pytest-mock",
     "ruff",
+    "tox>=4.0",
+    "tox-uv>=1.0",
     "python-dotenv",
     "openai",
     "agent-framework-azure-ai",
@@ -102,6 +104,10 @@ constraint-dependencies = [
     "pydantic >= 2.0.0",
     "PyJWT >= 2.8.0",
     "typing-extensions >= 4.0.0",
+
+    # --- Tox ---
+    "tox >= 4.23.0",
+    "tox-uv >= 1.18.0",
 
     # --- Development & Testing ---
     "black >= 23.0.0",
@@ -207,3 +213,35 @@ skip-magic-trailing-comma = false
 
 # Like Black, automatically detect the appropriate line ending.
 line-ending = "auto"
+
+# Tox configuration
+[tool.tox]
+requires = ["tox>=4.23", "tox-uv>=1.18"]
+
+[tool.tox.env_run_base]
+runner = "uv-venv-lock-runner"
+uv_sync_flags = ["--all-extras", "--dev"]
+commands = [["pytest", "tests/", "-v", "--tb=short", "-m", "not integration", { replace = "posargs", default = "", extend = true }]]
+
+[tool.tox.env.py311]
+base_python = ["python3.11"]
+
+[tool.tox.env.py312]
+base_python = ["python3.12"]
+
+[tool.tox.env.lint]
+base_python = ["python3.11"]
+commands = [["ruff", "check", ".", "--preview", { replace = "posargs", default = "", extend = true }]]
+
+[tool.tox.env.format]
+base_python = ["python3.11"]
+commands = [["ruff", "format", "--check", ".", { replace = "posargs", default = "", extend = true }]]
+
+[tool.tox.env.integration]
+base_python = ["python3.11"]
+commands = [["pytest", "-m", "integration", "-v", "--tb=short", { replace = "posargs", default = "", extend = true }]]
+pass_env = ["AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT", "AZURE_OPENAI_API_VERSION", "AGENT365_TEST_TENANT_ID", "AGENT365_TEST_AGENT_ID", "ENABLE_OBSERVABILITY"]
+
+[tool.tox.env.verify-constraints]
+base_python = ["python3.11"]
+commands = [["python", "scripts/verify_constraints.py"]]
