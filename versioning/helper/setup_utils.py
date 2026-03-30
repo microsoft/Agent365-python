@@ -8,7 +8,9 @@ This module provides helper functions to dynamically set internal package versio
 at build time, ensuring all packages in the monorepo use the exact same version.
 """
 
+import re
 from os import environ
+from pathlib import Path
 
 
 def get_package_version() -> str:
@@ -101,6 +103,43 @@ def get_next_major_version(base_version: str) -> str:
         return base_version
 
 
+def _parse_root_constraints(root_pyproject_path: Path) -> dict[str, str]:
+    """
+    Parse constraint-dependencies from the root pyproject.toml.
+
+    Returns a dict mapping normalized package names to their full constraint strings.
+    Example: {"semantic-kernel": "semantic-kernel >= 1.39.3"}
+    """
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return {}
+
+    try:
+        with open(root_pyproject_path, "rb") as f:
+            root_data = tomllib.load(f)
+    except (FileNotFoundError, PermissionError):
+        return {}
+
+    constraints_list = root_data.get("tool", {}).get("uv", {}).get("constraint-dependencies", [])
+    constraints: dict[str, str] = {}
+    for entry in constraints_list:
+        if not isinstance(entry, str):
+            continue
+        pkg_name = re.split(r"\s*[<>=!~]", entry, maxsplit=1)[0].strip()
+        normalized = pkg_name.lower().replace("_", "-")
+        constraints[normalized] = entry
+    return constraints
+
+
+def _has_version_constraint(dep: str) -> bool:
+    """Check if a dependency string already includes a version constraint."""
+    return bool(re.search(r"[<>=!~]", dep))
+
+
 def get_dynamic_dependencies(
     pyproject_path: str = "pyproject.toml",
     use_exact_match: bool = False,
@@ -126,7 +165,9 @@ def get_dynamic_dependencies(
        Example: == 0.1.0.dev5
        - Forces exact version match
 
-    External packages keep their original version constraints.
+    External packages without version constraints get the centralized constraint
+    from the root pyproject.toml constraint-dependencies, ensuring published packages
+    enforce minimum versions for security and compatibility.
 
     Args:
         pyproject_path: Path to the pyproject.toml file (default: "pyproject.toml")
@@ -204,6 +245,12 @@ def get_dynamic_dependencies(
             file=sys.stderr,
         )
 
+    # Load centralized constraints from root pyproject.toml so that published
+    # packages enforce the same minimum versions used during development.
+    pkg_pyproject = Path(pyproject_path).resolve()
+    root_pyproject = pkg_pyproject.parent.parent.parent / "pyproject.toml"
+    root_constraints = _parse_root_constraints(root_pyproject)
+
     # Update internal package versions dynamically
     updated_dependencies = []
     for dep in dependencies:
@@ -229,8 +276,15 @@ def get_dynamic_dependencies(
             else:
                 # Minimum version (default): >= base_version
                 updated_dependencies.append(f"{pkg_name} >= {base_version}")
+        elif not _has_version_constraint(dep):
+            # External dep with no version constraint — apply root constraint if available
+            normalized = dep.strip().lower().replace("_", "-")
+            if normalized in root_constraints:
+                updated_dependencies.append(root_constraints[normalized])
+            else:
+                updated_dependencies.append(dep)
         else:
-            # Keep external dependencies as-is
+            # External dependency already has a version constraint — keep as-is
             updated_dependencies.append(dep)
 
     return updated_dependencies
