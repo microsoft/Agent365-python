@@ -61,6 +61,31 @@ pytest tests/ --cov=libraries --cov-report=html -v
 - `unit`: Fast, mocked tests (default)
 - `integration`: Slow tests requiring real services/API keys
 
+### Running with tox
+
+```bash
+# Run all default environments (lint, format, unit tests on 3.11 + 3.12)
+uv run tox
+
+# Run a specific environment
+uv run tox -e lint
+uv run tox -e format
+uv run tox -e py311
+uv run tox -e py312
+
+# Run integration tests (requires env vars)
+uv run tox -e integration
+
+# Verify centralized dependency constraints
+uv run tox -e verify-constraints
+
+# Pass extra args to pytest
+uv run tox -e py311 -- -k "environment"
+
+# List all available environments
+uv run tox list
+```
+
 ### Linting and Formatting
 
 ```bash
@@ -241,7 +266,8 @@ Place it before imports with one blank line after.
 The `.github/workflows/ci.yml` pipeline:
 - Runs on pushes to `main` and `release/*` branches
 - Tests both Python 3.11 and 3.12
-- Executes: lint check → format check → build → unit tests → integration tests (if secrets available)
+- Uses **tox** (via `uv run --frozen tox -e <env>`) to run lint, format, test, and constraint verification steps
+- Executes: verify-constraints → lint → format → build → unit tests → integration tests (if secrets available)
 - Only publishes packages on `release/*` branches when SDK changes detected
 - Uses git-based versioning (tags on release branches = official versions, others = dev versions)
 

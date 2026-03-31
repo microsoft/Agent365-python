@@ -32,6 +32,7 @@ dependencies = [
     "opentelemetry-api",
     "opentelemetry-sdk",
     "opentelemetry-instrumentation",
+    "wrapt",
 ]
 
 [project.urls]
