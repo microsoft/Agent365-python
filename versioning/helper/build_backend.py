@@ -5,6 +5,10 @@
 Custom build backend that wraps setuptools.build_meta to inject centralized
 version constraints into published wheel metadata.
 
+Note: backend-path references a directory outside the package. This is intentional
+for monorepo wheel builds. Individual sdist publishing is not supported; packages
+are published as wheels only from CI.
+
 Usage in package pyproject.toml:
   [build-system]
   requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit"]
@@ -15,7 +19,6 @@ Usage in package pyproject.toml:
 from __future__ import annotations
 
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -59,29 +62,45 @@ def _apply_constraints_to_list(
 
     Returns True if any changes were made.
     """
+    from packaging.requirements import Requirement
+
     changed = False
     for i, dep in enumerate(deps):
         if not isinstance(dep, str):
             continue
         stripped = dep.strip()
 
+        # Parse the requirement to correctly handle environment markers
+        # e.g. 'pkg; python_version < "3.12"' should not be treated as constrained
+        try:
+            req = Requirement(stripped)
+            name = req.name
+            has_specifier = bool(req.specifier)
+            marker_suffix = f" ; {req.marker}" if req.marker else ""
+        except Exception:
+            # Fallback: split off markers manually
+            base, sep, marker_rest = stripped.partition(";")
+            name = base.strip()
+            has_specifier = False
+            marker_suffix = f";{marker_rest}" if sep else ""
+
         # Skip deps that already have version constraints
-        if re.search(r"[<>=!~]", stripped):
+        if has_specifier:
             continue
 
-        if stripped.startswith("microsoft-agents-a365-"):
+        if name.startswith("microsoft-agents-a365-"):
             # Pin internal deps to exact build version
-            deps[i] = f"{stripped} == {package_version}"
+            deps[i] = f"{name} == {package_version}{marker_suffix}"
             changed = True
         else:
             # Apply root constraint for external deps
-            normalized = stripped.lower().replace("_", "-")
+            normalized = name.lower().replace("_", "-")
             if normalized in root_constraints:
-                deps[i] = root_constraints[normalized]
+                deps[i] = f"{root_constraints[normalized]}{marker_suffix}"
                 changed = True
             else:
                 print(
-                    f"Warning: No constraint found for bare dependency '{stripped}'. "
+                    f"Warning: No constraint found for bare dependency '{name}'. "
                     f"It will be published without a version constraint.",
                     file=sys.stderr,
                 )

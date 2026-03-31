@@ -145,16 +145,10 @@ class TestParseRootConstraints:
         assert constraints == {}
 
 
-# Only run build_backend tests if tomlkit is available
-try:
-    import tomlkit
-
-    _has_tomlkit = True
-except ImportError:
-    _has_tomlkit = False
+import tomlkit  # noqa: E402
+from setup_utils import _has_version_constraint, get_dynamic_dependencies  # noqa: E402
 
 
-@pytest.mark.skipif(not _has_tomlkit, reason="tomlkit not installed")
 class TestApplyConstraints:
     """Tests for build_backend._apply_constraints."""
 
@@ -370,3 +364,161 @@ class TestApplyConstraints:
 
         result = self.build_backend._apply_constraints(pkg_toml)
         assert result is None
+
+    def test_preserves_environment_markers(self) -> None:
+        """Deps with environment markers but no version spec get constraints applied."""
+        pkg_toml = self._write_pkg_toml("""\
+            [project]
+            name = "pkg-a"
+            dependencies = [
+                'aiohttp ; python_version < "3.13"',
+            ]
+        """)
+
+        self.build_backend._apply_constraints(pkg_toml)
+
+        doc = tomlkit.parse(pkg_toml.read_text(encoding="utf-8"))
+        deps = list(doc["project"]["dependencies"])
+        # Should get the root constraint AND preserve the marker
+        assert len(deps) == 1
+        assert "aiohttp >= 3.8.0" in deps[0]
+        assert "python_version" in deps[0]
+
+    def test_marker_only_dep_not_treated_as_constrained(self) -> None:
+        """A dep with only a marker (no version spec) should not be skipped."""
+        pkg_toml = self._write_pkg_toml("""\
+            [project]
+            name = "pkg-a"
+            dependencies = [
+                'pydantic ; sys_platform == "linux"',
+            ]
+        """)
+
+        original = self.build_backend._apply_constraints(pkg_toml)
+        # Should be treated as bare dep and get root constraint applied
+        assert original is not None
+
+        doc = tomlkit.parse(pkg_toml.read_text(encoding="utf-8"))
+        deps = list(doc["project"]["dependencies"])
+        assert "pydantic >= 2.0.0" in deps[0]
+
+
+class TestHasVersionConstraint:
+    """Tests for _has_version_constraint with packaging.requirements.Requirement."""
+
+    def test_bare_dep(self) -> None:
+        assert _has_version_constraint("pydantic") is False
+
+    def test_dep_with_specifier(self) -> None:
+        assert _has_version_constraint("pydantic >= 2.0.0") is True
+
+    def test_dep_with_exact(self) -> None:
+        assert _has_version_constraint("pydantic == 2.1.0") is True
+
+    def test_dep_with_compatible(self) -> None:
+        assert _has_version_constraint("pydantic ~= 2.0") is True
+
+    def test_dep_with_marker_only(self) -> None:
+        """Marker-only deps should NOT be treated as version-constrained."""
+        assert _has_version_constraint('pydantic ; python_version < "3.12"') is False
+
+    def test_dep_with_marker_and_specifier(self) -> None:
+        """Deps with both specifier and marker should be constrained."""
+        assert _has_version_constraint('pydantic >= 2.0 ; python_version >= "3.9"') is True
+
+    def test_dep_with_extras(self) -> None:
+        """Extras alone don't count as a version constraint."""
+        assert _has_version_constraint("httpx[http2]") is False
+
+    def test_dep_with_extras_and_specifier(self) -> None:
+        assert _has_version_constraint("httpx[http2] >= 0.27.0") is True
+
+
+class TestGetDynamicDependencies:
+    """Tests for get_dynamic_dependencies with robust Requirement parsing."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Create a minimal monorepo root for get_dynamic_dependencies tests."""
+        self.root_dir = tmp_path / "repo"
+        self.root_dir.mkdir()
+
+        root_toml = self.root_dir / "pyproject.toml"
+        root_toml.write_text(
+            textwrap.dedent("""\
+                [tool.uv.workspace]
+                members = ["libraries/*"]
+
+                [tool.uv]
+                constraint-dependencies = [
+                    "pydantic >= 2.0.0",
+                    "aiohttp >= 3.8.0",
+                ]
+            """),
+            encoding="utf-8",
+        )
+
+        self.pkg_dir = self.root_dir / "libraries" / "pkg-a"
+        self.pkg_dir.mkdir(parents=True)
+
+        monkeypatch.setenv("AGENT365_PYTHON_SDK_PACKAGE_VERSION", "1.2.3")
+
+    def _write_pkg_toml(self, deps_toml: str) -> Path:
+        """Write a package pyproject.toml and return its path."""
+        pkg_toml = self.pkg_dir / "pyproject.toml"
+        pkg_toml.write_text(textwrap.dedent(deps_toml), encoding="utf-8")
+        return pkg_toml
+
+    def test_external_bare_dep_gets_constraint(self) -> None:
+        """Bare external deps get root constraint applied."""
+        pkg_toml = self._write_pkg_toml("""\
+            [project]
+            name = "pkg-a"
+            dependencies = ["pydantic"]
+        """)
+        result = get_dynamic_dependencies(pyproject_path=str(pkg_toml))
+        assert result == ["pydantic >= 2.0.0"]
+
+    def test_external_dep_with_marker_preserves_marker(self) -> None:
+        """External dep with marker gets constraint + marker preserved."""
+        pkg_toml = self._write_pkg_toml("""\
+            [project]
+            name = "pkg-a"
+            dependencies = ['pydantic ; python_version >= "3.9"']
+        """)
+        result = get_dynamic_dependencies(pyproject_path=str(pkg_toml))
+        assert len(result) == 1
+        assert "pydantic >= 2.0.0" in result[0]
+        assert "python_version" in result[0]
+
+    def test_external_dep_no_root_constraint_kept_as_is(self) -> None:
+        """External dep with no matching root constraint stays unchanged."""
+        pkg_toml = self._write_pkg_toml("""\
+            [project]
+            name = "pkg-a"
+            dependencies = ["unknown-package"]
+        """)
+        result = get_dynamic_dependencies(pyproject_path=str(pkg_toml))
+        assert result == ["unknown-package"]
+
+    def test_internal_dep_gets_pinned(self) -> None:
+        """Internal microsoft-agents-a365-* deps get pinned to build version."""
+        pkg_toml = self._write_pkg_toml("""\
+            [project]
+            name = "pkg-a"
+            dependencies = ["microsoft-agents-a365-runtime"]
+        """)
+        result = get_dynamic_dependencies(pyproject_path=str(pkg_toml))
+        assert result == ["microsoft-agents-a365-runtime >= 1.2.3"]
+
+    def test_internal_dep_with_marker(self) -> None:
+        """Internal dep with marker gets pinned and marker preserved."""
+        pkg_toml = self._write_pkg_toml("""\
+            [project]
+            name = "pkg-a"
+            dependencies = ['microsoft-agents-a365-runtime ; sys_platform == "linux"']
+        """)
+        result = get_dynamic_dependencies(pyproject_path=str(pkg_toml))
+        assert len(result) == 1
+        assert "microsoft-agents-a365-runtime >= 1.2.3" in result[0]
+        assert "sys_platform" in result[0]

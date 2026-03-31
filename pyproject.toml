@@ -48,6 +48,8 @@ dev-dependencies = [
     "pytest-asyncio",
     "pytest-mock",
     "ruff",
+    "tomlkit",
+    "setuptools",
     "tox>=4.0",
     "tox-uv>=1.0",
     "python-dotenv",
