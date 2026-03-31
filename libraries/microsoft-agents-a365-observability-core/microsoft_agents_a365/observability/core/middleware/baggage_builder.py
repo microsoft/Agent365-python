@@ -20,6 +20,8 @@ from ..constants import (
     GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
+    SERVER_ADDRESS_KEY,
+    SERVER_PORT_KEY,
     SERVICE_NAME_KEY,
     SESSION_DESCRIPTION_KEY,
     SESSION_ID_KEY,
@@ -165,6 +167,23 @@ class BaggageBuilder:
     def user_client_ip(self, value: str | None) -> "BaggageBuilder":
         """Set the user client IP baggage value."""
         self._set(GEN_AI_CALLER_CLIENT_IP_KEY, validate_and_normalize_ip(value))
+        return self
+
+    def invoke_agent_server(
+        self, address: str | None, port: int | None = None
+    ) -> "BaggageBuilder":
+        """Set the invoke agent server address and port baggage values.
+
+        Args:
+            address: The server address (hostname) of the target agent service.
+            port: Optional server port. Only recorded when different from 443.
+
+        Returns:
+            Self for method chaining
+        """
+        self._set(SERVER_ADDRESS_KEY, address)
+        if port is not None and port != 443:
+            self._set(SERVER_PORT_KEY, str(port))
         return self
 
     def conversation_id(self, value: str | None) -> "BaggageBuilder":

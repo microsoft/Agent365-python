@@ -49,6 +49,7 @@ from .utils import get_sdk_version
 
 if TYPE_CHECKING:
     from .agent_details import AgentDetails
+    from .span_details import SpanDetails
 
 # Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
 logger = logging.getLogger(__name__)
@@ -93,32 +94,28 @@ class OpenTelemetryScope:
 
     def __init__(
         self,
-        kind: "str | SpanKind",
         operation_name: str,
         activity_name: str,
         agent_details: "AgentDetails | None" = None,
-        parent_context: Context | None = None,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
+        span_details: "SpanDetails | None" = None,
     ):
         """Initialize the OpenTelemetry scope.
 
         Args:
-            kind: The kind of activity. Accepts a string (e.g. ``"Client"``,
-                ``"Server"``, ``"Internal"``) or an ``opentelemetry.trace.SpanKind``
-                enum value directly.
             operation_name: The name of the operation being traced
             activity_name: The name of the activity for display purposes
             agent_details: Optional agent details
-            parent_context: Optional OpenTelemetry Context used to link this span to an
-                upstream operation. Use ``extract_context_from_headers()`` to extract a
-                Context from HTTP headers containing W3C traceparent.
-            start_time: Optional explicit start time as a datetime object.
-                Useful when recording an operation after it has already completed.
-            end_time: Optional explicit end time as a datetime object.
-                When provided, the span will use this timestamp when disposed
-                instead of the current wall-clock time.
+            span_details: Optional span configuration including parent context,
+                start/end times, span kind, and span links. Subclasses may override
+                ``span_details.span_kind`` before calling this constructor;
+                defaults to ``SpanKind.CLIENT``.
         """
+        parent_context = span_details.parent_context if span_details else None
+        start_time = span_details.start_time if span_details else None
+        end_time = span_details.end_time if span_details else None
+        span_links = span_details.span_links if span_details else None
+        kind = span_details.span_kind if span_details and span_details.span_kind else SpanKind.CLIENT
+
         self._span: Span | None = None
         self._custom_start_time: datetime | None = start_time
         self._custom_end_time: datetime | None = end_time
@@ -130,20 +127,8 @@ class OpenTelemetryScope:
         if self._is_telemetry_enabled():
             tracer = self._get_tracer()
 
-            # Resolve activity_kind from either a SpanKind enum or a string
-            if isinstance(kind, SpanKind):
-                activity_kind = kind
-            else:
-                # Map string kind to SpanKind enum
-                activity_kind = SpanKind.INTERNAL
-                if kind.lower() == "client":
-                    activity_kind = SpanKind.CLIENT
-                elif kind.lower() == "server":
-                    activity_kind = SpanKind.SERVER
-                elif kind.lower() == "producer":
-                    activity_kind = SpanKind.PRODUCER
-                elif kind.lower() == "consumer":
-                    activity_kind = SpanKind.CONSUMER
+            # Resolve activity_kind from SpanKind enum
+            activity_kind = kind if isinstance(kind, SpanKind) else SpanKind.CLIENT
 
             # Get context for parent relationship
             # If parent_context is provided, use it directly
@@ -158,6 +143,7 @@ class OpenTelemetryScope:
                 kind=activity_kind,
                 context=span_context,
                 start_time=otel_start_time,
+                links=span_links,
             )
 
             # Log span creation

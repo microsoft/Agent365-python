@@ -93,25 +93,20 @@ class InvokeAgentScope(OpenTelemetryScope):
         if agent_details.agent_name:
             activity_name = f"{INVOKE_AGENT_OPERATION_NAME} {agent_details.agent_name}"
 
-        kind = SpanKind.CLIENT
-        parent_context = None
-        start_time = None
-        end_time = None
-        if span_details is not None:
-            if span_details.span_kind is not None:
-                kind = span_details.span_kind
-            parent_context = span_details.parent_context
-            start_time = span_details.start_time
-            end_time = span_details.end_time
+        # spanKind defaults to CLIENT; allow override via span_details
+        resolved_span_details = SpanDetails(
+            span_kind=span_details.span_kind if span_details and span_details.span_kind else SpanKind.CLIENT,
+            parent_context=span_details.parent_context if span_details else None,
+            start_time=span_details.start_time if span_details else None,
+            end_time=span_details.end_time if span_details else None,
+            span_links=span_details.span_links if span_details else None,
+        ) if span_details else SpanDetails(span_kind=SpanKind.CLIENT)
 
         super().__init__(
-            kind=kind,
             operation_name=INVOKE_AGENT_OPERATION_NAME,
             activity_name=activity_name,
             agent_details=agent_details,
-            parent_context=parent_context,
-            start_time=start_time,
-            end_time=end_time,
+            span_details=resolved_span_details,
         )
 
         self.set_tag_maybe(SESSION_ID_KEY, request.session_id)

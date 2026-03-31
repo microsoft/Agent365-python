@@ -25,6 +25,8 @@ from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
+    SERVER_ADDRESS_KEY,
+    SERVER_PORT_KEY,
 )
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -236,6 +238,38 @@ class TestInvokeAgentScope(unittest.TestCase):
             SpanKind.SERVER,
             "InvokeAgentScope should create SERVER spans when span_kind parameter is set",
         )
+
+    def test_span_processor_propagates_server_baggage_for_invoke_agent_span(self):
+        """Test that SpanProcessor propagates server address/port baggage onto invoke_agent spans."""
+        from microsoft_agents_a365.observability.core.middleware.baggage_builder import (
+            BaggageBuilder,
+        )
+
+        server_address = "myagent.azurewebsites.net"
+        server_port = 8443
+
+        # Use InvokeAgentScopeDetails without endpoint so the span processor
+        # propagates server address/port from baggage (not from endpoint).
+        scope_details_no_endpoint = InvokeAgentScopeDetails()
+
+        # Set server address/port in baggage, then start an invoke_agent span
+        with BaggageBuilder().invoke_agent_server(server_address, server_port).build():
+            scope = InvokeAgentScope.start(
+                self.test_request,
+                scope_details_no_endpoint,
+                self.agent_details,
+            )
+            if scope is not None:
+                scope.dispose()
+
+        # Processor should propagate server baggage onto the span
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+
+        span = finished_spans[-1]
+        span_attributes = getattr(span, "attributes", {}) or {}
+        self.assertEqual(span_attributes.get(SERVER_ADDRESS_KEY), server_address)
+        self.assertEqual(span_attributes.get(SERVER_PORT_KEY), str(server_port))
 
 
 if __name__ == "__main__":

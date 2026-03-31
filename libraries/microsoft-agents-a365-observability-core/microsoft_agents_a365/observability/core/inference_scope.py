@@ -3,6 +3,8 @@
 
 from typing import List
 
+from opentelemetry.trace import SpanKind
+
 from .agent_details import AgentDetails
 from .constants import (
     CHANNEL_LINK_KEY,
@@ -74,22 +76,20 @@ class InferenceScope(OpenTelemetryScope):
             user_details: Optional human user details
             span_details: Optional span configuration (parent context, timing)
         """
-        parent_context = None
-        start_time = None
-        end_time = None
-        if span_details is not None:
-            parent_context = span_details.parent_context
-            start_time = span_details.start_time
-            end_time = span_details.end_time
+        # spanKind for InferenceScope is always CLIENT
+        resolved_span_details = SpanDetails(
+            span_kind=SpanKind.CLIENT,
+            parent_context=span_details.parent_context if span_details else None,
+            start_time=span_details.start_time if span_details else None,
+            end_time=span_details.end_time if span_details else None,
+            span_links=span_details.span_links if span_details else None,
+        ) if span_details else SpanDetails(span_kind=SpanKind.CLIENT)
 
         super().__init__(
-            kind="Client",
             operation_name=details.operationName.value,
             activity_name=f"{details.operationName.value} {details.model}",
             agent_details=agent_details,
-            parent_context=parent_context,
-            start_time=start_time,
-            end_time=end_time,
+            span_details=resolved_span_details,
         )
 
         if request.content:
