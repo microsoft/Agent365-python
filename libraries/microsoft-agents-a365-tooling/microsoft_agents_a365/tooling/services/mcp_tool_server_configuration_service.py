@@ -29,15 +29,16 @@ from urllib.parse import urlparse
 
 # Third-party imports
 import aiohttp
-from microsoft_agents.hosting.core import TurnContext
+from microsoft_agents.hosting.core import Authorization, TurnContext
 
 # Local imports
 from ..models import ChatHistoryMessage, ChatMessageRequest, MCPServerConfig, ToolOptions
 from ..utils import Constants
 from ..utils.utility import (
-    get_tooling_gateway_for_digital_worker,
     build_mcp_server_url,
     get_chat_history_endpoint,
+    get_tooling_gateway_for_digital_worker,
+    resolve_token_scope_for_server,
 )
 
 # Runtime Imports
@@ -89,22 +90,38 @@ class McpToolServerConfigurationService:
     # --------------------------------------------------------------------------
 
     async def list_tool_servers(
-        self, agentic_app_id: str, auth_token: str, options: Optional[ToolOptions] = None
+        self,
+        agentic_app_id: str,
+        auth_token: str,
+        options: Optional[ToolOptions] = None,
+        authorization: Optional[Authorization] = None,
+        auth_handler_name: Optional[str] = None,
+        turn_context: Optional[TurnContext] = None,
     ) -> List[MCPServerConfig]:
         """
         Gets the list of MCP Servers that are configured for the agent.
 
+        When ``authorization``, ``auth_handler_name``, and ``turn_context`` are all provided,
+        per-audience OAuth tokens are acquired for each server after discovery:
+        - V1 servers (no ``audience`` field) share the shared ATG token (one exchange).
+        - V2 servers each receive a token scoped to their own audience GUID.
+
         Args:
             agentic_app_id: Agentic App ID for the agent.
-            auth_token: Authentication token to access the MCP servers.
+            auth_token: Authentication token used for gateway discovery.
             options: Optional ToolOptions instance containing optional parameters.
+            authorization: Optional Authorization context for per-audience token exchange.
+            auth_handler_name: Optional auth handler name used with ``authorization``.
+            turn_context: Optional TurnContext used with ``authorization``.
 
         Returns:
-            List[MCPServerConfig]: Returns the list of MCP Servers that are configured.
+            List[MCPServerConfig]: Returns the list of MCP Servers that are configured,
+            each with an ``Authorization`` header attached when auth context is provided.
 
         Raises:
             ValueError: If required parameters are invalid or empty.
-            Exception: If there's an error communicating with the tooling gateway.
+            Exception: If there's an error communicating with the tooling gateway or
+                       a per-audience token exchange fails.
         """
         # Validate input parameters
         self._validate_input_parameters(agentic_app_id, auth_token)
@@ -117,9 +134,17 @@ class McpToolServerConfigurationService:
 
         # Determine configuration source based on environment
         if self._is_development_scenario():
-            return self._load_servers_from_manifest()
+            servers = self._load_servers_from_manifest()
         else:
-            return await self._load_servers_from_gateway(agentic_app_id, auth_token, options)
+            servers = await self._load_servers_from_gateway(agentic_app_id, auth_token, options)
+
+        # Acquire per-audience tokens and attach Authorization headers when auth context provided
+        if authorization is not None and auth_handler_name is not None and turn_context is not None:
+            servers = await self._attach_per_audience_tokens(
+                servers, authorization, auth_handler_name, turn_context
+            )
+
+        return servers
 
     # --------------------------------------------------------------------------
     # ENVIRONMENT DETECTION
@@ -137,6 +162,72 @@ class McpToolServerConfigurationService:
         is_dev = environment.lower() == "development"
         self._logger.debug(f"Environment: {environment}, Development scenario: {is_dev}")
         return is_dev
+
+    async def _attach_per_audience_tokens(
+        self,
+        servers: List[MCPServerConfig],
+        authorization: Authorization,
+        auth_handler_name: str,
+        turn_context: TurnContext,
+    ) -> List[MCPServerConfig]:
+        """
+        Acquire one OAuth token per unique audience and attach an ``Authorization: Bearer``
+        header to each server's headers.
+
+        V1 servers (no ``audience`` field, or audience matching the shared ATG AppId) all
+        share the same ATG-scoped token (one exchange). V2 servers each receive a token
+        scoped to their own audience GUID.
+
+        Args:
+            servers: List of MCP server configs returned from discovery.
+            authorization: Authorization context for token exchange.
+            auth_handler_name: Auth handler name to pass to the token exchange.
+            turn_context: TurnContext to pass to the token exchange.
+
+        Returns:
+            List[MCPServerConfig]: New list of server configs with ``Authorization`` headers set.
+
+        Raises:
+            Exception: If a token exchange fails for any server.
+        """
+        token_cache: Dict[str, str] = {}  # scope → bearer token
+        result: List[MCPServerConfig] = []
+
+        for server in servers:
+            scope = resolve_token_scope_for_server(server)
+
+            if scope not in token_cache:
+                self._logger.debug(
+                    f"Acquiring token for MCP server '{server.mcp_server_name}' (scope: {scope})"
+                )
+                token_result = await authorization.exchange_token(
+                    turn_context, [scope], auth_handler_name
+                )
+                if token_result is None or not token_result.token:
+                    raise Exception(
+                        f"Failed to obtain token for MCP server '{server.mcp_server_name}'"
+                        f" (scope: {scope})"
+                    )
+                token_cache[scope] = token_result.token
+
+            merged_headers: Dict[str, str] = dict(server.headers) if server.headers else {}
+            merged_headers[Constants.Headers.AUTHORIZATION] = (
+                f"{Constants.Headers.BEARER_PREFIX} {token_cache[scope]}"
+            )
+
+            result.append(
+                MCPServerConfig(
+                    mcp_server_name=server.mcp_server_name,
+                    mcp_server_unique_name=server.mcp_server_unique_name,
+                    url=server.url,
+                    headers=merged_headers,
+                    audience=server.audience,
+                    scope=server.scope,
+                    publisher=server.publisher,
+                )
+            )
+
+        return result
 
     # --------------------------------------------------------------------------
     # DEVELOPMENT: MANIFEST-BASED CONFIGURATION
@@ -481,6 +572,9 @@ class McpToolServerConfigurationService:
                 mcp_server_name=mcp_server_name,
                 mcp_server_unique_name=mcp_server_unique_name,
                 url=final_url,
+                audience=server_element.get("audience"),
+                scope=server_element.get("scope"),
+                publisher=server_element.get("publisher"),
             )
 
         except Exception:
@@ -518,6 +612,9 @@ class McpToolServerConfigurationService:
                 mcp_server_name=mcp_server_name,
                 mcp_server_unique_name=mcp_server_unique_name,
                 url=final_url,
+                audience=server_element.get("audience"),
+                scope=server_element.get("scope"),
+                publisher=server_element.get("publisher"),
             )
 
         except Exception:

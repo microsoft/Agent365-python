@@ -5,7 +5,13 @@
 Provides utility functions for the Tooling components.
 """
 
+from __future__ import annotations
+
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..models.mcp_server_config import MCPServerConfig
 
 
 # Constants for base URLs
@@ -16,6 +22,9 @@ CHAT_HISTORY_ENDPOINT_PATH = "/agents/real-time-threat-protection/chat-message"
 
 PPAPI_TOKEN_SCOPE = "https://api.powerplatform.com"
 PROD_MCP_PLATFORM_AUTHENTICATION_SCOPE = "ea9ffc3e-8a23-4a7d-836d-234d7c7565c1/.default"
+
+# Shared ATG AppId — V1 servers (no audience field) use this scope
+ATG_APP_ID = "ea9ffc3e-8a23-4a7d-836d-234d7c7565c1"
 
 
 def get_tooling_gateway_for_digital_worker(agentic_app_id: str) -> str:
@@ -104,3 +113,26 @@ def get_chat_history_endpoint() -> str:
         str: The chat history endpoint URL.
     """
     return f"{_get_mcp_platform_base_url()}{CHAT_HISTORY_ENDPOINT_PATH}"
+
+
+def resolve_token_scope_for_server(server: MCPServerConfig) -> str:
+    """
+    Resolve the OAuth scope to request for a given MCP server.
+
+    V2 servers carry their own audience GUID in the ``audience`` field and receive
+    a token scoped to that GUID. V1 servers (no audience, audience equals the shared
+    ATG AppId, or audience starting with ``api://``) fall back to the shared ATG scope.
+
+    Args:
+        server: The MCP server configuration to resolve the scope for.
+
+    Returns:
+        str: The OAuth scope string (e.g. ``"<guid>/.default"``).
+    """
+    if (
+        server.audience is not None
+        and server.audience != ATG_APP_ID
+        and not server.audience.startswith("api://")
+    ):
+        return f"{server.audience}/.default"
+    return f"{ATG_APP_ID}/.default"

@@ -94,11 +94,15 @@ class McpToolRegistrationService:
 
             options = ToolOptions(orchestrator_name=self._orchestrator_name)
 
-            # Get MCP server configurations
+            # Get MCP server configurations — pass auth context so each server receives
+            # its own per-audience Authorization token (V1 = shared ATG, V2 = per-GUID).
             server_configs = await self._mcp_server_configuration_service.list_tool_servers(
                 agentic_app_id=agentic_app_id,
                 auth_token=auth_token,
                 options=options,
+                authorization=auth,
+                auth_handler_name=auth_handler_name,
+                turn_context=turn_context,
             )
 
             self._logger.info(f"Loaded {len(server_configs)} MCP server configurations")
@@ -112,16 +116,15 @@ class McpToolRegistrationService:
                 server_name = config.mcp_server_name or config.mcp_server_unique_name
 
                 try:
-                    # Prepare auth headers
-                    headers = {}
-                    if auth_token:
-                        headers[Constants.Headers.AUTHORIZATION] = (
-                            f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                    # Merge base (non-auth) headers with per-server headers from list_tool_servers.
+                    # server.headers already contains the correct per-audience Authorization token.
+                    base_headers = {
+                        Constants.Headers.USER_AGENT: Utility.get_user_agent_header(
+                            self._orchestrator_name
                         )
-
-                    headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
-                        self._orchestrator_name
-                    )
+                    }
+                    server_headers = dict(config.headers) if config.headers else {}
+                    headers = {**base_headers, **server_headers}  # server auth takes precedence
 
                     # Create httpx client with auth headers configured
                     http_client = httpx.AsyncClient(
