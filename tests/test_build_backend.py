@@ -18,11 +18,9 @@ Validates that:
 
 from __future__ import annotations
 
-import os
 import sys
 import textwrap
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -31,7 +29,7 @@ _helper_dir = str(Path(__file__).resolve().parent.parent / "versioning" / "helpe
 if _helper_dir not in sys.path:
     sys.path.insert(0, _helper_dir)
 
-from setup_utils import _find_root_pyproject, _parse_root_constraints
+from setup_utils import _find_root_pyproject, _parse_root_constraints  # noqa: E402
 
 
 class TestFindRootPyproject:
