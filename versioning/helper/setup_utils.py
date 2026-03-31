@@ -103,12 +103,65 @@ def get_next_major_version(base_version: str) -> str:
         return base_version
 
 
-def _parse_root_constraints(root_pyproject_path: Path) -> dict[str, str]:
+def _find_root_pyproject(start_path: Path | None = None) -> Path | None:
     """
-    Parse constraint-dependencies from the root pyproject.toml.
+    Walk up from start_path to find the monorepo root pyproject.toml.
 
-    Returns a dict mapping normalized package names to their full constraint strings.
-    Example: {"semantic-kernel": "semantic-kernel >= 1.39.3"}
+    The root is identified by having [tool.uv.workspace] or
+    [tool.uv.constraint-dependencies].
+
+    Args:
+        start_path: A path to start walking up from (e.g. a package's pyproject.toml).
+                    If None, starts from the current working directory.
+
+    Returns:
+        Path to the root pyproject.toml, or None if not found.
+    """
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return None
+
+    if start_path is None:
+        start_path = Path.cwd()
+    else:
+        start_path = Path(start_path).resolve()
+
+    # If start_path is a file, begin from its parent directory
+    if start_path.is_file():
+        start_path = start_path.parent
+
+    for parent in [start_path] + list(start_path.parents):
+        candidate = parent / "pyproject.toml"
+        if not candidate.exists():
+            continue
+        try:
+            with open(candidate, "rb") as f:
+                data = tomllib.load(f)
+            uv_cfg = data.get("tool", {}).get("uv", {})
+            if "workspace" in uv_cfg or "constraint-dependencies" in uv_cfg:
+                return candidate
+        except Exception:
+            continue
+    return None
+
+
+def _parse_root_constraints(start_path: Path | None = None) -> dict[str, str]:
+    """
+    Parse constraint-dependencies from the monorepo root pyproject.toml.
+
+    Walks up from start_path to find the root, then parses constraints.
+
+    Args:
+        start_path: A path to start walking up from (e.g. a package's pyproject.toml).
+                    If None, starts from the current working directory.
+
+    Returns:
+        A dict mapping normalized package names to their full constraint strings.
+        Example: {"semantic-kernel": "semantic-kernel >= 1.39.3"}
     """
     try:
         import tomllib
@@ -117,6 +170,10 @@ def _parse_root_constraints(root_pyproject_path: Path) -> dict[str, str]:
             import tomli as tomllib  # type: ignore[no-redef]
         except ImportError:
             return {}
+
+    root_pyproject_path = _find_root_pyproject(start_path)
+    if root_pyproject_path is None:
+        return {}
 
     try:
         with open(root_pyproject_path, "rb") as f:
@@ -247,9 +304,8 @@ def get_dynamic_dependencies(
 
     # Load centralized constraints from root pyproject.toml so that published
     # packages enforce the same minimum versions used during development.
-    pkg_pyproject = Path(pyproject_path).resolve()
-    root_pyproject = pkg_pyproject.parent.parent.parent / "pyproject.toml"
-    root_constraints = _parse_root_constraints(root_pyproject)
+    # Uses walk-up approach to find the root, independent of directory depth.
+    root_constraints = _parse_root_constraints(Path(pyproject_path).resolve())
 
     # Update internal package versions dynamically
     updated_dependencies = []

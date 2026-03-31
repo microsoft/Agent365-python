@@ -7,7 +7,7 @@ version constraints into published wheel metadata.
 
 Usage in package pyproject.toml:
   [build-system]
-  requires = ["setuptools>=68", "wheel", "tzdata"]
+  requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit"]
   build-backend = "build_backend"
   backend-path = ["../../versioning/helper"]
 """
@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import os
 import re
-import tomllib
+import sys
 from pathlib import Path
 
+import tomlkit
+from setup_utils import _parse_root_constraints
 from setuptools.build_meta import (
     build_editable,
     build_sdist,
@@ -42,60 +44,23 @@ __all__ = [
 ]
 
 
-def _load_root_constraints() -> dict[str, str]:
-    """Load constraint-dependencies from the monorepo root pyproject.toml."""
-    root = Path("pyproject.toml").resolve()
-    # Walk up to find the root (contains [tool.uv.workspace])
-    for parent in [root.parent] + list(root.parents):
-        candidate = parent / "pyproject.toml"
-        if not candidate.exists():
-            continue
-        with open(candidate, "rb") as f:
-            data = tomllib.load(f)
-        uv_cfg = data.get("tool", {}).get("uv", {})
-        if "workspace" in uv_cfg or "constraint-dependencies" in uv_cfg:
-            constraints_list = uv_cfg.get("constraint-dependencies", [])
-            constraints: dict[str, str] = {}
-            for entry in constraints_list:
-                if not isinstance(entry, str):
-                    continue
-                pkg_name = re.split(r"\s*[<>=!~]", entry, maxsplit=1)[0].strip()
-                normalized = pkg_name.lower().replace("_", "-")
-                constraints[normalized] = entry
-            return constraints
-    return {}
-
-
 def _get_package_version() -> str:
     """Get the package version from the environment variable set by CI/CD."""
     return os.environ.get("AGENT365_PYTHON_SDK_PACKAGE_VERSION", "0.0.0")
 
 
-def _apply_constraints(pyproject_path: Path) -> str | None:
+def _apply_constraints_to_list(
+    deps: tomlkit.items.Array,
+    root_constraints: dict[str, str],
+    package_version: str,
+) -> bool:
     """
-    Rewrite pyproject.toml to include version constraints on all bare deps.
+    Apply version constraints to a tomlkit dependency array in-place.
 
-    - Internal deps (microsoft-agents-a365-*) get pinned to == current build version
-    - External deps get the centralized constraint from root pyproject.toml
-
-    Returns the original content so it can be restored, or None if no changes needed.
+    Returns True if any changes were made.
     """
-    original = pyproject_path.read_text(encoding="utf-8")
-
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
-
-    deps = data.get("project", {}).get("dependencies", [])
-    if not deps:
-        return None
-
-    root_constraints = _load_root_constraints()
-    package_version = _get_package_version()
-
-    modified = original
     changed = False
-
-    for dep in deps:
+    for i, dep in enumerate(deps):
         if not isinstance(dep, str):
             continue
         stripped = dep.strip()
@@ -106,27 +71,64 @@ def _apply_constraints(pyproject_path: Path) -> str | None:
 
         if stripped.startswith("microsoft-agents-a365-"):
             # Pin internal deps to exact build version
-            constrained = f"{stripped} == {package_version}"
+            deps[i] = f"{stripped} == {package_version}"
+            changed = True
         else:
             # Apply root constraint for external deps
             normalized = stripped.lower().replace("_", "-")
             if normalized in root_constraints:
-                constrained = root_constraints[normalized]
+                deps[i] = root_constraints[normalized]
+                changed = True
             else:
-                continue
+                print(
+                    f"Warning: No constraint found for bare dependency '{stripped}'. "
+                    f"It will be published without a version constraint.",
+                    file=sys.stderr,
+                )
+    return changed
 
-        # Replace the bare dep name with the constrained version in the TOML
-        pattern = rf'(\s*")({re.escape(dep)})(")'
-        replacement = rf"\g<1>{constrained}\g<3>"
-        new_modified = re.sub(pattern, replacement, modified)
-        if new_modified != modified:
-            modified = new_modified
-            changed = True
+
+def _apply_constraints(pyproject_path: Path) -> str | None:
+    """
+    Rewrite pyproject.toml to include version constraints on all bare deps.
+
+    Uses tomlkit for safe TOML round-tripping that preserves comments,
+    formatting, and handles multiline arrays and alternate quoting styles.
+
+    - Internal deps (microsoft-agents-a365-*) get pinned to == current build version
+    - External deps get the centralized constraint from root pyproject.toml
+    - Both [project].dependencies and [project.optional-dependencies] are processed
+
+    Returns the original content so it can be restored, or None if no changes needed.
+    """
+    original = pyproject_path.read_text(encoding="utf-8")
+    doc = tomlkit.parse(original)
+
+    project = doc.get("project")
+    if project is None:
+        return None
+
+    root_constraints = _parse_root_constraints(pyproject_path)
+    package_version = _get_package_version()
+
+    changed = False
+
+    # Process [project].dependencies
+    deps = project.get("dependencies")
+    if deps is not None:
+        changed |= _apply_constraints_to_list(deps, root_constraints, package_version)
+
+    # Process [project.optional-dependencies]
+    opt_deps = project.get("optional-dependencies")
+    if opt_deps is not None:
+        for group_name in opt_deps:
+            group = opt_deps[group_name]
+            changed |= _apply_constraints_to_list(group, root_constraints, package_version)
 
     if not changed:
         return None
 
-    pyproject_path.write_text(modified, encoding="utf-8")
+    pyproject_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
     return original
 
 
