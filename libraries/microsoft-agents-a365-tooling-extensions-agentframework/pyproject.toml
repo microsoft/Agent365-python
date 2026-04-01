@@ -1,6 +1,7 @@
 [build-system]
-requires = ["setuptools>=68", "wheel", "tzdata"]
-build-backend = "setuptools.build_meta"
+requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit", "packaging"]
+build-backend = "build_backend"
+backend-path = ["../../versioning/helper"]
 
 [project]
 name = "microsoft-agents-a365-tooling-extensions-agentframework"
