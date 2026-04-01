@@ -77,13 +77,17 @@ class InferenceScope(OpenTelemetryScope):
             span_details: Optional span configuration (parent context, timing)
         """
         # spanKind for InferenceScope is always CLIENT
-        resolved_span_details = SpanDetails(
-            span_kind=SpanKind.CLIENT,
-            parent_context=span_details.parent_context if span_details else None,
-            start_time=span_details.start_time if span_details else None,
-            end_time=span_details.end_time if span_details else None,
-            span_links=span_details.span_links if span_details else None,
-        ) if span_details else SpanDetails(span_kind=SpanKind.CLIENT)
+        resolved_span_details = (
+            SpanDetails(
+                span_kind=SpanKind.CLIENT,
+                parent_context=span_details.parent_context if span_details else None,
+                start_time=span_details.start_time if span_details else None,
+                end_time=span_details.end_time if span_details else None,
+                span_links=span_details.span_links if span_details else None,
+            )
+            if span_details
+            else SpanDetails(span_kind=SpanKind.CLIENT)
+        )
 
         super().__init__(
             operation_name=details.operationName.value,

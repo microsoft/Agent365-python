@@ -114,7 +114,17 @@ class OpenTelemetryScope:
         start_time = span_details.start_time if span_details else None
         end_time = span_details.end_time if span_details else None
         span_links = span_details.span_links if span_details else None
-        kind = span_details.span_kind if span_details and span_details.span_kind else SpanKind.CLIENT
+        kind = (
+            span_details.span_kind if span_details and span_details.span_kind else SpanKind.CLIENT
+        )
+        if not isinstance(kind, SpanKind):
+            logger.warning(
+                "span_details.span_kind has invalid type %s (value: %r); "
+                "falling back to SpanKind.CLIENT",
+                type(kind).__name__,
+                kind,
+            )
+            kind = SpanKind.CLIENT
 
         self._span: Span | None = None
         self._custom_start_time: datetime | None = start_time
@@ -127,8 +137,7 @@ class OpenTelemetryScope:
         if self._is_telemetry_enabled():
             tracer = self._get_tracer()
 
-            # Resolve activity_kind from SpanKind enum
-            activity_kind = kind if isinstance(kind, SpanKind) else SpanKind.CLIENT
+            activity_kind = kind
 
             # Get context for parent relationship
             # If parent_context is provided, use it directly

@@ -169,9 +169,7 @@ class BaggageBuilder:
         self._set(GEN_AI_CALLER_CLIENT_IP_KEY, validate_and_normalize_ip(value))
         return self
 
-    def invoke_agent_server(
-        self, address: str | None, port: int | None = None
-    ) -> "BaggageBuilder":
+    def invoke_agent_server(self, address: str | None, port: int | None = None) -> "BaggageBuilder":
         """Set the invoke agent server address and port baggage values.
 
         Args:

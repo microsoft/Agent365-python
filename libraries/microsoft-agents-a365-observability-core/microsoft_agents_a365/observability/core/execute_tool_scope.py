@@ -78,13 +78,19 @@ class ExecuteToolScope(OpenTelemetryScope):
             span_details: Optional span configuration (parent context, timing, kind)
         """
         # spanKind defaults to INTERNAL; allow override via span_details
-        resolved_span_details = SpanDetails(
-            span_kind=span_details.span_kind if span_details and span_details.span_kind else SpanKind.INTERNAL,
-            parent_context=span_details.parent_context if span_details else None,
-            start_time=span_details.start_time if span_details else None,
-            end_time=span_details.end_time if span_details else None,
-            span_links=span_details.span_links if span_details else None,
-        ) if span_details else SpanDetails(span_kind=SpanKind.INTERNAL)
+        resolved_span_details = (
+            SpanDetails(
+                span_kind=span_details.span_kind
+                if span_details and span_details.span_kind
+                else SpanKind.INTERNAL,
+                parent_context=span_details.parent_context if span_details else None,
+                start_time=span_details.start_time if span_details else None,
+                end_time=span_details.end_time if span_details else None,
+                span_links=span_details.span_links if span_details else None,
+            )
+            if span_details
+            else SpanDetails(span_kind=SpanKind.INTERNAL)
+        )
 
         super().__init__(
             operation_name=EXECUTE_TOOL_OPERATION_NAME,
