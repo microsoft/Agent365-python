@@ -33,6 +33,7 @@ from .constants import (
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
     GEN_AI_AGENT_PLATFORM_ID_KEY,
+    GEN_AI_AGENT_VERSION_KEY,
     GEN_AI_ICON_URI_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -178,6 +179,7 @@ class OpenTelemetryScope:
                     self.set_tag_maybe(
                         GEN_AI_AGENT_DESCRIPTION_KEY, agent_details.agent_description
                     )
+                    self.set_tag_maybe(GEN_AI_AGENT_VERSION_KEY, agent_details.agent_version)
                     self.set_tag_maybe(GEN_AI_AGENT_AUID_KEY, agent_details.agentic_user_id)
                     self.set_tag_maybe(GEN_AI_AGENT_EMAIL_KEY, agent_details.agentic_user_email)
                     self.set_tag_maybe(

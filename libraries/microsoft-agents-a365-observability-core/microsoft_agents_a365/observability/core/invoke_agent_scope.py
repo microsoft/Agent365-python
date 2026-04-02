@@ -17,6 +17,7 @@ from .constants import (
     GEN_AI_CALLER_AGENT_NAME_KEY,
     GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,
     GEN_AI_CALLER_AGENT_USER_ID_KEY,
+    GEN_AI_CALLER_AGENT_VERSION_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
@@ -161,6 +162,10 @@ class InvokeAgentScope(OpenTelemetryScope):
                 self.set_tag_maybe(
                     GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,
                     caller_agent_details.agent_platform_id,
+                )
+                self.set_tag_maybe(
+                    GEN_AI_CALLER_AGENT_VERSION_KEY,
+                    caller_agent_details.agent_version,
                 )
 
     def record_response(self, response: str) -> None:
