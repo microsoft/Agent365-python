@@ -11,6 +11,7 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
+    GEN_AI_AGENT_VERSION_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
     SERVER_ADDRESS_KEY,
     SERVER_PORT_KEY,
@@ -363,6 +364,27 @@ class TestBaggageBuilder(unittest.TestCase):
             current_baggage = baggage.get_all()
             self.assertEqual(current_baggage.get(SERVER_ADDRESS_KEY), address)
             self.assertIsNone(current_baggage.get(SERVER_PORT_KEY))
+
+    def test_agent_version_method(self):
+        """Test agent_version method sets agent version baggage."""
+        self.assertTrue(hasattr(self.builder, "agent_version"))
+        self.assertTrue(callable(self.builder.agent_version))
+
+        with self.builder.agent_version("1.0.0").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(GEN_AI_AGENT_VERSION_KEY), "1.0.0")
+
+    def test_agent_version_none_not_set(self):
+        """Test agent_version with None does not set baggage."""
+        with BaggageBuilder().agent_version(None).build():
+            current_baggage = baggage.get_all()
+            self.assertIsNone(current_baggage.get(GEN_AI_AGENT_VERSION_KEY))
+
+    def test_agent_version_whitespace_not_set(self):
+        """Test agent_version with whitespace-only value does not set baggage."""
+        with BaggageBuilder().agent_version("   ").build():
+            current_baggage = baggage.get_all()
+            self.assertIsNone(current_baggage.get(GEN_AI_AGENT_VERSION_KEY))
 
 
 if __name__ == "__main__":
