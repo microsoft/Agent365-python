@@ -323,7 +323,10 @@ class TestResolveTokenScopeForServer:
         server = self._make_server(
             audience="api://mcp-calendartools", scope="McpServers.Calendar.All"
         )
-        assert resolve_token_scope_for_server(server) == "api://mcp-calendartools/McpServers.Calendar.All"
+        assert (
+            resolve_token_scope_for_server(server)
+            == "api://mcp-calendartools/McpServers.Calendar.All"
+        )
 
     def test_v2_guid_audience_null_scope_falls_back_to_default(self):
         """V2: unique GUID audience + null scope → <guid>/.default (pre-consented)."""
@@ -420,11 +423,11 @@ class TestAttachPerAudienceTokens:
         guid1 = "aaaaaaaa-0000-0000-0000-000000000001"
         guid2 = "bbbbbbbb-0000-0000-0000-000000000002"
         servers = [
-            self._make_server("mail"),        # V1
-            self._make_server("cal1", guid1), # V2 guid1
-            self._make_server("cal2", guid2), # V2 guid2
-            self._make_server("files"),       # V1 (same scope as mail → no 2nd exchange)
-            self._make_server("cal3", guid1), # V2 guid1 again → no 2nd exchange
+            self._make_server("mail"),  # V1
+            self._make_server("cal1", guid1),  # V2 guid1
+            self._make_server("cal2", guid2),  # V2 guid2
+            self._make_server("files"),  # V1 (same scope as mail → no 2nd exchange)
+            self._make_server("cal3", guid1),  # V2 guid1 again → no 2nd exchange
         ]
 
         authorization = MagicMock()

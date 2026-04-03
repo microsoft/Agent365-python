@@ -161,7 +161,10 @@ class McpToolRegistrationService:
                         )
                     }
                     server_headers = dict(si.headers) if si.headers else {}
-                    headers = {**base_headers, **server_headers}  # per-audience token takes precedence
+                    headers = {
+                        **base_headers,
+                        **server_headers,
+                    }  # per-audience token takes precedence
 
                     # Create MCPServerStreamableHttpParams with proper configuration
                     params = MCPServerStreamableHttpParams(url=si.url, headers=headers)

@@ -119,7 +119,9 @@ class McpToolRegistrationService:
         # Get and process servers
         options = ToolOptions(orchestrator_name=self._orchestrator_name)
         servers = await self._mcp_server_configuration_service.list_tool_servers(
-            agentic_app_id, auth_token, options,
+            agentic_app_id,
+            auth_token,
+            options,
             authorization=auth,
             auth_handler_name=auth_handler_name,
             turn_context=context,
