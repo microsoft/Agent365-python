@@ -97,22 +97,13 @@ class TestExecuteToolScope(unittest.TestCase):
 
         self.span_exporter.clear()
 
-    def test_record_tool_input_method_exists(self):
-        """Test that record_tool_input method exists on ExecuteToolScope."""
+    def test_record_response_method_exists(self):
+        """Test that record_response method exists on ExecuteToolScope."""
         scope = ExecuteToolScope.start(Request(), self.tool_details, self.agent_details)
 
         if scope is not None:
-            self.assertTrue(hasattr(scope, "record_tool_input"))
-            self.assertTrue(callable(scope.record_tool_input))
-            scope.dispose()
-
-    def test_record_tool_output_method_exists(self):
-        """Test that record_tool_output method exists on ExecuteToolScope."""
-        scope = ExecuteToolScope.start(Request(), self.tool_details, self.agent_details)
-
-        if scope is not None:
-            self.assertTrue(hasattr(scope, "record_tool_output"))
-            self.assertTrue(callable(scope.record_tool_output))
+            self.assertTrue(hasattr(scope, "record_response"))
+            self.assertTrue(callable(scope.record_response))
             scope.dispose()
 
     def test_request_metadata_set_on_span(self):

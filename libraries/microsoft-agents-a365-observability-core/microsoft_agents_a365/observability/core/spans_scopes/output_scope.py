@@ -16,9 +16,9 @@ from ..message_utils import normalize_output_messages, serialize_messages
 from ..models.messages import (
     OutputMessage,
     OutputMessages,
-    OutputMessagesParam,
+    ToolOutputMessages,
 )
-from ..models.response import Response
+from ..models.response import Response, ResponseMessagesParam
 from ..models.user_details import UserDetails
 from ..opentelemetry_scope import OpenTelemetryScope
 from ..request import Request
@@ -94,14 +94,19 @@ class OutputScope(OpenTelemetryScope):
 
         self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
 
-        # Normalize response messages and extract inner messages for accumulation
-        normalized = normalize_output_messages(response.messages)
-        self._output_messages: list[OutputMessage] = list(normalized.messages)
-        self._output_messages_dirty = False
-
-        # Set initial output messages attribute as the full versioned wrapper
-        wrapper = OutputMessages(messages=self._output_messages)
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))
+        # Handle tool output messages vs regular output messages
+        if isinstance(response.messages, ToolOutputMessages):
+            # Tool output: serialize directly, no accumulation
+            self._output_messages: list[OutputMessage] = []
+            self._output_messages_dirty = False
+            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(response.messages))
+        else:
+            # Regular output: normalize and set up accumulation
+            normalized = normalize_output_messages(response.messages)
+            self._output_messages = list(normalized.messages)
+            self._output_messages_dirty = False
+            wrapper = OutputMessages(messages=self._output_messages)
+            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))
 
         # Set user details if provided
         if user_details:
@@ -113,18 +118,22 @@ class OutputScope(OpenTelemetryScope):
                 validate_and_normalize_ip(user_details.user_client_ip),
             )
 
-    def record_output_messages(self, messages: OutputMessagesParam) -> None:
+    def record_output_messages(self, messages: ResponseMessagesParam) -> None:
         """Records the output messages for telemetry tracking.
 
         Appends the provided messages to the accumulated output messages list.
-        Accepts plain strings (auto-wrapped as OTEL OutputMessage) or a versioned
-        OutputMessages wrapper.
+        Accepts plain strings (auto-wrapped as OTEL OutputMessage), a versioned
+        OutputMessages wrapper, or a ToolOutputMessages wrapper.
         The list is capped at _MAX_OUTPUT_MESSAGES to prevent unbounded memory growth.
         The updated attribute is flushed when the scope is disposed.
 
         Args:
-            messages: List of output message strings or an OutputMessages wrapper to append
+            messages: Plain strings, OutputMessages, or ToolOutputMessages to append
         """
+        if isinstance(messages, ToolOutputMessages):
+            # Tool output: serialize directly, overwrite attribute
+            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(messages))
+            return
         normalized = normalize_output_messages(messages)
         self._output_messages.extend(normalized.messages)
         if len(self._output_messages) > self._MAX_OUTPUT_MESSAGES:

@@ -23,7 +23,7 @@ from .constants import (
     USER_NAME_KEY,
 )
 from .message_utils import serialize_messages
-from .models.messages import ToolInputMessages, ToolOutputMessages
+from .models.messages import ToolOutputMessages
 from .models.user_details import UserDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
@@ -112,7 +112,7 @@ class ExecuteToolScope(OpenTelemetryScope):
 
         self.set_tag_maybe(GEN_AI_TOOL_NAME_KEY, tool_name)
         if arguments is not None:
-            self.record_tool_input(arguments)
+            self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, serialize_messages(arguments))
         self.set_tag_maybe(GEN_AI_TOOL_TYPE_KEY, tool_type)
         self.set_tag_maybe(GEN_AI_TOOL_CALL_ID_KEY, tool_call_id)
         self.set_tag_maybe(GEN_AI_TOOL_DESCRIPTION_KEY, description)
@@ -138,15 +138,7 @@ class ExecuteToolScope(OpenTelemetryScope):
                 validate_and_normalize_ip(user_details.user_client_ip),
             )
 
-    def record_tool_input(self, messages: ToolInputMessages) -> None:
-        """Record the tool input for telemetry tracking.
-
-        Args:
-            messages: A ToolInputMessages wrapper containing tool call requests
-        """
-        self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, serialize_messages(messages))
-
-    def record_tool_output(self, messages: ToolOutputMessages) -> None:
+    def record_response(self, messages: ToolOutputMessages) -> None:
         """Record the tool output for telemetry tracking.
 
         Args:
