@@ -89,6 +89,9 @@ class McpToolRegistrationService:
             agentic_app_id=agentic_app_id,
             auth_token=auth_token,
             options=options,
+            authorization=auth,
+            auth_handler_name=auth_handler_name,
+            turn_context=context,
         )
 
         self._logger.info(f"Loaded {len(mcp_server_configs)} MCP server configurations")
@@ -104,10 +107,6 @@ class McpToolRegistrationService:
 
         # Convert MCP server configs to McpToolset objects (only new ones)
         mcp_servers_info = []
-        mcp_server_headers = {
-            Constants.Headers.AUTHORIZATION: f"{Constants.Headers.BEARER_PREFIX} {auth_token}",
-            Constants.Headers.USER_AGENT: Utility.get_user_agent_header(self._orchestrator_name),
-        }
 
         for server_config in mcp_server_configs:
             # Skip if server URL already exists
@@ -119,10 +118,18 @@ class McpToolRegistrationService:
                 continue
 
             try:
+                base_headers = {
+                    Constants.Headers.USER_AGENT: Utility.get_user_agent_header(
+                        self._orchestrator_name
+                    )
+                }
+                server_headers = dict(server_config.headers) if server_config.headers else {}
+                headers = {**base_headers, **server_headers}  # per-audience token takes precedence
+
                 server_info = McpToolset(
                     connection_params=StreamableHTTPConnectionParams(
                         url=server_config.url,
-                        headers=mcp_server_headers,
+                        headers=headers,
                     )
                 )
 

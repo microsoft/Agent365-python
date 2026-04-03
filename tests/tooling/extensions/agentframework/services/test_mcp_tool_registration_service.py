@@ -57,12 +57,13 @@ class TestAddToolServersHttpxClientConfiguration:
 
     @pytest.fixture
     def mock_mcp_server_config(self):
-        """Create a mock MCP server configuration."""
+        """Create a mock V2 MCP server configuration (has GUID audience for per-audience token)."""
         config = Mock()
         config.mcp_server_name = "test-mcp-server"
         config.mcp_server_unique_name = "test-mcp-server-unique"
         config.url = "https://test-mcp-server.example.com/api"
         config.headers = None  # per-audience headers attached by list_tool_servers
+        config.audience = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"  # V2: GUID audience
         return config
 
     @pytest.fixture

@@ -119,22 +119,23 @@ class McpToolRegistrationService:
         # Get and process servers
         options = ToolOptions(orchestrator_name=self._orchestrator_name)
         servers = await self._mcp_server_configuration_service.list_tool_servers(
-            agentic_app_id, auth_token, options
+            agentic_app_id, auth_token, options,
+            authorization=auth,
+            auth_handler_name=auth_handler_name,
+            turn_context=context,
         )
         self._logger.info(f"🔧 Adding MCP tools from {len(servers)} servers")
 
         # Process each server (matching C# foreach pattern)
         for server in servers:
             try:
-                headers = {
-                    Constants.Headers.AUTHORIZATION: (
-                        f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
-                    ),
+                base_headers = {
+                    Constants.Headers.USER_AGENT: Utility.get_user_agent_header(
+                        self._orchestrator_name
+                    )
                 }
-
-                headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
-                    self._orchestrator_name
-                )
+                server_headers = dict(server.headers) if server.headers else {}
+                headers = {**base_headers, **server_headers}  # per-audience token takes precedence
 
                 # Use the URL from server (always populated by the configuration service)
                 server_url = server.url

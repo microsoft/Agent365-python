@@ -104,6 +104,9 @@ class McpToolRegistrationService:
             agentic_app_id=agentic_app_id,
             auth_token=auth_token,
             options=options,
+            authorization=auth,
+            auth_handler_name=auth_handler_name,
+            turn_context=context,
         )
 
         self._logger.info(f"Loaded {len(mcp_server_configs)} MCP server configurations")
@@ -118,6 +121,7 @@ class McpToolRegistrationService:
             server_info = MCPServerInfo(
                 name=server_name,
                 url=server_url,
+                headers=dict(server_config.headers) if server_config.headers else None,
             )
             mcp_servers_info.append(server_info)
 
@@ -149,16 +153,15 @@ class McpToolRegistrationService:
 
             if si.url not in existing_server_urls:
                 try:
-                    # Prepare headers with authorization
-                    headers = si.headers or {}
-                    if auth_token:
-                        headers[Constants.Headers.AUTHORIZATION] = (
-                            f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                    # Merge base headers with per-server headers from list_tool_servers.
+                    # si.headers already contains the correct per-audience Authorization token.
+                    base_headers = {
+                        Constants.Headers.USER_AGENT: Utility.get_user_agent_header(
+                            self._orchestrator_name
                         )
-
-                    headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
-                        self._orchestrator_name
-                    )
+                    }
+                    server_headers = dict(si.headers) if si.headers else {}
+                    headers = {**base_headers, **server_headers}  # per-audience token takes precedence
 
                     # Create MCPServerStreamableHttpParams with proper configuration
                     params = MCPServerStreamableHttpParams(url=si.url, headers=headers)

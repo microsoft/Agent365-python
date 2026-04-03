@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 # Constants for base URLs
-MCP_PLATFORM_PROD_BASE_URL = "https://agent365.svc.cloud.microsoft"
+MCP_PLATFORM_PROD_BASE_URL = "https://test.agent365.svc.cloud.dev.microsoft"
 
 # API endpoint paths
 CHAT_HISTORY_ENDPOINT_PATH = "/agents/real-time-threat-protection/chat-message"
@@ -25,6 +25,8 @@ PROD_MCP_PLATFORM_AUTHENTICATION_SCOPE = "ea9ffc3e-8a23-4a7d-836d-234d7c7565c1/.
 
 # Shared ATG AppId — V1 servers (no audience field) use this scope
 ATG_APP_ID = "ea9ffc3e-8a23-4a7d-836d-234d7c7565c1"
+# ATG AppId in Application ID URI form — also treated as V1
+ATG_APP_ID_URI = f"api://{ATG_APP_ID}"
 
 
 def get_tooling_gateway_for_digital_worker(agentic_app_id: str) -> str:
@@ -38,7 +40,7 @@ def get_tooling_gateway_for_digital_worker(agentic_app_id: str) -> str:
         str: The tooling gateway URL for the digital worker.
     """
     # The endpoint needs to be updated based on the environment (prod, dev, etc.)
-    return f"{_get_mcp_platform_base_url()}/agents/{agentic_app_id}/mcpServers"
+    return f"{_get_mcp_platform_base_url()}/agents/v2/{agentic_app_id}/mcpServers"
 
 
 def get_mcp_base_url() -> str:
@@ -119,20 +121,28 @@ def resolve_token_scope_for_server(server: MCPServerConfig) -> str:
     """
     Resolve the OAuth scope to request for a given MCP server.
 
-    V2 servers carry their own audience GUID in the ``audience`` field and receive
-    a token scoped to that GUID. V1 servers (no audience, audience equals the shared
-    ATG AppId, or audience starting with ``api://``) fall back to the shared ATG scope.
+    V2 servers carry their own audience in the ``audience`` field (bare GUID or
+    ``api://`` URI form). When an explicit ``scope`` is provided (e.g.
+    ``"Tools.ListInvoke.All"``), the scope is ``{audience}/{scope}``. When scope
+    is absent, ``{audience}/.default`` is used (relies on pre-consented scopes).
+    V1 servers (no audience, audience equals the shared ATG AppId in bare GUID or
+    ``api://`` URI form) always fall back to the shared ATG ``/.default`` scope.
 
     Args:
         server: The MCP server configuration to resolve the scope for.
 
     Returns:
-        str: The OAuth scope string (e.g. ``"<guid>/.default"``).
+        str: The OAuth scope string, e.g. ``"<guid>/Tools.ListInvoke.All"``,
+        ``"api://<guid>/.default"``, or the shared ATG ``"<atg-guid>/.default"``.
     """
     if (
         server.audience is not None
         and server.audience != ATG_APP_ID
-        and not server.audience.startswith("api://")
+        and server.audience != ATG_APP_ID_URI
     ):
+        # V2: use explicit scope when present, fall back to /.default (pre-consented)
+        if server.scope:
+            return f"{server.audience}/{server.scope}"
         return f"{server.audience}/.default"
+    # V1: shared ATG platform token
     return f"{ATG_APP_ID}/.default"
