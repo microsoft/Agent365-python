@@ -31,11 +31,17 @@ from .constants import (
     USER_NAME_KEY,
 )
 from .invoke_agent_details import InvokeAgentScopeDetails
+from .message_utils import (
+    normalize_input_messages,
+    normalize_output_messages,
+    serialize_messages,
+)
 from .models.caller_details import CallerDetails
+from .models.messages import InputMessagesParam, OutputMessagesParam
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .span_details import SpanDetails
-from .utils import safe_json_dumps, validate_and_normalize_ip
+from .utils import validate_and_normalize_ip
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +136,9 @@ class InvokeAgentScope(OpenTelemetryScope):
             self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
             self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
         if request.content:
-            self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps([request.content]))
+            # Wrap bare string into list for backward compatibility
+            content = [request.content] if isinstance(request.content, str) else request.content
+            self.record_input_messages(content)
 
         # Set caller details tags
         if caller_details:
@@ -176,18 +184,26 @@ class InvokeAgentScope(OpenTelemetryScope):
         """
         self.record_output_messages([response])
 
-    def record_input_messages(self, messages: list[str]) -> None:
+    def record_input_messages(self, messages: InputMessagesParam) -> None:
         """Record the input messages for telemetry tracking.
 
-        Args:
-            messages: List of input messages to record
-        """
-        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps(messages))
+        Accepts plain strings (auto-wrapped as OTEL ChatMessage with role ``user``)
+        or a versioned ``InputMessages`` wrapper.
 
-    def record_output_messages(self, messages: list[str]) -> None:
+        Args:
+            messages: List of input message strings or an InputMessages wrapper
+        """
+        wrapper = normalize_input_messages(messages)
+        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, serialize_messages(wrapper))
+
+    def record_output_messages(self, messages: OutputMessagesParam) -> None:
         """Record the output messages for telemetry tracking.
 
+        Accepts plain strings (auto-wrapped as OTEL OutputMessage with role ``assistant``)
+        or a versioned ``OutputMessages`` wrapper.
+
         Args:
-            messages: List of output messages to record
+            messages: List of output message strings or an OutputMessages wrapper
         """
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(messages))
+        wrapper = normalize_output_messages(messages)
+        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))

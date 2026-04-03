@@ -5,7 +5,6 @@
 
 import os
 import unittest
-from urllib.parse import urlparse
 
 import pytest
 from microsoft_agents_a365.observability.core import (
@@ -17,6 +16,7 @@ from microsoft_agents_a365.observability.core import (
     InvokeAgentScope,
     InvokeAgentScopeDetails,
     Request,
+    ServiceEndpoint,
     SpanDetails,
     ToolCallDetails,
     configure,
@@ -250,7 +250,7 @@ class TestTraceContextPropagation(unittest.TestCase):
         parent_context = extract_context_from_headers({"traceparent": traceparent})
 
         invoke_scope_details = InvokeAgentScopeDetails(
-            endpoint=urlparse("https://example.com/agent"),
+            endpoint=ServiceEndpoint(hostname="example.com", port=443),
         )
 
         with InvokeAgentScope.start(

@@ -5,7 +5,6 @@ import os
 import sys
 import unittest
 from pathlib import Path
-from urllib.parse import urlparse
 
 import pytest
 from microsoft_agents_a365.observability.core import (
@@ -15,6 +14,7 @@ from microsoft_agents_a365.observability.core import (
     InvokeAgentScope,
     InvokeAgentScopeDetails,
     Request,
+    ServiceEndpoint,
     SpanDetails,
     UserDetails,
     configure,
@@ -62,7 +62,7 @@ class TestInvokeAgentScope(unittest.TestCase):
             agent_description="A test agent for invoke scope testing",
         )
         cls.invoke_scope_details = InvokeAgentScopeDetails(
-            endpoint=urlparse("https://example.com/agent"),
+            endpoint=ServiceEndpoint(hostname="example.com", port=443),
         )
 
         # Create channel for requests

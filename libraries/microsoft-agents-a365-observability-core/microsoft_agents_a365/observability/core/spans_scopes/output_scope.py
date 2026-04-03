@@ -12,12 +12,18 @@ from ..constants import (
     USER_ID_KEY,
     USER_NAME_KEY,
 )
+from ..message_utils import normalize_output_messages, serialize_messages
+from ..models.messages import (
+    OutputMessage,
+    OutputMessages,
+    OutputMessagesParam,
+)
 from ..models.response import Response
 from ..models.user_details import UserDetails
 from ..opentelemetry_scope import OpenTelemetryScope
 from ..request import Request
 from ..span_details import SpanDetails
-from ..utils import safe_json_dumps, validate_and_normalize_ip
+from ..utils import validate_and_normalize_ip
 
 OUTPUT_OPERATION_NAME = "output_messages"
 
@@ -88,11 +94,14 @@ class OutputScope(OpenTelemetryScope):
 
         self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
 
-        # Initialize accumulated messages list
-        self._output_messages: list[str] = list(response.messages)
+        # Normalize response messages and extract inner messages for accumulation
+        normalized = normalize_output_messages(response.messages)
+        self._output_messages: list[OutputMessage] = list(normalized.messages)
+        self._output_messages_dirty = False
 
-        # Set response messages
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(self._output_messages))
+        # Set initial output messages attribute as the full versioned wrapper
+        wrapper = OutputMessages(messages=self._output_messages)
+        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))
 
         # Set user details if provided
         if user_details:
@@ -104,16 +113,27 @@ class OutputScope(OpenTelemetryScope):
                 validate_and_normalize_ip(user_details.user_client_ip),
             )
 
-    def record_output_messages(self, messages: list[str]) -> None:
+    def record_output_messages(self, messages: OutputMessagesParam) -> None:
         """Records the output messages for telemetry tracking.
 
         Appends the provided messages to the accumulated output messages list.
+        Accepts plain strings (auto-wrapped as OTEL OutputMessage) or a versioned
+        OutputMessages wrapper.
         The list is capped at _MAX_OUTPUT_MESSAGES to prevent unbounded memory growth.
+        The updated attribute is flushed when the scope is disposed.
 
         Args:
-            messages: List of output messages to append
+            messages: List of output message strings or an OutputMessages wrapper to append
         """
-        self._output_messages.extend(messages)
+        normalized = normalize_output_messages(messages)
+        self._output_messages.extend(normalized.messages)
         if len(self._output_messages) > self._MAX_OUTPUT_MESSAGES:
             self._output_messages = self._output_messages[-self._MAX_OUTPUT_MESSAGES :]
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(self._output_messages))
+        self._output_messages_dirty = True
+
+    def _end(self) -> None:
+        """End the span and flush accumulated output messages."""
+        if self._output_messages_dirty:
+            wrapper = OutputMessages(messages=self._output_messages)
+            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))
+        super()._end()
