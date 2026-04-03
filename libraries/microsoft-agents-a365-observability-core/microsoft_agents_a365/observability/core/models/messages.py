@@ -168,7 +168,7 @@ MessagePart = Union[
 class ChatMessage:
     """An input message sent to a model (OTEL gen-ai semantic conventions)."""
 
-    role: str
+    role: MessageRole
     parts: list[MessagePart] = field(default_factory=list)
     name: str | None = None
 
@@ -178,6 +178,24 @@ class OutputMessage(ChatMessage):
     """An output message produced by a model (OTEL gen-ai semantic conventions)."""
 
     finish_reason: str | None = None
+
+
+@dataclass
+class ToolInputMessage:
+    """A tool input message representing a tool call request."""
+
+    role: MessageRole
+    parts: list[ToolCallRequestPart] = field(default_factory=list)
+    name: str | None = None
+
+
+@dataclass
+class ToolOutputMessage:
+    """A tool output message representing a tool call response."""
+
+    role: MessageRole
+    parts: list[ToolCallResponsePart] = field(default_factory=list)
+    name: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +219,22 @@ class OutputMessages:
     """Versioned wrapper for output messages."""
 
     messages: list[OutputMessage] = field(default_factory=list)
+    version: str = field(default=A365_MESSAGE_SCHEMA_VERSION, init=False)
+
+
+@dataclass
+class ToolInputMessages:
+    """Versioned wrapper for tool input messages."""
+
+    messages: list[ToolInputMessage] = field(default_factory=list)
+    version: str = field(default=A365_MESSAGE_SCHEMA_VERSION, init=False)
+
+
+@dataclass
+class ToolOutputMessages:
+    """Versioned wrapper for tool output messages."""
+
+    messages: list[ToolOutputMessage] = field(default_factory=list)
     version: str = field(default=A365_MESSAGE_SCHEMA_VERSION, init=False)
 
 

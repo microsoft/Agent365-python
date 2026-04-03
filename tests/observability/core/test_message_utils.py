@@ -30,6 +30,11 @@ from microsoft_agents_a365.observability.core.models.messages import (
     ReasoningPart,
     TextPart,
     ToolCallRequestPart,
+    ToolCallResponsePart,
+    ToolInputMessage,
+    ToolInputMessages,
+    ToolOutputMessage,
+    ToolOutputMessages,
 )
 
 
@@ -71,7 +76,7 @@ class TestConversion(unittest.TestCase):
     def test_to_input_messages_single(self):
         result = to_input_messages(["Hello"])
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].role, MessageRole.USER.value)
+        self.assertEqual(result[0].role, MessageRole.USER)
         self.assertEqual(len(result[0].parts), 1)
         self.assertIsInstance(result[0].parts[0], TextPart)
         self.assertEqual(result[0].parts[0].content, "Hello")
@@ -90,14 +95,14 @@ class TestConversion(unittest.TestCase):
         result = to_output_messages(["Response text"])
         self.assertEqual(len(result), 1)
         self.assertIsInstance(result[0], OutputMessage)
-        self.assertEqual(result[0].role, MessageRole.ASSISTANT.value)
+        self.assertEqual(result[0].role, MessageRole.ASSISTANT)
         self.assertEqual(result[0].parts[0].content, "Response text")
 
     def test_to_output_messages_multiple(self):
         result = to_output_messages(["First", "Second"])
         self.assertEqual(len(result), 2)
         for msg in result:
-            self.assertEqual(msg.role, MessageRole.ASSISTANT.value)
+            self.assertEqual(msg.role, MessageRole.ASSISTANT)
 
     def test_to_output_messages_empty(self):
         result = to_output_messages([])
@@ -112,14 +117,12 @@ class TestNormalization(unittest.TestCase):
         self.assertIsInstance(result, InputMessages)
         self.assertEqual(result.version, A365_MESSAGE_SCHEMA_VERSION)
         self.assertEqual(len(result.messages), 1)
-        self.assertEqual(result.messages[0].role, MessageRole.USER.value)
+        self.assertEqual(result.messages[0].role, MessageRole.USER)
 
     def test_normalize_input_from_wrapper(self):
         wrapper = InputMessages(
             messages=[
-                ChatMessage(
-                    role=MessageRole.SYSTEM.value, parts=[TextPart(content="System prompt")]
-                )
+                ChatMessage(role=MessageRole.SYSTEM, parts=[TextPart(content="System prompt")])
             ]
         )
         result = normalize_input_messages(wrapper)
@@ -130,13 +133,13 @@ class TestNormalization(unittest.TestCase):
         self.assertIsInstance(result, OutputMessages)
         self.assertEqual(result.version, A365_MESSAGE_SCHEMA_VERSION)
         self.assertEqual(len(result.messages), 1)
-        self.assertEqual(result.messages[0].role, MessageRole.ASSISTANT.value)
+        self.assertEqual(result.messages[0].role, MessageRole.ASSISTANT)
 
     def test_normalize_output_from_wrapper(self):
         wrapper = OutputMessages(
             messages=[
                 OutputMessage(
-                    role=MessageRole.ASSISTANT.value,
+                    role=MessageRole.ASSISTANT,
                     parts=[TextPart(content="Answer")],
                     finish_reason=FinishReason.STOP.value,
                 )
@@ -161,7 +164,7 @@ class TestSerialization(unittest.TestCase):
 
     def test_serialize_input_messages(self):
         wrapper = InputMessages(
-            messages=[ChatMessage(role=MessageRole.USER.value, parts=[TextPart(content="Hello")])]
+            messages=[ChatMessage(role=MessageRole.USER, parts=[TextPart(content="Hello")])]
         )
         result = serialize_messages(wrapper)
         parsed = json.loads(result)
@@ -176,7 +179,7 @@ class TestSerialization(unittest.TestCase):
         wrapper = OutputMessages(
             messages=[
                 OutputMessage(
-                    role=MessageRole.ASSISTANT.value,
+                    role=MessageRole.ASSISTANT,
                     parts=[TextPart(content="Response")],
                     finish_reason=FinishReason.STOP.value,
                 )
@@ -191,7 +194,7 @@ class TestSerialization(unittest.TestCase):
 
     def test_serialize_omits_none_values(self):
         wrapper = InputMessages(
-            messages=[ChatMessage(role=MessageRole.USER.value, parts=[TextPart(content="Hi")])]
+            messages=[ChatMessage(role=MessageRole.USER, parts=[TextPart(content="Hi")])]
         )
         result = serialize_messages(wrapper)
         parsed = json.loads(result)
@@ -203,7 +206,7 @@ class TestSerialization(unittest.TestCase):
         wrapper = InputMessages(
             messages=[
                 ChatMessage(
-                    role=MessageRole.USER.value,
+                    role=MessageRole.USER,
                     parts=[
                         TextPart(content="Analyze this image"),
                         BlobPart(modality="image", content="base64data", mime_type="image/png"),
@@ -225,7 +228,7 @@ class TestSerialization(unittest.TestCase):
         wrapper = OutputMessages(
             messages=[
                 OutputMessage(
-                    role=MessageRole.ASSISTANT.value,
+                    role=MessageRole.ASSISTANT,
                     parts=[
                         ToolCallRequestPart(
                             name="search",
@@ -249,7 +252,7 @@ class TestSerialization(unittest.TestCase):
         wrapper = OutputMessages(
             messages=[
                 OutputMessage(
-                    role=MessageRole.ASSISTANT.value,
+                    role=MessageRole.ASSISTANT,
                     parts=[
                         ReasoningPart(content="Checking GDPR Article 5"),
                         TextPart(content="Based on GDPR..."),
@@ -270,7 +273,7 @@ class TestSerialization(unittest.TestCase):
         wrapper = InputMessages(
             messages=[
                 ChatMessage(
-                    role=MessageRole.USER.value,
+                    role=MessageRole.USER,
                     parts=[TextPart(content="日本語テスト 🚀")],
                 )
             ]
@@ -307,6 +310,54 @@ class TestVersionField(unittest.TestCase):
         wrapper = InputMessages(messages=[])
         result = json.loads(serialize_messages(wrapper))
         self.assertEqual(result["version"], A365_MESSAGE_SCHEMA_VERSION)
+
+
+class TestToolSerialization(unittest.TestCase):
+    """Tests for serializing tool message wrappers."""
+
+    def test_serialize_tool_input(self):
+        wrapper = ToolInputMessages(
+            messages=[
+                ToolInputMessage(
+                    role=MessageRole.ASSISTANT,
+                    parts=[ToolCallRequestPart(name="search", arguments={"q": "GDPR"})],
+                )
+            ]
+        )
+        result = serialize_messages(wrapper)
+        parsed = json.loads(result)
+        self.assertEqual(parsed["version"], A365_MESSAGE_SCHEMA_VERSION)
+        self.assertEqual(len(parsed["messages"]), 1)
+        self.assertEqual(parsed["messages"][0]["role"], "assistant")
+        part = parsed["messages"][0]["parts"][0]
+        self.assertEqual(part["type"], "tool_call")
+        self.assertEqual(part["name"], "search")
+        self.assertEqual(part["arguments"], {"q": "GDPR"})
+
+    def test_serialize_tool_output(self):
+        wrapper = ToolOutputMessages(
+            messages=[
+                ToolOutputMessage(
+                    role=MessageRole.TOOL,
+                    parts=[ToolCallResponsePart(response={"hits": 3})],
+                )
+            ]
+        )
+        result = serialize_messages(wrapper)
+        parsed = json.loads(result)
+        self.assertEqual(parsed["version"], A365_MESSAGE_SCHEMA_VERSION)
+        self.assertEqual(parsed["messages"][0]["role"], "tool")
+        part = parsed["messages"][0]["parts"][0]
+        self.assertEqual(part["type"], "tool_call_response")
+        self.assertEqual(part["response"], {"hits": 3})
+
+    def test_serialize_tool_input_version_not_settable(self):
+        with self.assertRaises(TypeError):
+            ToolInputMessages(messages=[], version="99.99.99")  # type: ignore[call-arg]
+
+    def test_serialize_tool_output_version_not_settable(self):
+        with self.assertRaises(TypeError):
+            ToolOutputMessages(messages=[], version="99.99.99")  # type: ignore[call-arg]
 
 
 if __name__ == "__main__":

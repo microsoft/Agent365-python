@@ -21,6 +21,12 @@ from microsoft_agents_a365.observability.core import (
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
+from microsoft_agents_a365.observability.core.models.messages import (
+    MessageRole,
+    ToolCallRequestPart,
+    ToolInputMessage,
+    ToolInputMessages,
+)
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -46,7 +52,14 @@ class TestCustomStartEndTime(unittest.TestCase):
         )
         cls.tool_details = ToolCallDetails(
             tool_name="test_tool",
-            arguments='{"arg": "value"}',
+            arguments=ToolInputMessages(
+                messages=[
+                    ToolInputMessage(
+                        role=MessageRole.ASSISTANT,
+                        parts=[ToolCallRequestPart(name="test_tool", arguments={"arg": "value"})],
+                    )
+                ]
+            ),
             tool_call_id="call-123",
         )
 

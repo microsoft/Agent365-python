@@ -47,6 +47,10 @@ from .models.messages import (
     TextPart,
     ToolCallRequestPart,
     ToolCallResponsePart,
+    ToolInputMessage,
+    ToolInputMessages,
+    ToolOutputMessage,
+    ToolOutputMessages,
     UriPart,
 )
 from .models.response import Response
@@ -122,6 +126,10 @@ __all__ = [
     "OutputMessages",
     "InputMessagesParam",
     "OutputMessagesParam",
+    "ToolInputMessage",
+    "ToolOutputMessage",
+    "ToolInputMessages",
+    "ToolOutputMessages",
     # Utility functions
     "extract_context_from_headers",
     "get_traceparent",

@@ -12,6 +12,7 @@ from .constants import (
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
+    GEN_AI_TOOL_CALL_RESULT_KEY,
     GEN_AI_TOOL_DESCRIPTION_KEY,
     GEN_AI_TOOL_NAME_KEY,
     GEN_AI_TOOL_TYPE_KEY,
@@ -21,6 +22,8 @@ from .constants import (
     USER_ID_KEY,
     USER_NAME_KEY,
 )
+from .message_utils import serialize_messages
+from .models.messages import ToolInputMessages, ToolOutputMessages
 from .models.user_details import UserDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
@@ -108,7 +111,8 @@ class ExecuteToolScope(OpenTelemetryScope):
         endpoint = details.endpoint
 
         self.set_tag_maybe(GEN_AI_TOOL_NAME_KEY, tool_name)
-        self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, arguments)
+        if arguments is not None:
+            self.record_tool_input(arguments)
         self.set_tag_maybe(GEN_AI_TOOL_TYPE_KEY, tool_type)
         self.set_tag_maybe(GEN_AI_TOOL_CALL_ID_KEY, tool_call_id)
         self.set_tag_maybe(GEN_AI_TOOL_DESCRIPTION_KEY, description)
@@ -134,13 +138,18 @@ class ExecuteToolScope(OpenTelemetryScope):
                 validate_and_normalize_ip(user_details.user_client_ip),
             )
 
-    def record_response(self, response: str) -> None:
-        """Records response information for telemetry tracking.
-
-        Note: This method is intentionally a no-op as GEN_AI_EVENT_CONTENT was removed.
-        The method is kept for interface compatibility.
+    def record_tool_input(self, messages: ToolInputMessages) -> None:
+        """Record the tool input for telemetry tracking.
 
         Args:
-            response: The response to record
+            messages: A ToolInputMessages wrapper containing tool call requests
         """
-        pass
+        self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, serialize_messages(messages))
+
+    def record_tool_output(self, messages: ToolOutputMessages) -> None:
+        """Record the tool output for telemetry tracking.
+
+        Args:
+            messages: A ToolOutputMessages wrapper containing tool call responses
+        """
+        self.set_tag_maybe(GEN_AI_TOOL_CALL_RESULT_KEY, serialize_messages(messages))

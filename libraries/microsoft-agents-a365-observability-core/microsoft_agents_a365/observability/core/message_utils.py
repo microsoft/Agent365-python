@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict
+from enum import Enum
 from typing import Union
 
 from .models.messages import (
@@ -24,6 +25,8 @@ from .models.messages import (
     OutputMessages,
     OutputMessagesParam,
     TextPart,
+    ToolInputMessages,
+    ToolOutputMessages,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,10 +40,10 @@ def is_string_list(
 
 
 def is_wrapped_messages(
-    param: Union[InputMessagesParam, OutputMessagesParam],
+    param: Union[InputMessagesParam, OutputMessagesParam, ToolInputMessages, ToolOutputMessages],
 ) -> bool:
-    """Return ``True`` when *param* is a versioned wrapper (``InputMessages`` or ``OutputMessages``)."""
-    return isinstance(param, (InputMessages, OutputMessages))
+    """Return ``True`` when *param* is a versioned wrapper."""
+    return isinstance(param, (InputMessages, OutputMessages, ToolInputMessages, ToolOutputMessages))
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +54,7 @@ def is_wrapped_messages(
 def to_input_messages(messages: list[str]) -> list[ChatMessage]:
     """Convert plain input strings into OTEL ``ChatMessage`` objects."""
     return [
-        ChatMessage(role=MessageRole.USER.value, parts=[TextPart(content=content)])
+        ChatMessage(role=MessageRole.USER, parts=[TextPart(content=content)])
         for content in messages
     ]
 
@@ -59,7 +62,7 @@ def to_input_messages(messages: list[str]) -> list[ChatMessage]:
 def to_output_messages(messages: list[str]) -> list[OutputMessage]:
     """Convert plain output strings into OTEL ``OutputMessage`` objects."""
     return [
-        OutputMessage(role=MessageRole.ASSISTANT.value, parts=[TextPart(content=content)])
+        OutputMessage(role=MessageRole.ASSISTANT, parts=[TextPart(content=content)])
         for content in messages
     ]
 
@@ -97,11 +100,16 @@ def normalize_output_messages(param: OutputMessagesParam) -> OutputMessages:
 
 
 def _message_dict_factory(items: list[tuple[str, object]]) -> dict[str, object]:
-    """Custom dict factory for ``dataclasses.asdict`` that drops ``None`` values."""
-    return {k: v for k, v in items if v is not None}
+    """Custom dict factory for ``dataclasses.asdict``.
+
+    Drops ``None`` values and converts enum members to their string value.
+    """
+    return {k: (v.value if isinstance(v, Enum) else v) for k, v in items if v is not None}
 
 
-def serialize_messages(wrapper: Union[InputMessages, OutputMessages]) -> str:
+def serialize_messages(
+    wrapper: Union[InputMessages, OutputMessages, ToolInputMessages, ToolOutputMessages],
+) -> str:
     """Serialize a versioned message wrapper to JSON.
 
     The output is the full wrapper object:

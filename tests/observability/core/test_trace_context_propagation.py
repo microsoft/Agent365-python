@@ -24,6 +24,12 @@ from microsoft_agents_a365.observability.core import (
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
+from microsoft_agents_a365.observability.core.models.messages import (
+    MessageRole,
+    ToolCallRequestPart,
+    ToolInputMessage,
+    ToolInputMessages,
+)
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -160,7 +166,16 @@ class TestTraceContextPropagation(unittest.TestCase):
         # Create child scope using extracted context
         tool_details = ToolCallDetails(
             tool_name="search_tool",
-            arguments='{"query": "test"}',
+            arguments=ToolInputMessages(
+                messages=[
+                    ToolInputMessage(
+                        role=MessageRole.ASSISTANT,
+                        parts=[
+                            ToolCallRequestPart(name="search_tool", arguments={"query": "test"})
+                        ],
+                    )
+                ]
+            ),
             tool_call_id="call-123",
         )
 

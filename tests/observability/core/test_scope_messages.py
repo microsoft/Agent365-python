@@ -112,11 +112,11 @@ class TestInvokeAgentScopeMessages(ScopeMessageTestBase):
         wrapper = InputMessages(
             messages=[
                 ChatMessage(
-                    role=MessageRole.SYSTEM.value,
+                    role=MessageRole.SYSTEM,
                     parts=[TextPart(content="You are a compliance assistant.")],
                 ),
                 ChatMessage(
-                    role=MessageRole.USER.value,
+                    role=MessageRole.USER,
                     parts=[TextPart(content="What are data retention policies?")],
                 ),
             ]
@@ -148,7 +148,7 @@ class TestInvokeAgentScopeMessages(ScopeMessageTestBase):
         wrapper = OutputMessages(
             messages=[
                 OutputMessage(
-                    role=MessageRole.ASSISTANT.value,
+                    role=MessageRole.ASSISTANT,
                     parts=[
                         ReasoningPart(content="Checking Article 5(1)(e)"),
                         TextPart(content="Based on GDPR..."),
@@ -193,7 +193,7 @@ class TestInvokeAgentScopeMessages(ScopeMessageTestBase):
     def test_request_content_structured_input(self):
         """Request.content as InputMessages should be serialized directly."""
         wrapper = InputMessages(
-            messages=[ChatMessage(role=MessageRole.USER.value, parts=[TextPart(content="Hello")])]
+            messages=[ChatMessage(role=MessageRole.USER, parts=[TextPart(content="Hello")])]
         )
         request = Request(content=wrapper)
         scope = InvokeAgentScope.start(request, self.invoke_scope_details, self.agent_details)
@@ -221,11 +221,11 @@ class TestInferenceScopeMessages(ScopeMessageTestBase):
         wrapper = InputMessages(
             messages=[
                 ChatMessage(
-                    role=MessageRole.SYSTEM.value,
+                    role=MessageRole.SYSTEM,
                     parts=[TextPart(content="You are helpful.")],
                 ),
                 ChatMessage(
-                    role=MessageRole.USER.value,
+                    role=MessageRole.USER,
                     parts=[TextPart(content="Question")],
                 ),
             ]
@@ -251,7 +251,7 @@ class TestInferenceScopeMessages(ScopeMessageTestBase):
         wrapper = OutputMessages(
             messages=[
                 OutputMessage(
-                    role=MessageRole.ASSISTANT.value,
+                    role=MessageRole.ASSISTANT,
                     parts=[TextPart(content="Answer")],
                     finish_reason=FinishReason.STOP.value,
                 )
@@ -296,7 +296,7 @@ class TestOutputScopeMessages(ScopeMessageTestBase):
         wrapper = OutputMessages(
             messages=[
                 OutputMessage(
-                    role=MessageRole.ASSISTANT.value,
+                    role=MessageRole.ASSISTANT,
                     parts=[TextPart(content="Structured output")],
                     finish_reason=FinishReason.STOP.value,
                 )
@@ -328,7 +328,7 @@ class TestOutputScopeMessages(ScopeMessageTestBase):
         appended = OutputMessages(
             messages=[
                 OutputMessage(
-                    role=MessageRole.ASSISTANT.value,
+                    role=MessageRole.ASSISTANT,
                     parts=[TextPart(content="Structured append")],
                     finish_reason=FinishReason.STOP.value,
                 )
@@ -351,7 +351,7 @@ class TestOutputScopeMessages(ScopeMessageTestBase):
                 OutputMessages(
                     messages=[
                         OutputMessage(
-                            role=MessageRole.ASSISTANT.value,
+                            role=MessageRole.ASSISTANT,
                             parts=[TextPart(content="Structured")],
                         )
                     ]
