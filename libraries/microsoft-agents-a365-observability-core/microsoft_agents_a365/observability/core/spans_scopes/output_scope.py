@@ -121,17 +121,25 @@ class OutputScope(OpenTelemetryScope):
     def record_output_messages(self, messages: ResponseMessagesParam) -> None:
         """Records the output messages for telemetry tracking.
 
-        Appends the provided messages to the accumulated output messages list.
-        Accepts plain strings (auto-wrapped as OTEL OutputMessage), a versioned
-        OutputMessages wrapper, or a ToolOutputMessages wrapper.
-        The list is capped at _MAX_OUTPUT_MESSAGES to prevent unbounded memory growth.
-        The updated attribute is flushed when the scope is disposed.
+        Plain strings (``str`` or ``list[str]``) and ``OutputMessages`` are
+        appended to the accumulated output messages list (capped at
+        ``_MAX_OUTPUT_MESSAGES``). The updated attribute is flushed when the
+        scope is disposed.
+
+        To record tool output, pass an explicit ``ToolOutputMessages`` wrapper.
+        Plain strings cannot be distinguished as tool output at runtime.
+        Recording ``ToolOutputMessages`` overwrites the attribute immediately
+        and clears any previously accumulated assistant messages.
 
         Args:
-            messages: Plain strings, OutputMessages, or ToolOutputMessages to append
+            messages: Assistant output (str, list[str], or OutputMessages) or
+                tool output (ToolOutputMessages).
         """
         if isinstance(messages, ToolOutputMessages):
-            # Tool output: serialize directly, overwrite attribute
+            # Tool output: serialize directly, clear accumulated state so _end()
+            # doesn't overwrite with stale OutputMessages
+            self._output_messages = []
+            self._output_messages_dirty = False
             self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(messages))
             return
         normalized = normalize_output_messages(messages)

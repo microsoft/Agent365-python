@@ -109,12 +109,14 @@ def normalize_output_messages(param: OutputMessagesParam) -> OutputMessages:
 def _strings_to_tool_input_messages(strings: list[str]) -> list[ToolInputMessage]:
     """Convert plain strings into ``ToolInputMessage`` objects.
 
-    Each string is set as the ``arguments`` of a ``ToolCallRequestPart``.
+    Each string is treated as a raw JSON arguments string and stored
+    in the ``arguments`` field of a ``ToolCallRequestPart``. The tool
+    name is left empty as it is set separately on the span attribute.
     """
     return [
         ToolInputMessage(
             role=MessageRole.ASSISTANT,
-            parts=[ToolCallRequestPart(name="", arguments={"value": s})],
+            parts=[ToolCallRequestPart(name="", arguments={"raw": s})],
         )
         for s in strings
     ]
@@ -123,8 +125,9 @@ def _strings_to_tool_input_messages(strings: list[str]) -> list[ToolInputMessage
 def normalize_tool_input(param: ToolInputParam) -> ToolInputMessages:
     """Normalize a ``ToolInputParam`` to a versioned ``ToolInputMessages`` wrapper.
 
-    - ``str`` → wrapped as a single tool call request with the string as arguments.
-    - ``list[str]`` → each string becomes a tool call request.
+    - ``str`` → treated as raw tool arguments; wrapped in a single
+      ``ToolCallRequestPart`` with ``arguments={"raw": s}``.
+    - ``list[str]`` → each string becomes a separate tool call request.
     - ``ToolInputMessages`` → returned as-is.
     """
     if isinstance(param, str):

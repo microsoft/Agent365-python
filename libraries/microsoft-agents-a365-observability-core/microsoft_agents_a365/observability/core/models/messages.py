@@ -257,9 +257,10 @@ Supports a single string, a list of strings (backward compat), or the versioned 
 ToolInputParam = Union[str, list[str], ToolInputMessages]
 """Accepted input for tool arguments.
 
-Supports a single JSON string, a list of strings (backward compat), or the versioned wrapper.
-When a string or list of strings is provided, each string is set as the ``arguments`` property
-of a ``ToolCallRequestPart``.
+Supports a single string, a list of strings (backward compat), or the versioned wrapper.
+When a string or list of strings is provided, each string is stored as
+``arguments={"raw": s}`` on a ``ToolCallRequestPart`` with an empty tool name
+(the tool name is set separately via ``ToolCallDetails.tool_name``).
 """
 
 ToolOutputParam = Union[str, list[str], ToolOutputMessages]
