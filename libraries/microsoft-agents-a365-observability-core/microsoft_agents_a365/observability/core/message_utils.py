@@ -194,7 +194,8 @@ def serialize_messages(
         )
     except Exception:
         logger.warning("Failed to serialize messages; using fallback.", exc_info=True)
-        count = len(wrapper.messages)
+        messages = getattr(wrapper, "messages", [])
+        count = len(messages) if isinstance(messages, list) else 0
         noun = "message" if count == 1 else "messages"
         fallback = {
             "version": A365_MESSAGE_SCHEMA_VERSION,

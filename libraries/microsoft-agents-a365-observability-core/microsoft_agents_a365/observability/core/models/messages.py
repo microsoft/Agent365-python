@@ -91,7 +91,7 @@ class ReasoningPart:
 class BlobPart:
     """Inline binary data (base64-encoded)."""
 
-    modality: str
+    modality: Modality | str
     content: str
     mime_type: str | None = None
     type: str = field(default="blob", init=False)
@@ -101,7 +101,7 @@ class BlobPart:
 class FilePart:
     """Reference to a pre-uploaded file."""
 
-    modality: str
+    modality: Modality | str
     file_id: str
     mime_type: str | None = None
     type: str = field(default="file", init=False)
@@ -111,7 +111,7 @@ class FilePart:
 class UriPart:
     """External URI reference."""
 
-    modality: str
+    modality: Modality | str
     uri: str
     mime_type: str | None = None
     type: str = field(default="uri", init=False)
