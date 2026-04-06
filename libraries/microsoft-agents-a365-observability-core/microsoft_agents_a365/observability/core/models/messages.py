@@ -242,14 +242,30 @@ class ToolOutputMessages:
 # Parameter type aliases (backward-compatible union types)
 # ---------------------------------------------------------------------------
 
-InputMessagesParam = Union[list[str], InputMessages]
+InputMessagesParam = Union[str, list[str], InputMessages]
 """Accepted input for ``record_input_messages``.
 
-Supports plain strings (backward compat) or the versioned wrapper.
+Supports a single string, a list of strings (backward compat), or the versioned wrapper.
 """
 
-OutputMessagesParam = Union[list[str], OutputMessages]
+OutputMessagesParam = Union[str, list[str], OutputMessages]
 """Accepted input for ``record_output_messages``.
 
-Supports plain strings (backward compat) or the versioned wrapper.
+Supports a single string, a list of strings (backward compat), or the versioned wrapper.
+"""
+
+ToolInputParam = Union[str, list[str], ToolInputMessages]
+"""Accepted input for tool arguments.
+
+Supports a single JSON string, a list of strings (backward compat), or the versioned wrapper.
+When a string or list of strings is provided, each string is set as the ``arguments`` property
+of a ``ToolCallRequestPart``.
+"""
+
+ToolOutputParam = Union[str, list[str], ToolOutputMessages]
+"""Accepted input for tool output/response.
+
+Supports a single string, a list of strings (backward compat), or the versioned wrapper.
+When a string or list of strings is provided, each string is set as the ``response`` property
+of a ``ToolCallResponsePart``.
 """

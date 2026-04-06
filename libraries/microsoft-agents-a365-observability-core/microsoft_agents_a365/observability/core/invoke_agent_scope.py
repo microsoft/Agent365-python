@@ -135,10 +135,8 @@ class InvokeAgentScope(OpenTelemetryScope):
         if request.channel:
             self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
             self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
-        if request.content:
-            # Wrap bare string into list for backward compatibility
-            content = [request.content] if isinstance(request.content, str) else request.content
-            self.record_input_messages(content)
+        if request.content is not None:
+            self.record_input_messages(request.content)
 
         # Set caller details tags
         if caller_details:

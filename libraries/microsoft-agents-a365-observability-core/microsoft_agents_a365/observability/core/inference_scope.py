@@ -102,10 +102,8 @@ class InferenceScope(OpenTelemetryScope):
             span_details=resolved_span_details,
         )
 
-        if request.content:
-            # Wrap bare string into list for backward compatibility
-            content = [request.content] if isinstance(request.content, str) else request.content
-            self.record_input_messages(content)
+        if request.content is not None:
+            self.record_input_messages(request.content)
         self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
 
         self.set_tag_maybe(GEN_AI_OPERATION_NAME_KEY, details.operationName.value)

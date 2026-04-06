@@ -6,12 +6,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Union
 
-from .messages import OutputMessagesParam, ToolOutputMessages
+from .messages import OutputMessagesParam, ToolOutputParam
 
-ResponseMessagesParam = Union[OutputMessagesParam, ToolOutputMessages]
+ResponseMessagesParam = Union[OutputMessagesParam, ToolOutputParam]
 """Accepted type for Response.messages.
 
-Supports plain strings, OutputMessages, or ToolOutputMessages.
+Supports plain strings, OutputMessages, or ToolOutputMessages (and their string equivalents).
 """
 
 

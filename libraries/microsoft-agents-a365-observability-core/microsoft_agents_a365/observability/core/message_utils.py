@@ -25,8 +25,14 @@ from .models.messages import (
     OutputMessages,
     OutputMessagesParam,
     TextPart,
+    ToolCallRequestPart,
+    ToolCallResponsePart,
+    ToolInputMessage,
     ToolInputMessages,
+    ToolInputParam,
+    ToolOutputMessage,
     ToolOutputMessages,
+    ToolOutputParam,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,9 +81,12 @@ def to_output_messages(messages: list[str]) -> list[OutputMessage]:
 def normalize_input_messages(param: InputMessagesParam) -> InputMessages:
     """Normalize an ``InputMessagesParam`` to a versioned ``InputMessages`` wrapper.
 
+    - ``str`` → wrapped in a single-element list, then converted.
     - ``list[str]`` → converted to ``ChatMessage`` list and wrapped.
     - ``InputMessages`` → returned as-is.
     """
+    if isinstance(param, str):
+        return InputMessages(messages=to_input_messages([param]))
     if is_string_list(param):
         return InputMessages(messages=to_input_messages(param))  # type: ignore[arg-type]
     return param  # type: ignore[return-value]
@@ -86,11 +95,70 @@ def normalize_input_messages(param: InputMessagesParam) -> InputMessages:
 def normalize_output_messages(param: OutputMessagesParam) -> OutputMessages:
     """Normalize an ``OutputMessagesParam`` to a versioned ``OutputMessages`` wrapper.
 
+    - ``str`` → wrapped in a single-element list, then converted.
     - ``list[str]`` → converted to ``OutputMessage`` list and wrapped.
     - ``OutputMessages`` → returned as-is.
     """
+    if isinstance(param, str):
+        return OutputMessages(messages=to_output_messages([param]))
     if is_string_list(param):
         return OutputMessages(messages=to_output_messages(param))  # type: ignore[arg-type]
+    return param  # type: ignore[return-value]
+
+
+def _strings_to_tool_input_messages(strings: list[str]) -> list[ToolInputMessage]:
+    """Convert plain strings into ``ToolInputMessage`` objects.
+
+    Each string is set as the ``arguments`` of a ``ToolCallRequestPart``.
+    """
+    return [
+        ToolInputMessage(
+            role=MessageRole.ASSISTANT,
+            parts=[ToolCallRequestPart(name="", arguments={"value": s})],
+        )
+        for s in strings
+    ]
+
+
+def normalize_tool_input(param: ToolInputParam) -> ToolInputMessages:
+    """Normalize a ``ToolInputParam`` to a versioned ``ToolInputMessages`` wrapper.
+
+    - ``str`` → wrapped as a single tool call request with the string as arguments.
+    - ``list[str]`` → each string becomes a tool call request.
+    - ``ToolInputMessages`` → returned as-is.
+    """
+    if isinstance(param, str):
+        return ToolInputMessages(messages=_strings_to_tool_input_messages([param]))
+    if is_string_list(param):
+        return ToolInputMessages(messages=_strings_to_tool_input_messages(param))  # type: ignore[arg-type]
+    return param  # type: ignore[return-value]
+
+
+def _strings_to_tool_output_messages(strings: list[str]) -> list[ToolOutputMessage]:
+    """Convert plain strings into ``ToolOutputMessage`` objects.
+
+    Each string is set as the ``response`` of a ``ToolCallResponsePart``.
+    """
+    return [
+        ToolOutputMessage(
+            role=MessageRole.TOOL,
+            parts=[ToolCallResponsePart(response=s)],
+        )
+        for s in strings
+    ]
+
+
+def normalize_tool_output(param: ToolOutputParam) -> ToolOutputMessages:
+    """Normalize a ``ToolOutputParam`` to a versioned ``ToolOutputMessages`` wrapper.
+
+    - ``str`` → wrapped as a single tool call response.
+    - ``list[str]`` → each string becomes a tool call response.
+    - ``ToolOutputMessages`` → returned as-is.
+    """
+    if isinstance(param, str):
+        return ToolOutputMessages(messages=_strings_to_tool_output_messages([param]))
+    if is_string_list(param):
+        return ToolOutputMessages(messages=_strings_to_tool_output_messages(param))  # type: ignore[arg-type]
     return param  # type: ignore[return-value]
 
 

@@ -22,8 +22,8 @@ from .constants import (
     USER_ID_KEY,
     USER_NAME_KEY,
 )
-from .message_utils import serialize_messages
-from .models.messages import ToolOutputMessages
+from .message_utils import normalize_tool_input, normalize_tool_output, serialize_messages
+from .models.messages import ToolOutputParam
 from .models.user_details import UserDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
@@ -112,7 +112,8 @@ class ExecuteToolScope(OpenTelemetryScope):
 
         self.set_tag_maybe(GEN_AI_TOOL_NAME_KEY, tool_name)
         if arguments is not None:
-            self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, serialize_messages(arguments))
+            normalized = normalize_tool_input(arguments)
+            self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, serialize_messages(normalized))
         self.set_tag_maybe(GEN_AI_TOOL_TYPE_KEY, tool_type)
         self.set_tag_maybe(GEN_AI_TOOL_CALL_ID_KEY, tool_call_id)
         self.set_tag_maybe(GEN_AI_TOOL_DESCRIPTION_KEY, description)
@@ -138,10 +139,14 @@ class ExecuteToolScope(OpenTelemetryScope):
                 validate_and_normalize_ip(user_details.user_client_ip),
             )
 
-    def record_response(self, messages: ToolOutputMessages) -> None:
+    def record_response(self, messages: ToolOutputParam) -> None:
         """Record the tool output for telemetry tracking.
 
+        Accepts a single string, a list of strings (backward compat),
+        or a versioned ``ToolOutputMessages`` wrapper.
+
         Args:
-            messages: A ToolOutputMessages wrapper containing tool call responses
+            messages: Tool output string(s) or a ToolOutputMessages wrapper
         """
-        self.set_tag_maybe(GEN_AI_TOOL_CALL_RESULT_KEY, serialize_messages(messages))
+        normalized = normalize_tool_output(messages)
+        self.set_tag_maybe(GEN_AI_TOOL_CALL_RESULT_KEY, serialize_messages(normalized))

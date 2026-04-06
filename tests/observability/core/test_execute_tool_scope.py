@@ -23,12 +23,6 @@ from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
 )
-from microsoft_agents_a365.observability.core.models.messages import (
-    MessageRole,
-    ToolCallRequestPart,
-    ToolInputMessage,
-    ToolInputMessages,
-)
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -56,19 +50,7 @@ class TestExecuteToolScope(unittest.TestCase):
         )
         cls.tool_details = ToolCallDetails(
             tool_name="weather_tool",
-            arguments=ToolInputMessages(
-                messages=[
-                    ToolInputMessage(
-                        role=MessageRole.ASSISTANT,
-                        parts=[
-                            ToolCallRequestPart(
-                                name="weather_tool",
-                                arguments={"location": "Seattle", "units": "metric"},
-                            )
-                        ],
-                    )
-                ]
-            ),
+            arguments='{"location": "Seattle", "units": "metric"}',
             tool_call_id="call-123",
             description="Get current weather information for a location",
         )
