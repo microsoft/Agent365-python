@@ -25,14 +25,6 @@ from .models.messages import (
     OutputMessages,
     OutputMessagesParam,
     TextPart,
-    ToolCallRequestPart,
-    ToolCallResponsePart,
-    ToolInputMessage,
-    ToolInputMessages,
-    ToolInputParam,
-    ToolOutputMessage,
-    ToolOutputMessages,
-    ToolOutputParam,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,10 +38,10 @@ def is_string_list(
 
 
 def is_wrapped_messages(
-    param: Union[InputMessagesParam, OutputMessagesParam, ToolInputMessages, ToolOutputMessages],
+    param: Union[InputMessagesParam, OutputMessagesParam],
 ) -> bool:
     """Return ``True`` when *param* is a versioned wrapper."""
-    return isinstance(param, (InputMessages, OutputMessages, ToolInputMessages, ToolOutputMessages))
+    return isinstance(param, (InputMessages, OutputMessages))
 
 
 # ---------------------------------------------------------------------------
@@ -106,65 +98,6 @@ def normalize_output_messages(param: OutputMessagesParam) -> OutputMessages:
     return param  # type: ignore[return-value]
 
 
-def _strings_to_tool_input_messages(strings: list[str]) -> list[ToolInputMessage]:
-    """Convert plain strings into ``ToolInputMessage`` objects.
-
-    Each string is treated as a raw JSON arguments string and stored
-    in the ``arguments`` field of a ``ToolCallRequestPart``. The tool
-    name is left empty as it is set separately on the span attribute.
-    """
-    return [
-        ToolInputMessage(
-            role=MessageRole.ASSISTANT,
-            parts=[ToolCallRequestPart(name="", arguments={"raw": s})],
-        )
-        for s in strings
-    ]
-
-
-def normalize_tool_input(param: ToolInputParam) -> ToolInputMessages:
-    """Normalize a ``ToolInputParam`` to a versioned ``ToolInputMessages`` wrapper.
-
-    - ``str`` → treated as raw tool arguments; wrapped in a single
-      ``ToolCallRequestPart`` with ``arguments={"raw": s}``.
-    - ``list[str]`` → each string becomes a separate tool call request.
-    - ``ToolInputMessages`` → returned as-is.
-    """
-    if isinstance(param, str):
-        return ToolInputMessages(messages=_strings_to_tool_input_messages([param]))
-    if is_string_list(param):
-        return ToolInputMessages(messages=_strings_to_tool_input_messages(param))  # type: ignore[arg-type]
-    return param  # type: ignore[return-value]
-
-
-def _strings_to_tool_output_messages(strings: list[str]) -> list[ToolOutputMessage]:
-    """Convert plain strings into ``ToolOutputMessage`` objects.
-
-    Each string is set as the ``response`` of a ``ToolCallResponsePart``.
-    """
-    return [
-        ToolOutputMessage(
-            role=MessageRole.TOOL,
-            parts=[ToolCallResponsePart(response=s)],
-        )
-        for s in strings
-    ]
-
-
-def normalize_tool_output(param: ToolOutputParam) -> ToolOutputMessages:
-    """Normalize a ``ToolOutputParam`` to a versioned ``ToolOutputMessages`` wrapper.
-
-    - ``str`` → wrapped as a single tool call response.
-    - ``list[str]`` → each string becomes a tool call response.
-    - ``ToolOutputMessages`` → returned as-is.
-    """
-    if isinstance(param, str):
-        return ToolOutputMessages(messages=_strings_to_tool_output_messages([param]))
-    if is_string_list(param):
-        return ToolOutputMessages(messages=_strings_to_tool_output_messages(param))  # type: ignore[arg-type]
-    return param  # type: ignore[return-value]
-
-
 # ---------------------------------------------------------------------------
 # Serialization
 # ---------------------------------------------------------------------------
@@ -179,7 +112,7 @@ def _message_dict_factory(items: list[tuple[str, object]]) -> dict[str, object]:
 
 
 def serialize_messages(
-    wrapper: Union[InputMessages, OutputMessages, ToolInputMessages, ToolOutputMessages],
+    wrapper: Union[InputMessages, OutputMessages],
 ) -> str:
     """Serialize a versioned message wrapper to JSON.
 

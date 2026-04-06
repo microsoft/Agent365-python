@@ -30,11 +30,6 @@ from microsoft_agents_a365.observability.core.models.messages import (
     ReasoningPart,
     TextPart,
     ToolCallRequestPart,
-    ToolCallResponsePart,
-    ToolInputMessage,
-    ToolInputMessages,
-    ToolOutputMessage,
-    ToolOutputMessages,
 )
 
 
@@ -310,54 +305,6 @@ class TestVersionField(unittest.TestCase):
         wrapper = InputMessages(messages=[])
         result = json.loads(serialize_messages(wrapper))
         self.assertEqual(result["version"], A365_MESSAGE_SCHEMA_VERSION)
-
-
-class TestToolSerialization(unittest.TestCase):
-    """Tests for serializing tool message wrappers."""
-
-    def test_serialize_tool_input(self):
-        wrapper = ToolInputMessages(
-            messages=[
-                ToolInputMessage(
-                    role=MessageRole.ASSISTANT,
-                    parts=[ToolCallRequestPart(name="search", arguments={"q": "GDPR"})],
-                )
-            ]
-        )
-        result = serialize_messages(wrapper)
-        parsed = json.loads(result)
-        self.assertEqual(parsed["version"], A365_MESSAGE_SCHEMA_VERSION)
-        self.assertEqual(len(parsed["messages"]), 1)
-        self.assertEqual(parsed["messages"][0]["role"], "assistant")
-        part = parsed["messages"][0]["parts"][0]
-        self.assertEqual(part["type"], "tool_call")
-        self.assertEqual(part["name"], "search")
-        self.assertEqual(part["arguments"], {"q": "GDPR"})
-
-    def test_serialize_tool_output(self):
-        wrapper = ToolOutputMessages(
-            messages=[
-                ToolOutputMessage(
-                    role=MessageRole.TOOL,
-                    parts=[ToolCallResponsePart(response={"hits": 3})],
-                )
-            ]
-        )
-        result = serialize_messages(wrapper)
-        parsed = json.loads(result)
-        self.assertEqual(parsed["version"], A365_MESSAGE_SCHEMA_VERSION)
-        self.assertEqual(parsed["messages"][0]["role"], "tool")
-        part = parsed["messages"][0]["parts"][0]
-        self.assertEqual(part["type"], "tool_call_response")
-        self.assertEqual(part["response"], {"hits": 3})
-
-    def test_serialize_tool_input_version_not_settable(self):
-        with self.assertRaises(TypeError):
-            ToolInputMessages(messages=[], version="99.99.99")  # type: ignore[call-arg]
-
-    def test_serialize_tool_output_version_not_settable(self):
-        with self.assertRaises(TypeError):
-            ToolOutputMessages(messages=[], version="99.99.99")  # type: ignore[call-arg]
 
 
 if __name__ == "__main__":

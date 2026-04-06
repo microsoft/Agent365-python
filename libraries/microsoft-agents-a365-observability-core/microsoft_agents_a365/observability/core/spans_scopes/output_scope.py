@@ -13,25 +13,25 @@ from ..constants import (
     USER_NAME_KEY,
 )
 from ..message_utils import normalize_output_messages, serialize_messages
-from ..models.messages import (
-    OutputMessage,
-    OutputMessages,
-    ToolOutputMessages,
-)
+from ..models.messages import OutputMessages
 from ..models.response import Response, ResponseMessagesParam
 from ..models.user_details import UserDetails
 from ..opentelemetry_scope import OpenTelemetryScope
 from ..request import Request
 from ..span_details import SpanDetails
-from ..utils import validate_and_normalize_ip
+from ..utils import safe_json_dumps, validate_and_normalize_ip
 
 OUTPUT_OPERATION_NAME = "output_messages"
 
 
 class OutputScope(OpenTelemetryScope):
-    """Provides OpenTelemetry tracing scope for output messages."""
+    """Provides OpenTelemetry tracing scope for output messages.
 
-    _MAX_OUTPUT_MESSAGES = 5000
+    Output messages are set once (via the constructor or ``record_output_messages``)
+    rather than accumulated. For streaming scenarios, the agent developer should
+    collect all output (e.g. via a list or string builder) and pass the final
+    result to ``OutputScope``.
+    """
 
     @staticmethod
     def start(
@@ -93,20 +93,7 @@ class OutputScope(OpenTelemetryScope):
         )
 
         self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
-
-        # Handle tool output messages vs regular output messages
-        if isinstance(response.messages, ToolOutputMessages):
-            # Tool output: serialize directly, no accumulation
-            self._output_messages: list[OutputMessage] = []
-            self._output_messages_dirty = False
-            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(response.messages))
-        else:
-            # Regular output: normalize and set up accumulation
-            normalized = normalize_output_messages(response.messages)
-            self._output_messages = list(normalized.messages)
-            self._output_messages_dirty = False
-            wrapper = OutputMessages(messages=self._output_messages)
-            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))
+        self._set_output(response.messages)
 
         # Set user details if provided
         if user_details:
@@ -118,39 +105,24 @@ class OutputScope(OpenTelemetryScope):
                 validate_and_normalize_ip(user_details.user_client_ip),
             )
 
+    def _set_output(self, messages: ResponseMessagesParam) -> None:
+        """Serialize and set the output messages attribute on the span."""
+        if isinstance(messages, dict):
+            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(messages))
+        else:
+            normalized = normalize_output_messages(messages)
+            wrapper = OutputMessages(messages=list(normalized.messages))
+            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))
+
     def record_output_messages(self, messages: ResponseMessagesParam) -> None:
         """Records the output messages for telemetry tracking.
 
-        Plain strings (``str`` or ``list[str]``) and ``OutputMessages`` are
-        appended to the accumulated output messages list (capped at
-        ``_MAX_OUTPUT_MESSAGES``). The updated attribute is flushed when the
-        scope is disposed.
-
-        To record tool output, pass an explicit ``ToolOutputMessages`` wrapper.
-        Plain strings cannot be distinguished as tool output at runtime.
-        Recording ``ToolOutputMessages`` overwrites the attribute immediately
-        and clears any previously accumulated assistant messages.
+        Overwrites any previously set output messages. Accepts a single string,
+        a list of strings (auto-wrapped as OTEL OutputMessage), a versioned
+        ``OutputMessages`` wrapper, or a ``dict[str, object]`` for tool call
+        results (per OTEL spec).
 
         Args:
-            messages: Assistant output (str, list[str], or OutputMessages) or
-                tool output (ToolOutputMessages).
+            messages: String(s), OutputMessages, or dict for tool call results
         """
-        if isinstance(messages, ToolOutputMessages):
-            # Tool output: serialize directly, clear accumulated state so _end()
-            # doesn't overwrite with stale OutputMessages
-            self._output_messages = []
-            self._output_messages_dirty = False
-            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(messages))
-            return
-        normalized = normalize_output_messages(messages)
-        self._output_messages.extend(normalized.messages)
-        if len(self._output_messages) > self._MAX_OUTPUT_MESSAGES:
-            self._output_messages = self._output_messages[-self._MAX_OUTPUT_MESSAGES :]
-        self._output_messages_dirty = True
-
-    def _end(self) -> None:
-        """End the span and flush accumulated output messages."""
-        if self._output_messages_dirty:
-            wrapper = OutputMessages(messages=self._output_messages)
-            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))
-        super()._end()
+        self._set_output(messages)

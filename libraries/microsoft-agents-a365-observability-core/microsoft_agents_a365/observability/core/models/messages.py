@@ -180,24 +180,6 @@ class OutputMessage(ChatMessage):
     finish_reason: str | None = None
 
 
-@dataclass
-class ToolInputMessage:
-    """A tool input message representing a tool call request."""
-
-    role: MessageRole
-    parts: list[ToolCallRequestPart] = field(default_factory=list)
-    name: str | None = None
-
-
-@dataclass
-class ToolOutputMessage:
-    """A tool output message representing a tool call response."""
-
-    role: MessageRole
-    parts: list[ToolCallResponsePart] = field(default_factory=list)
-    name: str | None = None
-
-
 # ---------------------------------------------------------------------------
 # Versioned wrappers
 # ---------------------------------------------------------------------------
@@ -222,22 +204,6 @@ class OutputMessages:
     version: str = field(default=A365_MESSAGE_SCHEMA_VERSION, init=False)
 
 
-@dataclass
-class ToolInputMessages:
-    """Versioned wrapper for tool input messages."""
-
-    messages: list[ToolInputMessage] = field(default_factory=list)
-    version: str = field(default=A365_MESSAGE_SCHEMA_VERSION, init=False)
-
-
-@dataclass
-class ToolOutputMessages:
-    """Versioned wrapper for tool output messages."""
-
-    messages: list[ToolOutputMessage] = field(default_factory=list)
-    version: str = field(default=A365_MESSAGE_SCHEMA_VERSION, init=False)
-
-
 # ---------------------------------------------------------------------------
 # Parameter type aliases (backward-compatible union types)
 # ---------------------------------------------------------------------------
@@ -252,21 +218,4 @@ OutputMessagesParam = Union[str, list[str], OutputMessages]
 """Accepted input for ``record_output_messages``.
 
 Supports a single string, a list of strings (backward compat), or the versioned wrapper.
-"""
-
-ToolInputParam = Union[str, list[str], ToolInputMessages]
-"""Accepted input for tool arguments.
-
-Supports a single string, a list of strings (backward compat), or the versioned wrapper.
-When a string or list of strings is provided, each string is stored as
-``arguments={"raw": s}`` on a ``ToolCallRequestPart`` with an empty tool name
-(the tool name is set separately via ``ToolCallDetails.tool_name``).
-"""
-
-ToolOutputParam = Union[str, list[str], ToolOutputMessages]
-"""Accepted input for tool output/response.
-
-Supports a single string, a list of strings (backward compat), or the versioned wrapper.
-When a string or list of strings is provided, each string is set as the ``response`` property
-of a ``ToolCallResponsePart``.
 """

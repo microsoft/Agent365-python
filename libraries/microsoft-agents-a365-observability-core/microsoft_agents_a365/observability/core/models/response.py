@@ -6,15 +6,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Union
 
-from .messages import OutputMessagesParam, ToolOutputParam
+from .messages import OutputMessagesParam
 
-ResponseMessagesParam = Union[OutputMessagesParam, ToolOutputParam]
+ResponseMessagesParam = Union[OutputMessagesParam, dict[str, object]]
 """Accepted type for Response.messages.
 
-Plain strings (``str`` or ``list[str]``) are treated as assistant output messages
-and normalized via ``OutputMessages``. To record tool output, pass an explicit
-``ToolOutputMessages`` wrapper — plain strings cannot be distinguished as tool
-output at runtime.
+Supports plain strings, ``OutputMessages``, or a structured tool result dict.
+A ``dict[str, object]`` is treated as a tool call result per OTEL spec and
+serialized directly via ``json.dumps``.
 """
 
 
@@ -22,8 +21,8 @@ output at runtime.
 class Response:
     """Response details from agent execution.
 
-    Accepts plain strings (backward compat) or structured ``OutputMessages``.
-    For tool output, pass an explicit ``ToolOutputMessages`` wrapper.
+    Accepts plain strings (backward compat), structured ``OutputMessages``,
+    or a ``dict`` for tool call results (per OTEL spec).
     """
 
     messages: ResponseMessagesParam

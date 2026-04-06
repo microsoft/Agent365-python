@@ -22,14 +22,12 @@ from .constants import (
     USER_ID_KEY,
     USER_NAME_KEY,
 )
-from .message_utils import normalize_tool_input, normalize_tool_output, serialize_messages
-from .models.messages import ToolOutputParam
+from .utils import safe_json_dumps, validate_and_normalize_ip
 from .models.user_details import UserDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .span_details import SpanDetails
 from .tool_call_details import ToolCallDetails
-from .utils import validate_and_normalize_ip
 
 
 class ExecuteToolScope(OpenTelemetryScope):
@@ -112,8 +110,8 @@ class ExecuteToolScope(OpenTelemetryScope):
 
         self.set_tag_maybe(GEN_AI_TOOL_NAME_KEY, tool_name)
         if arguments is not None:
-            normalized = normalize_tool_input(arguments)
-            self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, serialize_messages(normalized))
+            serialized = safe_json_dumps(arguments) if isinstance(arguments, dict) else arguments
+            self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, serialized)
         self.set_tag_maybe(GEN_AI_TOOL_TYPE_KEY, tool_type)
         self.set_tag_maybe(GEN_AI_TOOL_CALL_ID_KEY, tool_call_id)
         self.set_tag_maybe(GEN_AI_TOOL_DESCRIPTION_KEY, description)
@@ -139,14 +137,15 @@ class ExecuteToolScope(OpenTelemetryScope):
                 validate_and_normalize_ip(user_details.user_client_ip),
             )
 
-    def record_response(self, messages: ToolOutputParam) -> None:
-        """Record the tool output for telemetry tracking.
+    def record_response(self, result: dict[str, object] | str) -> None:
+        """Record the tool call result for telemetry tracking.
 
-        Accepts a single string, a list of strings (backward compat),
-        or a versioned ``ToolOutputMessages`` wrapper.
+        Per OTEL spec, the result is expected to be an object. If a string
+        is provided, it is recorded as-is (JSON string fallback). If a dict
+        is provided, it is serialized to JSON.
 
         Args:
-            messages: Tool output string(s) or a ToolOutputMessages wrapper
+            result: Tool call result as a structured dict or JSON string
         """
-        normalized = normalize_tool_output(messages)
-        self.set_tag_maybe(GEN_AI_TOOL_CALL_RESULT_KEY, serialize_messages(normalized))
+        serialized = safe_json_dumps(result) if isinstance(result, dict) else result
+        self.set_tag_maybe(GEN_AI_TOOL_CALL_RESULT_KEY, serialized)

@@ -310,60 +310,50 @@ class TestOutputScopeMessages(ScopeMessageTestBase):
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
         self.assertEqual(parsed["messages"][0]["finish_reason"], "stop")
 
-    def test_append_string_messages(self):
-        """Appending plain strings should accumulate and flush on dispose."""
+    def test_record_overwrites_string_messages(self):
+        """record_output_messages with strings overwrites previous messages."""
         response = Response(messages=["Initial"])
         with OutputScope.start(Request(), response, self.agent_details) as scope:
-            scope.record_output_messages(["Appended"])
+            scope.record_output_messages(["Replacement"])
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 2)
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Initial")
-        self.assertEqual(parsed["messages"][1]["parts"][0]["content"], "Appended")
+        self.assertEqual(len(parsed["messages"]), 1)
+        self.assertNotIn("Initial", attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
+        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Replacement")
 
-    def test_append_structured_messages(self):
-        """Appending OutputMessages should accumulate structured messages."""
+    def test_record_overwrites_with_structured(self):
+        """record_output_messages with OutputMessages overwrites previous messages."""
         response = Response(messages=["Initial"])
-        appended = OutputMessages(
+        replacement = OutputMessages(
             messages=[
                 OutputMessage(
                     role=MessageRole.ASSISTANT,
-                    parts=[TextPart(content="Structured append")],
+                    parts=[TextPart(content="Structured replacement")],
                     finish_reason=FinishReason.STOP.value,
                 )
             ]
         )
         with OutputScope.start(Request(), response, self.agent_details) as scope:
-            scope.record_output_messages(appended)
+            scope.record_output_messages(replacement)
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 2)
-        self.assertEqual(parsed["messages"][1]["finish_reason"], "stop")
+        self.assertEqual(len(parsed["messages"]), 1)
+        self.assertEqual(parsed["messages"][0]["finish_reason"], "stop")
 
-    def test_mixed_mode_accumulation(self):
-        """Mixing string and structured appends should work."""
+    def test_record_overwrites_with_dict(self):
+        """record_output_messages with dict sets tool result directly."""
         response = Response(messages=["Initial"])
         with OutputScope.start(Request(), response, self.agent_details) as scope:
-            scope.record_output_messages(["Plain text"])
-            scope.record_output_messages(
-                OutputMessages(
-                    messages=[
-                        OutputMessage(
-                            role=MessageRole.ASSISTANT,
-                            parts=[TextPart(content="Structured")],
-                        )
-                    ]
-                )
-            )
+            scope.record_output_messages({"result": "tool output"})
 
         attrs = self._get_last_span_attrs()
-        parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 3)
+        parsed = json.loads(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
+        self.assertEqual(parsed["result"], "tool output")
 
-    def test_no_append_no_flush(self):
-        """If no messages are appended, the initial value should remain unchanged."""
+    def test_no_record_keeps_initial(self):
+        """If record_output_messages is not called, initial value remains."""
         response = Response(messages=["Only initial"])
         with OutputScope.start(Request(), response, self.agent_details):
             pass
