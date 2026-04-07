@@ -97,7 +97,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -157,7 +157,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -331,7 +331,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -394,7 +394,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ) as mock_mcp_tool,
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -456,7 +456,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -616,7 +616,7 @@ class TestHttpxClientLifecycle:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -700,7 +700,7 @@ class TestHttpxClientLifecycle:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -796,7 +796,7 @@ class TestHttpxClientLifecycle:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",

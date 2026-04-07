@@ -107,15 +107,13 @@ jobs:
       run: uv lock && uv sync --locked --all-extras --dev
 
     - name: Verify centralized version constraints
-      run: python scripts/verify_constraints.py
+      run: uv run --frozen tox -e verify-constraints
 
     - name: Check linting
-      run: |
-        uv run --frozen ruff check . --preview
+      run: uv run --frozen tox -e lint
 
     - name: Check formatting
-      run: |
-        uv run --frozen ruff format --check .
+      run: uv run --frozen tox -e format
 
     - name: Build package
       run: |
@@ -124,14 +122,12 @@ jobs:
         AGENT365_PYTHON_SDK_PACKAGE_VERSION: ${{ needs.version-number.outputs.PACKAGE_VERSION }}
 
     - name: Run unit tests
-      run: |
-        uv run --frozen pytest tests/ -v --tb=short -m "not integration"
+      run: uv run --frozen tox -e py3${{ matrix.python-version == '3.11' && '11' || '12' }}
 
     - name: Run integration tests
       # Only run integration tests if secrets are available
       if: ${{ vars.RUN_INTEGRATION_TESTS == 'true' }}
-      run: |
-        uv run --frozen pytest -m integration -v --tb=short
+      run: uv run --frozen tox -e integration
       env:
         AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
         AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}

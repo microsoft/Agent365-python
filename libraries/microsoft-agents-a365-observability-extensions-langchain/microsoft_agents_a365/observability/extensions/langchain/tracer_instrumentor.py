@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Collection
 from typing import Any
 from uuid import UUID
@@ -20,6 +21,8 @@ from opentelemetry.trace import Span
 from wrapt import wrap_function_wrapper
 
 from microsoft_agents_a365.observability.extensions.langchain.tracer import CustomLangChainTracer
+
+logger = logging.getLogger(__name__)
 
 _INSTRUMENTS: str = "langchain_core >= 1.2.0"
 
@@ -86,7 +89,7 @@ class CustomLangChainInstrumentor(BaseInstrumentor):
     def get_span(self, run_id: UUID) -> Span | None:
         """Return the span for a specific LangChain run_id, if available."""
         if not self._tracer:
-            print("Missing tracer; call InstrumentorForLangChain().instrument() first.")
+            logger.warning("Missing tracer; call InstrumentorForLangChain().instrument() first.")
             return None
         # TraceForLangChain is expected to expose get_span(run_id).
         get_span_fn = getattr(self._tracer, "get_span", None)
@@ -95,7 +98,7 @@ class CustomLangChainInstrumentor(BaseInstrumentor):
     def get_ancestors(self, run_id: UUID) -> list[Span]:
         """Return ancestor spans from the run’s parent up to the root (nearest first)."""
         if not self._tracer:
-            print("Missing tracer; call InstrumentorForLangChain().instrument() first.")
+            logger.warning("Missing tracer; call InstrumentorForLangChain().instrument() first.")
             return []
 
         # Expect the processor to keep a run_map with parent linkage (string keys).

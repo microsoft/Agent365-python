@@ -3,17 +3,19 @@
 
 # Request class.
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
-from .execution_type import ExecutionType
-from .source_metadata import SourceMetadata
+from .channel import Channel
+from .models.messages import InputMessagesParam
 
 
 @dataclass
 class Request:
     """Request details for agent execution."""
 
-    content: str
-    execution_type: ExecutionType
+    content: InputMessagesParam | None = None
     session_id: str | None = None
-    source_metadata: SourceMetadata | None = None
+    channel: Channel | None = None
+    conversation_id: str | None = None

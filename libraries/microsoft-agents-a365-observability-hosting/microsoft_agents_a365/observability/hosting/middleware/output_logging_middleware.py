@@ -12,28 +12,20 @@ from microsoft_agents.activity import Activity
 from microsoft_agents.hosting.core.turn_context import TurnContext
 from microsoft_agents_a365.observability.core.agent_details import AgentDetails
 from microsoft_agents_a365.observability.core.constants import (
-    GEN_AI_CALLER_ID_KEY,
-    GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_TENANT_ID_KEY,
-    GEN_AI_CALLER_UPN_KEY,
-    GEN_AI_CONVERSATION_ID_KEY,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
-    GEN_AI_EXECUTION_TYPE_KEY,
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
 )
-from microsoft_agents_a365.observability.core.models.caller_details import CallerDetails
 from microsoft_agents_a365.observability.core.models.response import Response
+from microsoft_agents_a365.observability.core.models.user_details import UserDetails
+from microsoft_agents_a365.observability.core.request import Request
+from microsoft_agents_a365.observability.core.span_details import SpanDetails
 from microsoft_agents_a365.observability.core.spans_scopes.output_scope import OutputScope
-from microsoft_agents_a365.observability.core.tenant_details import TenantDetails
-
-from ..scope_helpers.utils import (
-    get_execution_type_pair,
-)
+from microsoft_agents_a365.observability.core.utils import extract_context_from_headers
 
 logger = logging.getLogger(__name__)
 
-A365_PARENT_SPAN_KEY = "A365ParentSpanId"
-"""TurnState key for the parent span reference."""
+# TurnState key for the parent trace context (W3C traceparent string).
+A365_PARENT_TRACEPARENT_KEY = "A365ParentTraceparent"
 
 
 def _derive_agent_details(context: TurnContext) -> AgentDetails | None:
@@ -52,29 +44,21 @@ def _derive_agent_details(context: TurnContext) -> AgentDetails | None:
     return AgentDetails(
         agent_id=activity.get_agentic_instance_id() or "",
         agent_name=getattr(recipient, "name", None),
-        agent_auid=getattr(recipient, "aad_object_id", None),
-        agent_upn=activity.get_agentic_user(),
+        agentic_user_id=getattr(recipient, "aad_object_id", None),
+        agentic_user_email=activity.get_agentic_user(),
         agent_description=getattr(recipient, "role", None),
         tenant_id=getattr(recipient, "tenant_id", None),
     )
 
 
-def _derive_tenant_details(context: TurnContext) -> TenantDetails | None:
-    """Derive tenant details from the activity recipient."""
-    tenant_id = getattr(getattr(context.activity, "recipient", None), "tenant_id", None)
-    return TenantDetails(tenant_id=tenant_id) if tenant_id else None
-
-
-def _derive_caller_details(context: TurnContext) -> CallerDetails | None:
-    """Derive caller identity details from the activity from property."""
+def _derive_user_details(context: TurnContext) -> UserDetails | None:
+    """Derive user identity details from the activity from property."""
     frm = getattr(context.activity, "from_property", None)
     if not frm:
         return None
-    return CallerDetails(
-        caller_id=getattr(frm, "aad_object_id", None),
-        caller_upn=getattr(frm, "agentic_user_id", None),
-        caller_name=getattr(frm, "name", None),
-        tenant_id=getattr(frm, "tenant_id", None),
+    return UserDetails(
+        user_id=getattr(frm, "aad_object_id", None),
+        user_name=getattr(frm, "name", None),
     )
 
 
@@ -84,10 +68,10 @@ def _derive_conversation_id(context: TurnContext) -> str | None:
     return conv.id if conv else None
 
 
-def _derive_source_metadata(
+def _derive_channel(
     context: TurnContext,
 ) -> dict[str, str | None]:
-    """Derive source metadata (channel name and description) from TurnContext."""
+    """Derive channel (name and link) from TurnContext."""
     channel_id = getattr(context.activity, "channel_id", None)
     channel_name: str | None = None
     sub_channel: str | None = None
@@ -97,21 +81,13 @@ def _derive_source_metadata(
         elif hasattr(channel_id, "channel"):
             channel_name = channel_id.channel
             sub_channel = channel_id.sub_channel
-    return {"name": channel_name, "description": sub_channel}
-
-
-def _derive_execution_type(context: TurnContext) -> str | None:
-    """Derive execution type from the activity."""
-    pairs = list(get_execution_type_pair(context.activity))
-    if pairs:
-        return pairs[0][1]
-    return None
+    return {"name": channel_name, "link": sub_channel}
 
 
 class OutputLoggingMiddleware:
     """Middleware that creates :class:`OutputScope` spans for outgoing messages.
 
-    Links to a parent span when :data:`A365_PARENT_SPAN_KEY` is set in
+    Links to a parent span when :data:`A365_PARENT_TRACEPARENT_KEY` is set in
     ``turn_state``.
 
     **Privacy note:** Outgoing message content is captured verbatim as span
@@ -124,26 +100,22 @@ class OutputLoggingMiddleware:
         logic: Callable[[TurnContext], Awaitable],
     ) -> None:
         agent_details = _derive_agent_details(context)
-        tenant_details = _derive_tenant_details(context)
 
-        if not agent_details or not tenant_details:
+        if not agent_details:
             await logic()
             return
 
-        caller_details = _derive_caller_details(context)
+        user_details = _derive_user_details(context)
         conversation_id = _derive_conversation_id(context)
-        source_metadata = _derive_source_metadata(context)
-        execution_type = _derive_execution_type(context)
+        channel = _derive_channel(context)
 
         context.on_send_activities(
             self._create_send_handler(
                 context,
                 agent_details,
-                tenant_details,
-                caller_details,
+                user_details,
                 conversation_id,
-                source_metadata,
-                execution_type,
+                channel,
             )
         )
 
@@ -153,11 +125,9 @@ class OutputLoggingMiddleware:
         self,
         turn_context: TurnContext,
         agent_details: AgentDetails,
-        tenant_details: TenantDetails,
-        caller_details: CallerDetails | None,
+        user_details: UserDetails | None,
         conversation_id: str | None,
-        source_metadata: dict[str, str | None],
-        execution_type: str | None,
+        channel: dict[str, str | None],
     ) -> Callable:
         """Create a send handler that wraps outgoing messages in OutputScope spans.
 
@@ -177,36 +147,34 @@ class OutputLoggingMiddleware:
                 await send_next()
                 return
 
-            parent_id: str | None = turn_context.turn_state.get(A365_PARENT_SPAN_KEY)
-            if not parent_id:
+            traceparent: str | None = turn_context.turn_state.get(A365_PARENT_TRACEPARENT_KEY)
+            parent_context = None
+            if traceparent:
+                parent_context = extract_context_from_headers({"traceparent": traceparent})
+            else:
                 logger.warning(
-                    "[OutputLoggingMiddleware] No parent span ref in turn_state under "
+                    "[OutputLoggingMiddleware] No traceparent in turn_state under "
                     "'%s'. OutputScope will not be linked to a parent.",
-                    A365_PARENT_SPAN_KEY,
+                    A365_PARENT_TRACEPARENT_KEY,
                 )
 
+            request = Request(
+                conversation_id=conversation_id,
+            )
+
+            span_details = SpanDetails(parent_context=parent_context) if parent_context else None
+
             output_scope = OutputScope.start(
-                agent_details=agent_details,
-                tenant_details=tenant_details,
+                request=request,
                 response=Response(messages=messages),
-                parent_id=parent_id,
+                agent_details=agent_details,
+                user_details=user_details,
+                span_details=span_details,
             )
 
             # Set additional attributes on the scope
-            output_scope.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, conversation_id)
-            output_scope.set_tag_maybe(GEN_AI_EXECUTION_TYPE_KEY, execution_type)
-            output_scope.set_tag_maybe(
-                GEN_AI_EXECUTION_SOURCE_NAME_KEY, source_metadata.get("name")
-            )
-            output_scope.set_tag_maybe(
-                GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, source_metadata.get("description")
-            )
-
-            if caller_details:
-                output_scope.set_tag_maybe(GEN_AI_CALLER_ID_KEY, caller_details.caller_id)
-                output_scope.set_tag_maybe(GEN_AI_CALLER_UPN_KEY, caller_details.caller_upn)
-                output_scope.set_tag_maybe(GEN_AI_CALLER_NAME_KEY, caller_details.caller_name)
-                output_scope.set_tag_maybe(GEN_AI_CALLER_TENANT_ID_KEY, caller_details.tenant_id)
+            output_scope.set_tag_maybe(CHANNEL_NAME_KEY, channel.get("name"))
+            output_scope.set_tag_maybe(CHANNEL_LINK_KEY, channel.get("link"))
 
             try:
                 await send_next()
