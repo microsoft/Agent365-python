@@ -46,7 +46,8 @@ class _Agent365Exporter(SpanExporter):
     Agent 365 span exporter for Agent 365:
       * Partitions spans by (tenantId, agentId)
       * Builds OTLP-like JSON: resourceSpans -> scopeSpans -> spans
-      * POSTs per group to https://{endpoint}/maven/agent365/agents/{agentId}/traces?api-version=1
+      * POSTs per group to https://{endpoint}/observability/tenants/{tenantId}/otlp/agents/{agentId}/traces?api-version=1
+      *   or, when use_s2s_endpoint is True, https://{endpoint}/observabilityService/tenants/{tenantId}/otlp/agents/{agentId}/traces?api-version=1
       * Adds Bearer token via token_resolver(agentId, tenantId)
     """
 
