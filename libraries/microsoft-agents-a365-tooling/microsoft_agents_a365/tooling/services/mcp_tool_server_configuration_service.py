@@ -267,6 +267,7 @@ class McpToolServerConfigurationService:
             if manifest_path and manifest_path.exists():
                 self._logger.info(f"Loading MCP servers from: {manifest_path}")
                 mcp_servers = self._parse_manifest_file(manifest_path)
+                self._attach_dev_tokens(mcp_servers)
             else:
                 self._log_manifest_search_failure()
 
@@ -568,12 +569,18 @@ class McpToolServerConfigurationService:
             # Determine the final URL: use custom URL if provided, otherwise construct it
             final_url = endpoint if endpoint else build_mcp_server_url(server_name)
 
+            scope_raw = server_element.get("scope")
+            scope = None if not scope_raw or scope_raw.lower() == "null" else scope_raw
+
+            audience_raw = server_element.get("audience")
+            audience = None if not audience_raw or audience_raw.lower() == "default" else audience_raw
+
             return MCPServerConfig(
                 mcp_server_name=mcp_server_name,
                 mcp_server_unique_name=mcp_server_unique_name,
                 url=final_url,
-                audience=server_element.get("audience"),
-                scope=server_element.get("scope"),
+                audience=audience,
+                scope=scope,
                 publisher=server_element.get("publisher"),
             )
 
@@ -608,12 +615,18 @@ class McpToolServerConfigurationService:
             # Determine the final URL: use custom URL if provided, otherwise construct it
             final_url = endpoint if endpoint else build_mcp_server_url(server_name)
 
+            scope_raw = server_element.get("scope")
+            scope = None if not scope_raw or scope_raw.lower() == "null" else scope_raw
+
+            audience_raw = server_element.get("audience")
+            audience = None if not audience_raw or audience_raw.lower() == "default" else audience_raw
+
             return MCPServerConfig(
                 mcp_server_name=mcp_server_name,
                 mcp_server_unique_name=mcp_server_unique_name,
                 url=final_url,
-                audience=server_element.get("audience"),
-                scope=server_element.get("scope"),
+                audience=audience,
+                scope=scope,
                 publisher=server_element.get("publisher"),
             )
 
@@ -623,6 +636,46 @@ class McpToolServerConfigurationService:
     # --------------------------------------------------------------------------
     # VALIDATION AND UTILITY HELPERS
     # --------------------------------------------------------------------------
+
+    def _attach_dev_tokens(self, servers: List[MCPServerConfig]) -> None:
+        """
+        Attach per-server Authorization headers from environment variables (local dev only).
+
+        The CLI (``a365 develop get-token``) pre-acquires tokens interactively and writes
+        them to the environment before the agent starts:
+
+        - ``BEARER_TOKEN_<SERVER_UNIQUE_NAME_UPPER>`` — V2 per-server token
+        - ``BEARER_TOKEN`` — V1 shared ATG token (fallback)
+
+        For each server, the resolution order is:
+        1. ``BEARER_TOKEN_<MCP_SERVER_UNIQUE_NAME.upper()>`` (per-audience V2 token)
+        2. ``BEARER_TOKEN`` (shared V1 ATG token)
+
+        If neither is set, no Authorization header is injected and the server is left as-is.
+        This method is a no-op in production (``_load_servers_from_manifest`` is never called
+        there) and when ``authorization`` is provided (``_attach_per_audience_tokens`` takes
+        precedence via the caller in ``list_tool_servers``).
+
+        Args:
+            servers: List of MCP server configs parsed from ToolingManifest.json.
+        """
+        shared_token = os.getenv("BEARER_TOKEN")
+
+        for server in servers:
+            unique_name = server.mcp_server_unique_name or ""
+            per_server_token = os.getenv(f"BEARER_TOKEN_{unique_name.upper()}")
+            token = per_server_token or shared_token
+
+            if token:
+                existing = dict(server.headers) if server.headers else {}
+                existing[Constants.Headers.AUTHORIZATION] = (
+                    f"{Constants.Headers.BEARER_PREFIX} {token}"
+                )
+                server.headers = existing
+                self._logger.debug(
+                    f"Attached {'per-server' if per_server_token else 'shared'} "
+                    f"dev token for '{server.mcp_server_unique_name}'"
+                )
 
     def _validate_input_parameters(self, agentic_app_id: str, auth_token: str) -> None:
         """
@@ -668,6 +721,9 @@ class McpToolServerConfigurationService:
             server_element["mcpServerUniqueName"], str
         ):
             return server_element["mcpServerUniqueName"]
+        # Fall back to mcpServerName when mcpServerUniqueName is absent
+        if "mcpServerName" in server_element and isinstance(server_element["mcpServerName"], str):
+            return server_element["mcpServerName"]
         return None
 
     def _extract_server_url(self, server_element: Dict[str, Any]) -> Optional[str]:

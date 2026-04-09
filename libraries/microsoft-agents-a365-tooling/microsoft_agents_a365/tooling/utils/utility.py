@@ -137,6 +137,7 @@ def resolve_token_scope_for_server(server: MCPServerConfig) -> str:
     """
     if (
         server.audience is not None
+        and server.audience.lower() != "default"
         and server.audience != ATG_APP_ID
         and server.audience != ATG_APP_ID_URI
     ):
