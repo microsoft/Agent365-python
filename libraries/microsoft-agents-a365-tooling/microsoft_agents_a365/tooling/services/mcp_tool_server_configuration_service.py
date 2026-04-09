@@ -573,7 +573,9 @@ class McpToolServerConfigurationService:
             scope = None if not scope_raw or scope_raw.lower() == "null" else scope_raw
 
             audience_raw = server_element.get("audience")
-            audience = None if not audience_raw or audience_raw.lower() == "default" else audience_raw
+            audience = (
+                None if not audience_raw or audience_raw.lower() == "default" else audience_raw
+            )
 
             return MCPServerConfig(
                 mcp_server_name=mcp_server_name,
@@ -619,7 +621,9 @@ class McpToolServerConfigurationService:
             scope = None if not scope_raw or scope_raw.lower() == "null" else scope_raw
 
             audience_raw = server_element.get("audience")
-            audience = None if not audience_raw or audience_raw.lower() == "default" else audience_raw
+            audience = (
+                None if not audience_raw or audience_raw.lower() == "default" else audience_raw
+            )
 
             return MCPServerConfig(
                 mcp_server_name=mcp_server_name,
