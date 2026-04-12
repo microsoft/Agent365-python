@@ -135,14 +135,18 @@ class McpToolServerConfigurationService:
         # Determine configuration source based on environment
         if self._is_development_scenario():
             servers = self._load_servers_from_manifest()
+            # _attach_dev_tokens() already ran inside _load_servers_from_manifest().
+            # No OBO exchange in dev: env vars (BEARER_TOKEN_* / BEARER_TOKEN) are the
+            # auth mechanism, and the gateway is not reachable, so per-audience scopes
+            # are meaningless here.
         else:
             servers = await self._load_servers_from_gateway(agentic_app_id, auth_token, options)
-
-        # Acquire per-audience tokens and attach Authorization headers when auth context provided
-        if authorization is not None and auth_handler_name is not None and turn_context is not None:
-            servers = await self._attach_per_audience_tokens(
-                servers, authorization, auth_handler_name, turn_context
-            )
+            # Prod only: acquire per-audience tokens via OBO for each unique server audience.
+            # V1 servers share the shared ATG token; V2 servers each get their own audience token.
+            if authorization is not None and auth_handler_name is not None and turn_context is not None:
+                servers = await self._attach_per_audience_tokens(
+                    servers, authorization, auth_handler_name, turn_context
+                )
 
         return servers
 
