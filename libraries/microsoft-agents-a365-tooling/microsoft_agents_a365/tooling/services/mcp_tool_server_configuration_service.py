@@ -24,7 +24,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
 # Third-party imports
@@ -44,6 +44,17 @@ from ..utils.utility import (
 # Runtime Imports
 from microsoft_agents_a365.runtime import OperationError, OperationResult
 from microsoft_agents_a365.runtime.utility import Utility as RuntimeUtility
+
+
+# ==============================================================================
+# TYPES
+# ==============================================================================
+
+# Callable that acquires an auth token for a given server and scope.
+# Returns the raw token string (without Bearer prefix), or None if unavailable.
+# Used by _attach_per_audience_tokens to decouple token acquisition strategy
+# (dev env-var reads vs. production OBO exchange) from token attachment logic.
+TokenAcquirer = Callable[["MCPServerConfig", str], Awaitable[Optional[str]]]
 
 
 # ==============================================================================
@@ -132,22 +143,28 @@ class McpToolServerConfigurationService:
 
         self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
-        # Determine configuration source based on environment
+        # Determine configuration source and token acquirer based on environment.
         if self._is_development_scenario():
             servers = self._load_servers_from_manifest()
-            # _attach_dev_tokens() already ran inside _load_servers_from_manifest().
-            # No OBO exchange in dev: env vars (BEARER_TOKEN_* / BEARER_TOKEN) are the
-            # auth mechanism, and the gateway is not reachable, so per-audience scopes
-            # are meaningless here.
+            # Dev: read pre-acquired tokens from env vars (no OBO exchange).
+            # BEARER_TOKEN_<MCPSERVERNAME_UPPER> takes precedence; BEARER_TOKEN is the fallback.
+            acquire: TokenAcquirer = self._create_dev_token_acquirer()
         else:
             servers = await self._load_servers_from_gateway(agentic_app_id, auth_token, options)
-            # Prod only: acquire per-audience tokens via OBO for each unique server audience.
-            # V1 servers share the shared ATG token; V2 servers each get their own audience token.
-            if authorization is not None and auth_handler_name is not None and turn_context is not None:
-                servers = await self._attach_per_audience_tokens(
-                    servers, authorization, auth_handler_name, turn_context
+            if (
+                authorization is not None
+                and auth_handler_name is not None
+                and turn_context is not None
+            ):
+                # Prod: acquire per-audience tokens via OBO for each unique server audience.
+                # V1 servers share the shared ATG token; V2 servers each get their own audience token.
+                acquire = self._create_obo_token_acquirer(
+                    authorization, auth_handler_name, turn_context
                 )
+            else:
+                return servers
 
+        servers = await self._attach_per_audience_tokens(servers, acquire)
         return servers
 
     # --------------------------------------------------------------------------
@@ -167,64 +184,124 @@ class McpToolServerConfigurationService:
         self._logger.debug(f"Environment: {environment}, Development scenario: {is_dev}")
         return is_dev
 
-    async def _attach_per_audience_tokens(
+    def _create_dev_token_acquirer(self) -> TokenAcquirer:
+        """
+        Returns a ``TokenAcquirer`` that reads pre-acquired tokens from environment variables.
+
+        The CLI (``a365 develop get-token``) writes tokens to the environment before the agent
+        starts. Resolution order per server:
+
+        1. ``BEARER_TOKEN_<MCP_SERVER_NAME_UPPER>`` — per-server token (aligns with Node.js)
+        2. ``BEARER_TOKEN`` — shared fallback token
+
+        Returns:
+            TokenAcquirer: Async callable ``(server, scope) → Optional[str]``.
+        """
+        shared_token = os.getenv("BEARER_TOKEN")
+
+        async def acquire(server: MCPServerConfig, _scope: str) -> Optional[str]:
+            server_name = server.mcp_server_name or ""
+            per_server_token = os.getenv(f"BEARER_TOKEN_{server_name.upper()}")
+            token = per_server_token or shared_token
+            if token:
+                self._logger.debug(
+                    f"Attached {'per-server' if per_server_token else 'shared'} "
+                    f"dev token for '{server.mcp_server_name}'"
+                )
+            return token or None
+
+        return acquire
+
+    def _create_obo_token_acquirer(
         self,
-        servers: List[MCPServerConfig],
         authorization: Authorization,
         auth_handler_name: str,
         turn_context: TurnContext,
-    ) -> List[MCPServerConfig]:
+    ) -> TokenAcquirer:
         """
-        Acquire one OAuth token per unique audience and attach an ``Authorization: Bearer``
-        header to each server's headers.
+        Returns a ``TokenAcquirer`` that performs an OBO token exchange per unique scope.
 
-        V1 servers (no ``audience`` field, or audience matching the shared ATG AppId) all
-        share the same ATG-scoped token (one exchange). V2 servers each receive a token
-        scoped to their own audience GUID.
+        V1 servers (no ``audience`` field) share the shared ATG-scoped token (one exchange).
+        V2 servers each receive a token scoped to their own audience GUID.
 
         Args:
-            servers: List of MCP server configs returned from discovery.
             authorization: Authorization context for token exchange.
             auth_handler_name: Auth handler name to pass to the token exchange.
             turn_context: TurnContext to pass to the token exchange.
 
         Returns:
-            List[MCPServerConfig]: New list of server configs with ``Authorization`` headers set.
+            TokenAcquirer: Async callable ``(server, scope) → str`` (raises on failure).
+        """
+
+        async def acquire(server: MCPServerConfig, scope: str) -> Optional[str]:
+            self._logger.debug(
+                f"Acquiring OBO token for MCP server '{server.mcp_server_name}' (scope: {scope})"
+            )
+            token_result = await authorization.exchange_token(
+                turn_context, [scope], auth_handler_name
+            )
+            if token_result is None or not token_result.token:
+                raise Exception(
+                    f"Failed to obtain token for MCP server '{server.mcp_server_name}'"
+                    f" (scope: {scope})"
+                )
+            return token_result.token
+
+        return acquire
+
+    async def _attach_per_audience_tokens(
+        self,
+        servers: List[MCPServerConfig],
+        acquire: TokenAcquirer,
+    ) -> List[MCPServerConfig]:
+        """
+        Acquire one token per unique audience scope and attach ``Authorization: Bearer`` headers.
+
+        Caches acquired tokens by scope so each unique audience triggers exactly one
+        ``acquire`` call regardless of how many servers share that scope.
+
+        V1 servers (no ``audience`` field) all share one token exchange.
+        V2 servers each receive a token scoped to their own audience GUID.
+
+        Args:
+            servers: List of MCP server configs returned from discovery.
+            acquire: ``TokenAcquirer`` callable returned by ``_create_dev_token_acquirer`` or
+                     ``_create_obo_token_acquirer``. Receives ``(server, scope)`` and returns
+                     the raw token string (no Bearer prefix), or ``None`` if unavailable.
+
+        Returns:
+            List[MCPServerConfig]: New list of server configs with ``Authorization`` headers set
+            where a token was available.
 
         Raises:
-            Exception: If a token exchange fails for any server.
+            Exception: If the OBO acquirer fails for any server (propagated from ``acquire``).
         """
-        token_cache: Dict[str, str] = {}  # scope → bearer token
+        token_cache: Dict[str, Optional[str]] = {}  # scope → raw token (None = not available)
         result: List[MCPServerConfig] = []
 
         for server in servers:
             scope = resolve_token_scope_for_server(server)
 
             if scope not in token_cache:
-                self._logger.debug(
-                    f"Acquiring token for MCP server '{server.mcp_server_name}' (scope: {scope})"
-                )
-                token_result = await authorization.exchange_token(
-                    turn_context, [scope], auth_handler_name
-                )
-                if token_result is None or not token_result.token:
-                    raise Exception(
-                        f"Failed to obtain token for MCP server '{server.mcp_server_name}'"
-                        f" (scope: {scope})"
-                    )
-                token_cache[scope] = token_result.token
+                token_cache[scope] = await acquire(server, scope)
 
-            merged_headers: Dict[str, str] = dict(server.headers) if server.headers else {}
-            merged_headers[Constants.Headers.AUTHORIZATION] = (
-                f"{Constants.Headers.BEARER_PREFIX} {token_cache[scope]}"
-            )
+            token = token_cache[scope]
+            if token:
+                merged_headers: Dict[str, str] = dict(server.headers) if server.headers else {}
+                merged_headers[Constants.Headers.AUTHORIZATION] = (
+                    f"{Constants.Headers.BEARER_PREFIX} {token}"
+                )
+                final_headers: Optional[Dict[str, str]] = merged_headers
+            else:
+                # No token acquired — preserve original headers (including None) unchanged.
+                final_headers = dict(server.headers) if server.headers else None
 
             result.append(
                 MCPServerConfig(
                     mcp_server_name=server.mcp_server_name,
                     mcp_server_unique_name=server.mcp_server_unique_name,
                     url=server.url,
-                    headers=merged_headers,
+                    headers=final_headers,
                     audience=server.audience,
                     scope=server.scope,
                     publisher=server.publisher,
@@ -271,7 +348,6 @@ class McpToolServerConfigurationService:
             if manifest_path and manifest_path.exists():
                 self._logger.info(f"Loading MCP servers from: {manifest_path}")
                 mcp_servers = self._parse_manifest_file(manifest_path)
-                self._attach_dev_tokens(mcp_servers)
             else:
                 self._log_manifest_search_failure()
 
@@ -644,46 +720,6 @@ class McpToolServerConfigurationService:
     # --------------------------------------------------------------------------
     # VALIDATION AND UTILITY HELPERS
     # --------------------------------------------------------------------------
-
-    def _attach_dev_tokens(self, servers: List[MCPServerConfig]) -> None:
-        """
-        Attach per-server Authorization headers from environment variables (local dev only).
-
-        The CLI (``a365 develop get-token``) pre-acquires tokens interactively and writes
-        them to the environment before the agent starts:
-
-        - ``BEARER_TOKEN_<SERVER_UNIQUE_NAME_UPPER>`` — V2 per-server token
-        - ``BEARER_TOKEN`` — V1 shared ATG token (fallback)
-
-        For each server, the resolution order is:
-        1. ``BEARER_TOKEN_<MCP_SERVER_UNIQUE_NAME.upper()>`` (per-audience V2 token)
-        2. ``BEARER_TOKEN`` (shared V1 ATG token)
-
-        If neither is set, no Authorization header is injected and the server is left as-is.
-        This method is a no-op in production (``_load_servers_from_manifest`` is never called
-        there) and when ``authorization`` is provided (``_attach_per_audience_tokens`` takes
-        precedence via the caller in ``list_tool_servers``).
-
-        Args:
-            servers: List of MCP server configs parsed from ToolingManifest.json.
-        """
-        shared_token = os.getenv("BEARER_TOKEN")
-
-        for server in servers:
-            unique_name = server.mcp_server_unique_name or ""
-            per_server_token = os.getenv(f"BEARER_TOKEN_{unique_name.upper()}")
-            token = per_server_token or shared_token
-
-            if token:
-                existing = dict(server.headers) if server.headers else {}
-                existing[Constants.Headers.AUTHORIZATION] = (
-                    f"{Constants.Headers.BEARER_PREFIX} {token}"
-                )
-                server.headers = existing
-                self._logger.debug(
-                    f"Attached {'per-server' if per_server_token else 'shared'} "
-                    f"dev token for '{server.mcp_server_unique_name}'"
-                )
 
     def _validate_input_parameters(self, agentic_app_id: str, auth_token: str) -> None:
         """

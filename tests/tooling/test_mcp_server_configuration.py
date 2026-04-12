@@ -344,7 +344,12 @@ class TestResolveTokenScopeForServer:
 
 
 class TestAttachPerAudienceTokens:
-    """Tests for McpToolServerConfigurationService._attach_per_audience_tokens()."""
+    """Tests for McpToolServerConfigurationService._attach_per_audience_tokens().
+
+    Since _attach_per_audience_tokens now accepts a TokenAcquirer callable,
+    these tests use service._create_obo_token_acquirer() to build the acquirer
+    from a mock authorization object — matching real production usage.
+    """
 
     ATG_APP_ID = "ea9ffc3e-8a23-4a7d-836d-234d7c7565c1"
 
@@ -373,10 +378,9 @@ class TestAttachPerAudienceTokens:
         """V1 server (no audience) receives ATG-scoped token."""
         servers = [self._make_server("mail")]
         authorization, turn_context = self._make_auth_context("atg-token")
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
 
-        result = await service._attach_per_audience_tokens(
-            servers, authorization, "handler", turn_context
-        )
+        result = await service._attach_per_audience_tokens(servers, acquire)
 
         assert len(result) == 1
         assert result[0].headers["Authorization"] == "Bearer atg-token"
@@ -390,10 +394,9 @@ class TestAttachPerAudienceTokens:
         guid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         servers = [self._make_server("calendar", audience=guid)]
         authorization, turn_context = self._make_auth_context("v2-token")
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
 
-        result = await service._attach_per_audience_tokens(
-            servers, authorization, "handler", turn_context
-        )
+        result = await service._attach_per_audience_tokens(servers, acquire)
 
         assert result[0].headers["Authorization"] == "Bearer v2-token"
         authorization.exchange_token.assert_called_once_with(
@@ -409,10 +412,9 @@ class TestAttachPerAudienceTokens:
             self._make_server("files"),
         ]
         authorization, turn_context = self._make_auth_context("shared-atg-token")
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
 
-        result = await service._attach_per_audience_tokens(
-            servers, authorization, "handler", turn_context
-        )
+        result = await service._attach_per_audience_tokens(servers, acquire)
 
         assert all(s.headers["Authorization"] == "Bearer shared-atg-token" for s in result)
         authorization.exchange_token.assert_called_once()
@@ -441,10 +443,9 @@ class TestAttachPerAudienceTokens:
 
         authorization.exchange_token = fake_exchange
         turn_context = MagicMock()
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
 
-        result = await service._attach_per_audience_tokens(
-            servers, authorization, "handler", turn_context
-        )
+        result = await service._attach_per_audience_tokens(servers, acquire)
 
         assert call_count[0] == 3  # ATG + guid1 + guid2
         assert result[0].headers["Authorization"] == f"Bearer token-for-{self.ATG_APP_ID}/.default"
@@ -455,29 +456,27 @@ class TestAttachPerAudienceTokens:
 
     @pytest.mark.asyncio
     async def test_raises_when_token_exchange_returns_none(self, service):
-        """Exception raised when token exchange returns None."""
+        """Exception raised when OBO token exchange returns None."""
         servers = [self._make_server("mail")]
         authorization = MagicMock()
         authorization.exchange_token = AsyncMock(return_value=None)
+        acquire = service._create_obo_token_acquirer(authorization, "handler", MagicMock())
 
         with pytest.raises(Exception, match="Failed to obtain token"):
-            await service._attach_per_audience_tokens(
-                servers, authorization, "handler", MagicMock()
-            )
+            await service._attach_per_audience_tokens(servers, acquire)
 
     @pytest.mark.asyncio
     async def test_raises_when_token_is_empty(self, service):
-        """Exception raised when token result has empty token string."""
+        """Exception raised when OBO token result has an empty token string."""
         servers = [self._make_server("mail")]
         authorization = MagicMock()
         token_result = MagicMock()
         token_result.token = ""
         authorization.exchange_token = AsyncMock(return_value=token_result)
+        acquire = service._create_obo_token_acquirer(authorization, "handler", MagicMock())
 
         with pytest.raises(Exception, match="Failed to obtain token"):
-            await service._attach_per_audience_tokens(
-                servers, authorization, "handler", MagicMock()
-            )
+            await service._attach_per_audience_tokens(servers, acquire)
 
     @pytest.mark.asyncio
     async def test_preserves_existing_server_headers(self, service):
@@ -489,10 +488,9 @@ class TestAttachPerAudienceTokens:
             headers={"X-Custom": "my-value"},
         )
         authorization, turn_context = self._make_auth_context("tok")
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
 
-        result = await service._attach_per_audience_tokens(
-            [server], authorization, "handler", turn_context
-        )
+        result = await service._attach_per_audience_tokens([server], acquire)
 
         assert result[0].headers["X-Custom"] == "my-value"
         assert result[0].headers["Authorization"] == "Bearer tok"

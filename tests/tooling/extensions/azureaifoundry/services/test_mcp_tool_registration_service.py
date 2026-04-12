@@ -16,7 +16,6 @@ These tests verify that:
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from microsoft_agents_a365.tooling.extensions.azureaifoundry.services import (
     McpToolRegistrationService,
 )
@@ -26,7 +25,9 @@ from microsoft_agents_a365.tooling.utils.constants import Constants
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-_MODULE = "microsoft_agents_a365.tooling.extensions.azureaifoundry.services.mcp_tool_registration_service"
+_MODULE = (
+    "microsoft_agents_a365.tooling.extensions.azureaifoundry.services.mcp_tool_registration_service"
+)
 
 
 def _make_mock_server(auth_header: str | None = None):
@@ -105,7 +106,7 @@ class TestAuthContextForwardedToListToolServers:
         """list_tool_servers must receive the full auth context so per-audience
         token exchange runs for V2 MCP servers."""
         auth_token = "discovery-token"
-        mock_server = _make_mock_server(f"Bearer per-audience-token")
+        mock_server = _make_mock_server("Bearer per-audience-token")
         mock_mcp_tool = _make_mock_mcp_tool()
 
         service._mcp_server_configuration_service.list_tool_servers = AsyncMock(
@@ -141,7 +142,7 @@ class TestAuthContextForwardedToListToolServers:
     ):
         """Verify keyword argument names match list_tool_servers signature exactly."""
         auth_token = "token-xyz"
-        mock_server = _make_mock_server(f"Bearer v2-token")
+        mock_server = _make_mock_server("Bearer v2-token")
         mock_mcp_tool = _make_mock_mcp_tool()
 
         list_tool_servers_mock = AsyncMock(return_value=[mock_server])
@@ -377,7 +378,8 @@ class TestMultipleServers:
 
         def _get_auth(tool):
             calls = [
-                c for c in tool.update_headers.call_args_list
+                c
+                for c in tool.update_headers.call_args_list
                 if c.args[0] == Constants.Headers.AUTHORIZATION
             ]
             return calls[0].args[1] if calls else None
