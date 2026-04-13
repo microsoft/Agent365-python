@@ -17,6 +17,7 @@ from .constants import (
     GEN_AI_CALLER_AGENT_NAME_KEY,
     GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,
     GEN_AI_CALLER_AGENT_USER_ID_KEY,
+    GEN_AI_CALLER_AGENT_VERSION_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
@@ -30,11 +31,17 @@ from .constants import (
     USER_NAME_KEY,
 )
 from .invoke_agent_details import InvokeAgentScopeDetails
+from .message_utils import (
+    normalize_input_messages,
+    normalize_output_messages,
+    serialize_messages,
+)
 from .models.caller_details import CallerDetails
+from .models.messages import InputMessagesParam, OutputMessagesParam
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .span_details import SpanDetails
-from .utils import safe_json_dumps, validate_and_normalize_ip
+from .utils import validate_and_normalize_ip
 
 logger = logging.getLogger(__name__)
 
@@ -93,25 +100,26 @@ class InvokeAgentScope(OpenTelemetryScope):
         if agent_details.agent_name:
             activity_name = f"{INVOKE_AGENT_OPERATION_NAME} {agent_details.agent_name}"
 
-        kind = SpanKind.CLIENT
-        parent_context = None
-        start_time = None
-        end_time = None
-        if span_details is not None:
-            if span_details.span_kind is not None:
-                kind = span_details.span_kind
-            parent_context = span_details.parent_context
-            start_time = span_details.start_time
-            end_time = span_details.end_time
+        # spanKind defaults to CLIENT; allow override via span_details
+        resolved_span_details = (
+            SpanDetails(
+                span_kind=span_details.span_kind
+                if span_details and span_details.span_kind
+                else SpanKind.CLIENT,
+                parent_context=span_details.parent_context if span_details else None,
+                start_time=span_details.start_time if span_details else None,
+                end_time=span_details.end_time if span_details else None,
+                span_links=span_details.span_links if span_details else None,
+            )
+            if span_details
+            else SpanDetails(span_kind=SpanKind.CLIENT)
+        )
 
         super().__init__(
-            kind=kind,
             operation_name=INVOKE_AGENT_OPERATION_NAME,
             activity_name=activity_name,
             agent_details=agent_details,
-            parent_context=parent_context,
-            start_time=start_time,
-            end_time=end_time,
+            span_details=resolved_span_details,
         )
 
         self.set_tag_maybe(SESSION_ID_KEY, request.session_id)
@@ -127,8 +135,8 @@ class InvokeAgentScope(OpenTelemetryScope):
         if request.channel:
             self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
             self.set_tag_maybe(CHANNEL_LINK_KEY, request.channel.link)
-        if request.content:
-            self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps([request.content]))
+        if request.content is not None:
+            self.record_input_messages(request.content)
 
         # Set caller details tags
         if caller_details:
@@ -161,6 +169,10 @@ class InvokeAgentScope(OpenTelemetryScope):
                     GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY,
                     caller_agent_details.agent_platform_id,
                 )
+                self.set_tag_maybe(
+                    GEN_AI_CALLER_AGENT_VERSION_KEY,
+                    caller_agent_details.agent_version,
+                )
 
     def record_response(self, response: str) -> None:
         """Record response information for telemetry tracking.
@@ -170,18 +182,26 @@ class InvokeAgentScope(OpenTelemetryScope):
         """
         self.record_output_messages([response])
 
-    def record_input_messages(self, messages: list[str]) -> None:
+    def record_input_messages(self, messages: InputMessagesParam) -> None:
         """Record the input messages for telemetry tracking.
 
-        Args:
-            messages: List of input messages to record
-        """
-        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps(messages))
+        Accepts plain strings (auto-wrapped as OTEL ChatMessage with role ``user``)
+        or a versioned ``InputMessages`` wrapper.
 
-    def record_output_messages(self, messages: list[str]) -> None:
+        Args:
+            messages: List of input message strings or an InputMessages wrapper
+        """
+        wrapper = normalize_input_messages(messages)
+        self.set_tag_maybe(GEN_AI_INPUT_MESSAGES_KEY, serialize_messages(wrapper))
+
+    def record_output_messages(self, messages: OutputMessagesParam) -> None:
         """Record the output messages for telemetry tracking.
 
+        Accepts plain strings (auto-wrapped as OTEL OutputMessage with role ``assistant``)
+        or a versioned ``OutputMessages`` wrapper.
+
         Args:
-            messages: List of output messages to record
+            messages: List of output message strings or an OutputMessages wrapper
         """
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(messages))
+        wrapper = normalize_output_messages(messages)
+        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))
