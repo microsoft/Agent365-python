@@ -11,7 +11,10 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
+    GEN_AI_AGENT_VERSION_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
+    SERVER_ADDRESS_KEY,
+    SERVER_PORT_KEY,
     SERVICE_NAME_KEY,
     SESSION_DESCRIPTION_KEY,
     SESSION_ID_KEY,
@@ -328,6 +331,60 @@ class TestBaggageBuilder(unittest.TestCase):
         with BaggageBuilder().operation_source("   ").build():
             current_baggage = baggage.get_all()
             self.assertIsNone(current_baggage.get(SERVICE_NAME_KEY))
+
+    def test_invoke_agent_server_sets_address_and_port(self):
+        """Test that invoke_agent_server sets both address and non-443 port."""
+        address = "app.azurewebsites.net"
+        port = 8080
+
+        with BaggageBuilder().invoke_agent_server(address, port).build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(SERVER_ADDRESS_KEY), address)
+            self.assertEqual(current_baggage.get(SERVER_PORT_KEY), str(port))
+
+        # After scope exit, baggage should be cleared
+        current_baggage = baggage.get_all()
+        self.assertIsNone(current_baggage.get(SERVER_ADDRESS_KEY))
+        self.assertIsNone(current_baggage.get(SERVER_PORT_KEY))
+
+    def test_invoke_agent_server_omits_port_when_443(self):
+        """Test that invoke_agent_server omits port when it is the default 443."""
+        address = "app.azurewebsites.net"
+
+        with BaggageBuilder().invoke_agent_server(address, 443).build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(SERVER_ADDRESS_KEY), address)
+            self.assertIsNone(current_baggage.get(SERVER_PORT_KEY))
+
+    def test_invoke_agent_server_sets_address_only_when_port_none(self):
+        """Test that invoke_agent_server sets only address when port is None."""
+        address = "app.azurewebsites.net"
+
+        with BaggageBuilder().invoke_agent_server(address).build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(SERVER_ADDRESS_KEY), address)
+            self.assertIsNone(current_baggage.get(SERVER_PORT_KEY))
+
+    def test_agent_version_method(self):
+        """Test agent_version method sets agent version baggage."""
+        self.assertTrue(hasattr(self.builder, "agent_version"))
+        self.assertTrue(callable(self.builder.agent_version))
+
+        with self.builder.agent_version("1.0.0").build():
+            current_baggage = baggage.get_all()
+            self.assertEqual(current_baggage.get(GEN_AI_AGENT_VERSION_KEY), "1.0.0")
+
+    def test_agent_version_none_not_set(self):
+        """Test agent_version with None does not set baggage."""
+        with BaggageBuilder().agent_version(None).build():
+            current_baggage = baggage.get_all()
+            self.assertIsNone(current_baggage.get(GEN_AI_AGENT_VERSION_KEY))
+
+    def test_agent_version_whitespace_not_set(self):
+        """Test agent_version with whitespace-only value does not set baggage."""
+        with BaggageBuilder().agent_version("   ").build():
+            current_baggage = baggage.get_all()
+            self.assertIsNone(current_baggage.get(GEN_AI_AGENT_VERSION_KEY))
 
 
 if __name__ == "__main__":

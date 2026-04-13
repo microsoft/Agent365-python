@@ -84,7 +84,6 @@ class TestExecuteToolScope(unittest.TestCase):
         scope = ExecuteToolScope.start(Request(), self.tool_details, self.agent_details)
 
         if scope is not None:
-            # Test that the method exists
             self.assertTrue(hasattr(scope, "record_response"))
             self.assertTrue(callable(scope.record_response))
             scope.dispose()

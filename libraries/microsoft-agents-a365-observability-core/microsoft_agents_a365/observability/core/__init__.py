@@ -19,13 +19,37 @@ from .exporters.enriching_span_processor import (
     unregister_span_enricher,
 )
 from .exporters.spectra_exporter_options import SpectraExporterOptions
-from .inference_call_details import InferenceCallDetails, ServiceEndpoint
+from .inference_call_details import InferenceCallDetails
+from .models.service_endpoint import ServiceEndpoint
 from .inference_operation_type import InferenceOperationType
 from .inference_scope import InferenceScope
 from .invoke_agent_details import InvokeAgentScopeDetails
 from .invoke_agent_scope import InvokeAgentScope
 from .middleware.baggage_builder import BaggageBuilder
 from .models.caller_details import CallerDetails
+from .models.messages import (
+    BlobPart,
+    ChatMessage,
+    FilePart,
+    FinishReason,
+    GenericPart,
+    InputMessages,
+    InputMessagesParam,
+    MessagePart,
+    MessageRole,
+    Modality,
+    OutputMessage,
+    OutputMessages,
+    OutputMessagesParam,
+    ReasoningPart,
+    ServerToolCallPart,
+    ServerToolCallResponsePart,
+    TextPart,
+    ToolCallRequestPart,
+    ToolCallResponsePart,
+    UriPart,
+)
+from .models.response import Response
 from .models.user_details import UserDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
@@ -70,12 +94,34 @@ __all__ = [
     "ToolCallDetails",
     "Channel",
     "Request",
+    "Response",
     "SpanDetails",
     "InferenceCallDetails",
     "ServiceEndpoint",
     # Enums
     "InferenceOperationType",
     "ToolType",
+    # OTEL gen-ai message format types
+    "MessageRole",
+    "FinishReason",
+    "Modality",
+    "TextPart",
+    "ToolCallRequestPart",
+    "ToolCallResponsePart",
+    "ReasoningPart",
+    "BlobPart",
+    "FilePart",
+    "UriPart",
+    "ServerToolCallPart",
+    "ServerToolCallResponsePart",
+    "GenericPart",
+    "MessagePart",
+    "ChatMessage",
+    "OutputMessage",
+    "InputMessages",
+    "OutputMessages",
+    "InputMessagesParam",
+    "OutputMessagesParam",
     # Utility functions
     "extract_context_from_headers",
     "get_traceparent",

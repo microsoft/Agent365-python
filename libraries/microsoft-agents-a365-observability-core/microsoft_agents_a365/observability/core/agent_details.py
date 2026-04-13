@@ -38,3 +38,6 @@ class AgentDetails:
 
     provider_name: Optional[str] = None
     """The provider name (e.g., openai, anthropic)."""
+
+    agent_version: Optional[str] = None
+    """Optional version of the agent (e.g., "1.0.0", "2025-05-01")."""

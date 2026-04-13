@@ -91,22 +91,18 @@ class TestOutputScope(unittest.TestCase):
         self.assertIn("First message", output_value)
         self.assertIn("Second message", output_value)
 
-    def test_record_output_messages_appends(self):
-        """Test record_output_messages appends to accumulated messages."""
+    def test_record_output_messages_overwrites(self):
+        """Test record_output_messages overwrites previously set messages."""
         response = Response(messages=["Initial"])
 
         with OutputScope.start(Request(), response, self.agent_details) as scope:
-            scope.record_output_messages(["Appended 1"])
-            scope.record_output_messages(["Appended 2", "Appended 3"])
+            scope.record_output_messages(["Final message"])
 
         _, attributes = self._get_last_span()
 
         output_value = attributes[GEN_AI_OUTPUT_MESSAGES_KEY]
-        # All messages should be present (initial + all appended)
-        self.assertIn("Initial", output_value)
-        self.assertIn("Appended 1", output_value)
-        self.assertIn("Appended 2", output_value)
-        self.assertIn("Appended 3", output_value)
+        self.assertNotIn("Initial", output_value)
+        self.assertIn("Final message", output_value)
 
     def test_output_scope_with_parent_context(self):
         """Test OutputScope uses parent_context to link span to parent context."""
