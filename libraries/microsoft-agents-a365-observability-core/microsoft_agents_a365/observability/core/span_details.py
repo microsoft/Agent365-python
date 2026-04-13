@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from opentelemetry.context import Context
-from opentelemetry.trace import SpanKind
+from opentelemetry.trace import Link, SpanKind
 
 
 @dataclass
@@ -23,3 +23,6 @@ class SpanDetails:
 
     end_time: datetime | None = None
     """Optional explicit end time as a datetime object."""
+
+    span_links: list[Link] | None = None
+    """Optional span links to associate with this span for causal relationships."""

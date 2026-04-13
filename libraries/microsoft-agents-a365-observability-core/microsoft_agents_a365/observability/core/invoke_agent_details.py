@@ -4,11 +4,12 @@
 # Data class for invoke agent scope details.
 
 from dataclasses import dataclass
-from urllib.parse import ParseResult
+
+from .models.service_endpoint import ServiceEndpoint
 
 
 @dataclass
 class InvokeAgentScopeDetails:
     """Scope-level configuration for agent invocation tracing."""
 
-    endpoint: ParseResult | None = None
+    endpoint: ServiceEndpoint | None = None
