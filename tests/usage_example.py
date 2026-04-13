@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 
 import os
-from urllib.parse import urlparse
 
 
 def main():
@@ -18,6 +17,7 @@ def main():
         InvokeAgentScope,
         InvokeAgentScopeDetails,
         Request,
+        ServiceEndpoint,
         configure,
     )
 
@@ -67,7 +67,7 @@ def main():
 
     # Create invoke agent scope details (aligned with .NET SDK)
     invoke_scope_details = InvokeAgentScopeDetails(
-        endpoint=urlparse("https://agents.company.com:8080/inventory"),
+        endpoint=ServiceEndpoint(hostname="agents.company.com", port=8080),
     )
 
     # Create request for the invocation

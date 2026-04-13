@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from opentelemetry.trace import SpanKind
+
 from ..agent_details import AgentDetails
 from ..constants import (
     GEN_AI_CALLER_CLIENT_IP_KEY,
@@ -10,7 +12,9 @@ from ..constants import (
     USER_ID_KEY,
     USER_NAME_KEY,
 )
-from ..models.response import Response
+from ..message_utils import normalize_output_messages, serialize_messages
+from ..models.messages import OutputMessages
+from ..models.response import Response, ResponseMessagesParam
 from ..models.user_details import UserDetails
 from ..opentelemetry_scope import OpenTelemetryScope
 from ..request import Request
@@ -21,9 +25,13 @@ OUTPUT_OPERATION_NAME = "output_messages"
 
 
 class OutputScope(OpenTelemetryScope):
-    """Provides OpenTelemetry tracing scope for output messages."""
+    """Provides OpenTelemetry tracing scope for output messages.
 
-    _MAX_OUTPUT_MESSAGES = 5000
+    Output messages are set once (via the constructor or ``record_output_messages``)
+    rather than accumulated. For streaming scenarios, the agent developer should
+    collect all output (e.g. via a list or string builder) and pass the final
+    result to ``OutputScope``.
+    """
 
     @staticmethod
     def start(
@@ -64,31 +72,28 @@ class OutputScope(OpenTelemetryScope):
             user_details: Optional human user details
             span_details: Optional span configuration (parent context, timing)
         """
-        parent_context = None
-        start_time = None
-        end_time = None
-        if span_details is not None:
-            parent_context = span_details.parent_context
-            start_time = span_details.start_time
-            end_time = span_details.end_time
+        # spanKind for OutputScope is always CLIENT
+        resolved_span_details = (
+            SpanDetails(
+                span_kind=SpanKind.CLIENT,
+                parent_context=span_details.parent_context if span_details else None,
+                start_time=span_details.start_time if span_details else None,
+                end_time=span_details.end_time if span_details else None,
+                span_links=span_details.span_links if span_details else None,
+            )
+            if span_details
+            else SpanDetails(span_kind=SpanKind.CLIENT)
+        )
 
         super().__init__(
-            kind="Client",
             operation_name=OUTPUT_OPERATION_NAME,
             activity_name=(f"{OUTPUT_OPERATION_NAME} {agent_details.agent_id}"),
             agent_details=agent_details,
-            parent_context=parent_context,
-            start_time=start_time,
-            end_time=end_time,
+            span_details=resolved_span_details,
         )
 
         self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
-
-        # Initialize accumulated messages list
-        self._output_messages: list[str] = list(response.messages)
-
-        # Set response messages
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(self._output_messages))
+        self._set_output(response.messages)
 
         # Set user details if provided
         if user_details:
@@ -100,16 +105,24 @@ class OutputScope(OpenTelemetryScope):
                 validate_and_normalize_ip(user_details.user_client_ip),
             )
 
-    def record_output_messages(self, messages: list[str]) -> None:
+    def _set_output(self, messages: ResponseMessagesParam) -> None:
+        """Serialize and set the output messages attribute on the span."""
+        if isinstance(messages, dict):
+            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(messages))
+        else:
+            normalized = normalize_output_messages(messages)
+            wrapper = OutputMessages(messages=list(normalized.messages))
+            self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, serialize_messages(wrapper))
+
+    def record_output_messages(self, messages: ResponseMessagesParam) -> None:
         """Records the output messages for telemetry tracking.
 
-        Appends the provided messages to the accumulated output messages list.
-        The list is capped at _MAX_OUTPUT_MESSAGES to prevent unbounded memory growth.
+        Overwrites any previously set output messages. Accepts a single string,
+        a list of strings (auto-wrapped as OTEL OutputMessage), a versioned
+        ``OutputMessages`` wrapper, or a ``dict[str, object]`` for tool call
+        results (per OTEL spec).
 
         Args:
-            messages: List of output messages to append
+            messages: String(s), OutputMessages, or dict for tool call results
         """
-        self._output_messages.extend(messages)
-        if len(self._output_messages) > self._MAX_OUTPUT_MESSAGES:
-            self._output_messages = self._output_messages[-self._MAX_OUTPUT_MESSAGES :]
-        self.set_tag_maybe(GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(self._output_messages))
+        self._set_output(messages)
