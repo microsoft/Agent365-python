@@ -9,15 +9,14 @@ from microsoft_agents.activity import Activity, ChannelAccount, ConversationAcco
 from microsoft_agents.hosting.core import TurnContext
 from microsoft_agents_a365.observability.core.agent_details import AgentDetails
 from microsoft_agents_a365.observability.core.constants import (
-    GEN_AI_CALLER_ID_KEY,
+    CHANNEL_NAME_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
-    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
+    USER_ID_KEY,
 )
-from microsoft_agents_a365.observability.core.invoke_agent_details import InvokeAgentDetails
+from microsoft_agents_a365.observability.core.invoke_agent_details import InvokeAgentScopeDetails
 from microsoft_agents_a365.observability.core.invoke_agent_scope import InvokeAgentScope
-from microsoft_agents_a365.observability.core.tenant_details import TenantDetails
+from microsoft_agents_a365.observability.core.request import Request
 from microsoft_agents_a365.observability.hosting.scope_helpers.populate_invoke_agent_scope import (
     populate,
 )
@@ -44,11 +43,9 @@ def enable_telemetry():
 def test_populate():
     """Test populate populates scope from turn context."""
     # Create real InvokeAgentScope with minimal required parameters
-    invoke_agent_details = InvokeAgentDetails(
-        details=AgentDetails(agent_id="test-agent", agent_name="Test Agent")
-    )
-    tenant_details = TenantDetails(tenant_id="test-tenant")
-    scope = InvokeAgentScope(invoke_agent_details, tenant_details)
+    invoke_scope_details = InvokeAgentScopeDetails()
+    agent_details = AgentDetails(agent_id="test-agent", agent_name="Test Agent")
+    scope = InvokeAgentScope(Request(), invoke_scope_details, agent_details)
 
     # Create real Activity and TurnContext
     activity = Activity(
@@ -73,15 +70,12 @@ def test_populate():
     attributes = scope._span._attributes
 
     # Check caller attributes
-    assert GEN_AI_CALLER_ID_KEY in attributes
-    assert attributes[GEN_AI_CALLER_ID_KEY] == "caller-aad-id"
-
-    # Check execution type
-    assert GEN_AI_EXECUTION_TYPE_KEY in attributes
+    assert USER_ID_KEY in attributes
+    assert attributes[USER_ID_KEY] == "caller-aad-id"
 
     # Check execution source
-    assert GEN_AI_EXECUTION_SOURCE_NAME_KEY in attributes
-    assert attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY] == "test-channel"
+    assert CHANNEL_NAME_KEY in attributes
+    assert attributes[CHANNEL_NAME_KEY] == "test-channel"
 
     # Check conversation ID
     assert GEN_AI_CONVERSATION_ID_KEY in attributes

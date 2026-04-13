@@ -2,11 +2,8 @@
 # Licensed under the MIT License.
 
 from microsoft_agents_a365.observability.core.constants import (
-    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_OPERATION_NAME_KEY,
-    INVOKE_AGENT_OPERATION_NAME,
 )
-from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.core.inference_operation_type import InferenceOperationType
 from microsoft_agents_a365.observability.core.utils import extract_model_name
 from opentelemetry import context as context_api
@@ -40,11 +37,6 @@ class SemanticKernelSpanProcessor(SpanProcessor):
             span.set_attribute(GEN_AI_OPERATION_NAME_KEY, InferenceOperationType.CHAT.value.lower())
             model_name = extract_model_name(span.name)
             span.update_name(f"{InferenceOperationType.CHAT.value.lower()} {model_name}")
-
-        if span.name.startswith(INVOKE_AGENT_OPERATION_NAME):
-            span.set_attribute(
-                GEN_AI_EXECUTION_TYPE_KEY, ExecutionType.HUMAN_TO_AGENT.value.lower()
-            )
 
     def on_end(self, span: ReadableSpan) -> None:
         """

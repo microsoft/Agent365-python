@@ -8,21 +8,21 @@ from pathlib import Path
 
 import pytest
 from microsoft_agents_a365.observability.core import (
-    ExecutionType,
+    Channel,
     InferenceCallDetails,
     InferenceOperationType,
     InferenceScope,
     Request,
-    SourceMetadata,
-    TenantDetails,
+    SpanDetails,
     configure,
+    extract_context_from_headers,
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.agent_details import AgentDetails
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.constants import (
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
 )
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -42,9 +42,8 @@ class TestInferenceScope(unittest.TestCase):
             service_name="test-inference-service",
             service_namespace="test-namespace",
         )
-        # Create test agent and tenant details
+        # Create test agent details
         cls.agent_details = AgentDetails(agent_id="test-inference-agent")
-        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
 
     def setUp(self):
         super().setUp()
@@ -91,7 +90,6 @@ class TestInferenceScope(unittest.TestCase):
         self.assertIsNone(details.inputTokens)
         self.assertIsNone(details.outputTokens)
         self.assertIsNone(details.finishReasons)
-        self.assertIsNone(details.responseId)
 
     def test_inference_call_details_with_all_fields(self):
         """Test InferenceCallDetails creation with all fields."""
@@ -102,7 +100,6 @@ class TestInferenceScope(unittest.TestCase):
             inputTokens=150,
             outputTokens=75,
             finishReasons=["stop"],
-            responseId="resp-123",
         )
 
         self.assertEqual(details.operationName, InferenceOperationType.TEXT_COMPLETION)
@@ -111,7 +108,6 @@ class TestInferenceScope(unittest.TestCase):
         self.assertEqual(details.inputTokens, 150)
         self.assertEqual(details.outputTokens, 75)
         self.assertEqual(details.finishReasons, ["stop"])
-        self.assertEqual(details.responseId, "resp-123")
 
     def test_inference_scope_start_method(self):
         """Test InferenceScope.start() static method."""
@@ -121,7 +117,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         # Scope might be None if telemetry is disabled
         if scope is not None:
@@ -141,11 +137,10 @@ class TestInferenceScope(unittest.TestCase):
 
         request = Request(
             content="What is the weather like?",
-            execution_type=ExecutionType.EVENT_TO_AGENT,
             session_id="test-session-123",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details, request)
+        scope = InferenceScope.start(request, details, self.agent_details)
 
         # Test that scope can be created with request
         if scope is not None:
@@ -161,12 +156,11 @@ class TestInferenceScope(unittest.TestCase):
 
         request = Request(
             content="Inference request with source metadata",
-            execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-meta",
-            source_metadata=SourceMetadata(name="Channel 1", description="Link to channel"),
+            channel=Channel(name="Channel 1", link="Link to channel"),
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details, request)
+        scope = InferenceScope.start(request, details, self.agent_details)
 
         if scope is not None:
             scope.dispose()
@@ -178,23 +172,23 @@ class TestInferenceScope(unittest.TestCase):
         span_attributes = getattr(span, "attributes", {}) or {}
 
         self.assertIn(
-            GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+            CHANNEL_NAME_KEY,
             span_attributes,
             "Expected source name to be set on span",
         )
         self.assertEqual(
-            span_attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY],
-            request.source_metadata.name,
+            span_attributes[CHANNEL_NAME_KEY],
+            request.channel.name,
         )
 
         self.assertIn(
-            GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+            CHANNEL_LINK_KEY,
             span_attributes,
             "Expected source description to be set on span",
         )
         self.assertEqual(
-            span_attributes[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY],
-            request.source_metadata.description,
+            span_attributes[CHANNEL_LINK_KEY],
+            request.channel.link,
         )
 
     def test_inference_scope_context_manager(self):
@@ -207,7 +201,7 @@ class TestInferenceScope(unittest.TestCase):
             outputTokens=50,
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test context manager usage
@@ -232,7 +226,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test manual dispose
@@ -248,7 +242,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording input messages
@@ -265,7 +259,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording output messages
@@ -282,7 +276,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording input tokens
@@ -298,7 +292,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording output tokens
@@ -314,7 +308,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording finish reasons
@@ -331,7 +325,7 @@ class TestInferenceScope(unittest.TestCase):
             providerName="openai",
         )
 
-        scope = InferenceScope.start(details, self.agent_details, self.tenant_details)
+        scope = InferenceScope.start(Request(), details, self.agent_details)
 
         if scope is not None:
             # Test recording thought process
@@ -340,8 +334,8 @@ class TestInferenceScope(unittest.TestCase):
             # Should not raise an exception
             self.assertTrue(hasattr(scope, "record_thought_process"))
 
-    def test_inference_scope_with_parent_id(self):
-        """Test InferenceScope uses parent_id to link span to parent context."""
+    def test_inference_scope_with_parent_context(self):
+        """Test InferenceScope uses parent_context to link span to parent context."""
         details = InferenceCallDetails(
             operationName=InferenceOperationType.CHAT,
             model="gpt-4",
@@ -350,10 +344,16 @@ class TestInferenceScope(unittest.TestCase):
 
         parent_trace_id = "1234567890abcdef1234567890abcdef"
         parent_span_id = "abcdefabcdef1234"
-        parent_id = f"00-{parent_trace_id}-{parent_span_id}-01"
+        traceparent = f"00-{parent_trace_id}-{parent_span_id}-01"
+
+        # Extract context from traceparent header
+        parent_context = extract_context_from_headers({"traceparent": traceparent})
 
         with InferenceScope.start(
-            details, self.agent_details, self.tenant_details, parent_id=parent_id
+            Request(),
+            details,
+            self.agent_details,
+            span_details=SpanDetails(parent_context=parent_context),
         ):
             pass
 

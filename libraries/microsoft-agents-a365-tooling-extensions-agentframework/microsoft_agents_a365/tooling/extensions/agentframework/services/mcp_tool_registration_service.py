@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Optional, Sequence, Union
 
-from agent_framework import ChatAgent, ChatMessage, ChatMessageStoreProtocol, MCPStreamableHTTPTool
+from agent_framework import RawAgent, Message, BaseHistoryProvider, MCPStreamableHTTPTool
 from agent_framework.azure import AzureOpenAIChatClient
 from agent_framework.openai import OpenAIChatClient
 import httpx
@@ -62,9 +62,9 @@ class McpToolRegistrationService:
         auth_handler_name: str,
         turn_context: TurnContext,
         auth_token: Optional[str] = None,
-    ) -> Optional[ChatAgent]:
+    ) -> RawAgent:
         """
-        Add MCP tool servers to a chat agent (mirrors .NET implementation).
+        Add MCP tool servers to a RawAgent (mirrors .NET implementation).
 
         Args:
             chat_client: The chat client instance (Union[OpenAIChatClient, AzureOpenAIChatClient])
@@ -76,7 +76,10 @@ class McpToolRegistrationService:
             auth_token: Optional bearer token for authentication
 
         Returns:
-            ChatAgent instance with MCP tools registered, or None if creation failed
+            RawAgent instance with MCP tools registered.
+
+        Raises:
+            Exception: If agent creation fails.
         """
         try:
             # Exchange token if not provided
@@ -148,9 +151,9 @@ class McpToolRegistrationService:
                     )
                     continue
 
-            # Create the ChatAgent
-            agent = ChatAgent(
-                chat_client=chat_client,
+            # Create the RawAgent
+            agent = RawAgent(
+                client=chat_client,
                 tools=all_tools,
                 instructions=agent_instructions,
             )
@@ -164,17 +167,17 @@ class McpToolRegistrationService:
 
     def _convert_chat_messages_to_history(
         self,
-        chat_messages: Sequence[ChatMessage],
+        chat_messages: Sequence[Message],
     ) -> List[ChatHistoryMessage]:
         """
-        Convert Agent Framework ChatMessage objects to ChatHistoryMessage format.
+        Convert Agent Framework Message objects to ChatHistoryMessage format.
 
-        This internal helper method transforms Agent Framework's native ChatMessage
+        This internal helper method transforms Agent Framework's native Message
         objects into the ChatHistoryMessage format expected by the MCP platform's
         real-time threat protection endpoint.
 
         Args:
-            chat_messages: Sequence of ChatMessage objects to convert.
+            chat_messages: Sequence of Message objects to convert.
 
         Returns:
             List of ChatHistoryMessage objects ready for the MCP platform.
@@ -182,7 +185,7 @@ class McpToolRegistrationService:
         Note:
             - If message_id is None, a new UUID is generated
             - Role is extracted via the .value property of the Role object
-            - Timestamp is set to current UTC time (ChatMessage has no timestamp)
+            - Timestamp is set to current UTC time (Message has no timestamp)
             - Messages with empty or whitespace-only content are filtered out and
               logged at WARNING level. This is because ChatHistoryMessage requires
               non-empty content for validation. The filtered messages will not be
@@ -225,7 +228,7 @@ class McpToolRegistrationService:
 
     async def send_chat_history_messages(
         self,
-        chat_messages: Sequence[ChatMessage],
+        chat_messages: Sequence[Message],
         turn_context: TurnContext,
         tool_options: Optional[ToolOptions] = None,
     ) -> OperationResult:
@@ -236,7 +239,7 @@ class McpToolRegistrationService:
         and delegation to the core tooling service.
 
         Args:
-            chat_messages: Sequence of Agent Framework ChatMessage objects to send.
+            chat_messages: Sequence of Agent Framework Message objects to send.
                            Can be empty - the request will still be sent to register
                            the user message from turn_context.activity.text.
             turn_context: TurnContext from the Agents SDK containing conversation info.
@@ -257,7 +260,7 @@ class McpToolRegistrationService:
 
         Example:
             >>> service = McpToolRegistrationService()
-            >>> messages = [ChatMessage(role=Role.USER, text="Hello")]
+            >>> messages = [Message(role="user", text="Hello")]
             >>> result = await service.send_chat_history_messages(messages, turn_context)
             >>> if result.succeeded:
             ...     print("Chat history sent successfully")
@@ -304,18 +307,18 @@ class McpToolRegistrationService:
 
     async def send_chat_history_from_store(
         self,
-        chat_message_store: ChatMessageStoreProtocol,
+        chat_message_store: BaseHistoryProvider,
         turn_context: TurnContext,
         tool_options: Optional[ToolOptions] = None,
     ) -> OperationResult:
         """
-        Send chat history from a ChatMessageStore to the MCP platform.
+        Send chat history from a BaseHistoryProvider to the MCP platform.
 
         This is a convenience method that extracts messages from the store
         and delegates to send_chat_history_messages().
 
         Args:
-            chat_message_store: ChatMessageStore containing the conversation history.
+            chat_message_store: BaseHistoryProvider containing the conversation history.
             turn_context: TurnContext from the Agents SDK containing conversation info.
             tool_options: Optional configuration for the request.
 
@@ -339,7 +342,7 @@ class McpToolRegistrationService:
             raise ValueError("turn_context cannot be None")
 
         # Extract messages from the store
-        messages = await chat_message_store.list_messages()
+        messages = await chat_message_store.get_messages()
 
         # Delegate to the primary implementation
         return await self.send_chat_history_messages(

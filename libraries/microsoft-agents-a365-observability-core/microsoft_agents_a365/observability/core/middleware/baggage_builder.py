@@ -9,29 +9,29 @@ from typing import Any
 from opentelemetry import baggage, context
 
 from ..constants import (
-    CORRELATION_ID_KEY,
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_DESCRIPTION_KEY,
+    GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
-    GEN_AI_AGENT_UPN_KEY,
+    GEN_AI_AGENT_VERSION_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
-    GEN_AI_CALLER_ID_KEY,
-    GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
-    HIRING_MANAGER_ID_KEY,
-    OPERATION_SOURCE_KEY,
+    SERVER_ADDRESS_KEY,
+    SERVER_PORT_KEY,
+    SERVICE_NAME_KEY,
     SESSION_DESCRIPTION_KEY,
     SESSION_ID_KEY,
     TENANT_ID_KEY,
+    USER_EMAIL_KEY,
+    USER_ID_KEY,
+    USER_NAME_KEY,
 )
-from ..models.operation_source import OperationSource
-from ..utils import deprecated, validate_and_normalize_ip
+from ..utils import validate_and_normalize_ip
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,7 @@ class BaggageBuilder:
 
             builder = (BaggageBuilder()
                        .tenant_id("tenant-123")
-                       .agent_id("agent-456")
-                       .correlation_id("corr-789"))
+                       .agent_id("agent-456"))
 
             with builder.build():
                 # Baggage is set in this context
@@ -60,18 +59,18 @@ class BaggageBuilder:
         """Initialize the baggage builder."""
         self._pairs: dict[str, str] = {}
 
-    def operation_source(self, value: OperationSource | None) -> "BaggageBuilder":
+    def operation_source(self, value: str | None) -> "BaggageBuilder":
         """Set the operation source baggage value.
 
+        This captures the name of the service using the SDK.
+
         Args:
-            value: The operation source enum value
+            value: The service name (e.g., "my-agent-service", "weather-bot")
 
         Returns:
             Self for method chaining
         """
-        # Convert enum to string value for baggage storage
-        str_value = value.value if value is not None else None
-        self._set(OPERATION_SOURCE_KEY, str_value)
+        self._set(SERVICE_NAME_KEY, value)
         return self
 
     def tenant_id(self, value: str | None) -> "BaggageBuilder":
@@ -98,11 +97,11 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_ID_KEY, value)
         return self
 
-    def agent_auid(self, value: str | None) -> "BaggageBuilder":
-        """Set the agent AUID baggage value.
+    def agentic_user_id(self, value: str | None) -> "BaggageBuilder":
+        """Set the agentic user ID baggage value.
 
         Args:
-            value: The agent AUID
+            value: The agentic user ID
 
         Returns:
             Self for method chaining
@@ -110,16 +109,16 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_AUID_KEY, value)
         return self
 
-    def agent_upn(self, value: str | None) -> "BaggageBuilder":
-        """Set the agent UPN baggage value.
+    def agentic_user_email(self, value: str | None) -> "BaggageBuilder":
+        """Set the agentic user email baggage value.
 
         Args:
-            value: The agent UPN
+            value: The agentic user email
 
         Returns:
             Self for method chaining
         """
-        self._set(GEN_AI_AGENT_UPN_KEY, value)
+        self._set(GEN_AI_AGENT_EMAIL_KEY, value)
         return self
 
     def agent_blueprint_id(self, value: str | None) -> "BaggageBuilder":
@@ -134,40 +133,16 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_BLUEPRINT_ID_KEY, value)
         return self
 
-    def correlation_id(self, value: str | None) -> "BaggageBuilder":
-        """Set the correlation ID baggage value.
+    def user_id(self, value: str | None) -> "BaggageBuilder":
+        """Set the user ID baggage value.
 
         Args:
-            value: The correlation ID
+            value: The user ID
 
         Returns:
             Self for method chaining
         """
-        self._set(CORRELATION_ID_KEY, value)
-        return self
-
-    def caller_id(self, value: str | None) -> "BaggageBuilder":
-        """Set the caller ID baggage value.
-
-        Args:
-            value: The caller ID
-
-        Returns:
-            Self for method chaining
-        """
-        self._set(GEN_AI_CALLER_ID_KEY, value)
-        return self
-
-    def hiring_manager_id(self, value: str | None) -> "BaggageBuilder":
-        """Set the hiring manager ID baggage value.
-
-        Args:
-            value: The hiring manager ID
-
-        Returns:
-            Self for method chaining
-        """
-        self._set(HIRING_MANAGER_ID_KEY, value)
+        self._set(USER_ID_KEY, value)
         return self
 
     def agent_name(self, value: str | None) -> "BaggageBuilder":
@@ -180,19 +155,39 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_DESCRIPTION_KEY, value)
         return self
 
-    def caller_name(self, value: str | None) -> "BaggageBuilder":
-        """Set the caller name baggage value."""
-        self._set(GEN_AI_CALLER_NAME_KEY, value)
+    def agent_version(self, value: str | None) -> "BaggageBuilder":
+        """Set the agent version baggage value."""
+        self._set(GEN_AI_AGENT_VERSION_KEY, value)
         return self
 
-    def caller_upn(self, value: str | None) -> "BaggageBuilder":
-        """Set the caller UPN baggage value."""
-        self._set(GEN_AI_CALLER_UPN_KEY, value)
+    def user_name(self, value: str | None) -> "BaggageBuilder":
+        """Set the user name baggage value."""
+        self._set(USER_NAME_KEY, value)
         return self
 
-    def caller_client_ip(self, value: str | None) -> "BaggageBuilder":
-        """Set the caller client IP baggage value."""
+    def user_email(self, value: str | None) -> "BaggageBuilder":
+        """Set the user email baggage value."""
+        self._set(USER_EMAIL_KEY, value)
+        return self
+
+    def user_client_ip(self, value: str | None) -> "BaggageBuilder":
+        """Set the user client IP baggage value."""
         self._set(GEN_AI_CALLER_CLIENT_IP_KEY, validate_and_normalize_ip(value))
+        return self
+
+    def invoke_agent_server(self, address: str | None, port: int | None = None) -> "BaggageBuilder":
+        """Set the invoke agent server address and port baggage values.
+
+        Args:
+            address: The server address (hostname) of the target agent service.
+            port: Optional server port. Only recorded when different from 443.
+
+        Returns:
+            Self for method chaining
+        """
+        self._set(SERVER_ADDRESS_KEY, address)
+        if port is not None and port != 443:
+            self._set(SERVER_PORT_KEY, str(port))
         return self
 
     def conversation_id(self, value: str | None) -> "BaggageBuilder":
@@ -204,16 +199,6 @@ class BaggageBuilder:
         """Set the conversation item link baggage value."""
         self._set(GEN_AI_CONVERSATION_ITEM_LINK_KEY, value)
         return self
-
-    @deprecated("Use channel_name() instead")
-    def source_metadata_name(self, value: str | None) -> "BaggageBuilder":
-        """Set the execution source metadata name (e.g., channel name)."""
-        return self.channel_name(value)
-
-    @deprecated("Use channel_links() instead")
-    def source_metadata_description(self, value: str | None) -> "BaggageBuilder":
-        """Set the execution source metadata description (e.g., channel description)."""
-        return self.channel_links(value)
 
     def session_id(self, value: str | None) -> "BaggageBuilder":
         """Set the session ID baggage value."""
@@ -227,12 +212,12 @@ class BaggageBuilder:
 
     def channel_name(self, value: str | None) -> "BaggageBuilder":
         """Sets the channel name baggage value (e.g., 'Teams', 'msteams')."""
-        self._set(GEN_AI_EXECUTION_SOURCE_NAME_KEY, value)
+        self._set(CHANNEL_NAME_KEY, value)
         return self
 
     def channel_links(self, value: str | None) -> "BaggageBuilder":
-        """Sets the channel link baggage value. (e.g., channel links or description)."""
-        self._set(GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY, value)
+        """Sets the channel link baggage value."""
+        self._set(CHANNEL_LINK_KEY, value)
         return self
 
     def set_pairs(self, pairs: Any) -> "BaggageBuilder":
@@ -268,30 +253,6 @@ class BaggageBuilder:
         """
         if value is not None and value.strip():
             self._pairs[key] = value
-
-    @staticmethod
-    def set_request_context(
-        tenant_id: str | None = None,
-        agent_id: str | None = None,
-        correlation_id: str | None = None,
-    ) -> "BaggageScope":
-        """Convenience method to begin a request baggage scope with common fields.
-
-        Args:
-            tenant_id: The tenant ID
-            agent_id: The agent ID
-            correlation_id: The correlation ID
-
-        Returns:
-            A context manager that restores the previous baggage on exit
-        """
-        return (
-            BaggageBuilder()
-            .tenant_id(tenant_id)
-            .agent_id(agent_id)
-            .correlation_id(correlation_id)
-            .build()
-        )
 
 
 class BaggageScope:

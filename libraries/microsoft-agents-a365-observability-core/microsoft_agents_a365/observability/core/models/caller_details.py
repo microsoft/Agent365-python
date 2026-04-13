@@ -2,24 +2,23 @@
 # Licensed under the MIT License.
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from ..agent_details import AgentDetails
+
+from .user_details import UserDetails
 
 
 @dataclass
 class CallerDetails:
-    """Details about the caller that invoked an agent."""
+    """Composite caller details for agent-to-agent (A2A) scenarios.
 
-    caller_id: Optional[str] = None
-    """The unique identifier for the caller."""
+    Groups the human caller identity and the calling agent identity together.
+    """
 
-    caller_upn: Optional[str] = None
-    """The User Principal Name (UPN) of the caller."""
+    user_details: Optional[UserDetails] = None
+    """Details about the human user in the call chain."""
 
-    caller_name: Optional[str] = None
-    """The human-readable name of the caller."""
-
-    caller_user_id: Optional[str] = None
-    """The user ID of the caller."""
-
-    tenant_id: Optional[str] = None
-    """The tenant ID of the caller."""
+    caller_agent_details: Optional["AgentDetails"] = None
+    """Details about the calling agent in A2A scenarios."""

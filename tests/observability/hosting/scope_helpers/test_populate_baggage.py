@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 from microsoft_agents.activity import Activity, ChannelAccount, ConversationAccount
 from microsoft_agents.hosting.core import TurnContext
-from microsoft_agents_a365.observability.core.constants import GEN_AI_CALLER_ID_KEY
+from microsoft_agents_a365.observability.core.constants import USER_ID_KEY
 from microsoft_agents_a365.observability.core.middleware.baggage_builder import BaggageBuilder
 from microsoft_agents_a365.observability.hosting.scope_helpers.populate_baggage import populate
 
@@ -37,5 +37,5 @@ def test_populate():
     # Verify builder was populated by checking its internal _pairs dict
     assert len(builder._pairs) > 0
     # Verify specific expected baggage keys were set
-    assert GEN_AI_CALLER_ID_KEY in builder._pairs
-    assert builder._pairs[GEN_AI_CALLER_ID_KEY] == "caller-id"
+    assert USER_ID_KEY in builder._pairs
+    assert builder._pairs[USER_ID_KEY] == "caller-id"
