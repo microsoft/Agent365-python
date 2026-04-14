@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 # Constants for base URLs
-MCP_PLATFORM_PROD_BASE_URL = "https://test.agent365.svc.cloud.dev.microsoft"
+MCP_PLATFORM_PROD_BASE_URL = "https://agent365.svc.cloud.microsoft"
 
 # API endpoint paths
 CHAT_HISTORY_ENDPOINT_PATH = "/agents/real-time-threat-protection/chat-message"
