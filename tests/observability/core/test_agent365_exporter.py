@@ -237,7 +237,8 @@ class TestAgent365Exporter(unittest.TestCase):
 
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
             self.assertIn(
-                "/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces", url
+                "/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces",
+                url,
             )
             self.assertNotIn(
                 "/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces", url
@@ -272,7 +273,8 @@ class TestAgent365Exporter(unittest.TestCase):
                 "/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces", url
             )
             self.assertNotIn(
-                "/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces", url
+                "/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces",
+                url,
             )
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
