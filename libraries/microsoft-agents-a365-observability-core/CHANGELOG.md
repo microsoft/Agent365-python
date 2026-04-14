@@ -2,7 +2,45 @@
 
 All notable changes to this package will be documented in this file.
 
-## [Unreleased]
+## [0.3.0]
+
+### Breaking Changes
+
+- **New permission required: `Agent365.Observability.OtelWrite`** — The observability exporter now requires this scope as both a delegated and application permission on your agent blueprint. See [Upgrade Instructions](#upgrade-instructions-observability-permission-for-existing-agents) below.
+
+---
+
+### Upgrade Instructions: Observability Permission for Existing Agents
+
+Existing agent blueprints need `Agent365.Observability.OtelWrite` granted as both a **delegated permission** and an **application permission**. Choose either option below.
+
+#### Option A — Agent 365 CLI (requires both config files)
+
+Requires `a365.config.json` and `a365.generated.config.json` in your config directory, a Global Administrator account, and [Agent 365 CLI v1.1.139-preview](https://www.nuget.org/packages/Microsoft.Agents.A365.DevTools.Cli/1.1.139-preview) or later.
+
+```
+a365 setup admin --config-dir "<path-to-config-dir>"
+```
+
+This grants all missing permissions including the new Observability scopes.
+
+#### Option B — Entra Portal (no config files required)
+
+Requires Global Administrator access to the blueprint app registration.
+
+1. Go to **Entra portal** > **App registrations** > select your Blueprint app
+2. Go to **API permissions** > **Add a permission** > **APIs my organization uses** > search for `9b975845-388f-4429-889e-eab1ef63949c`
+3. Select **Delegated permissions** > check `Agent365.Observability.OtelWrite` > **Add permissions**
+4. Repeat step 2–3, this time select **Application permissions** > check `Agent365.Observability.OtelWrite` > **Add permissions**
+5. Click **Grant admin consent** and confirm
+
+Both `Agent365.Observability.OtelWrite` (Delegated) and `Agent365.Observability.OtelWrite` (Application) should show **Granted** status.
+
+> **Note:** If your agent is autonomous, you only need the **Application permission**. The delegated permission is required for agents that authenticate via a user session.
+
+---
+
+## [0.2.1.dev46]
 
 ### Breaking Changes
 

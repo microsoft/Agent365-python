@@ -221,9 +221,9 @@ def build_export_url(
         The fully constructed export URL with path and query parameters.
     """
     endpoint_path = (
-        f"/observabilityService/tenants/{tenant_id}/agents/{agent_id}/traces"
+        f"/observabilityService/tenants/{tenant_id}/otlp/agents/{agent_id}/traces"
         if use_s2s_endpoint
-        else f"/observability/tenants/{tenant_id}/agents/{agent_id}/traces"
+        else f"/observability/tenants/{tenant_id}/otlp/agents/{agent_id}/traces"
     )
 
     parsed = urlparse(endpoint)
