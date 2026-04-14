@@ -36,6 +36,8 @@ Requires Global Administrator access to the blueprint app registration.
 
 Both `Agent365.Observability.OtelWrite` (Delegated) and `Agent365.Observability.OtelWrite` (Application) should show **Granted** status.
 
+> **Note:** If your agent is autonomous, you only need the **Application permission**. The delegated permission is required for agents that authenticate via a user session.
+
 ---
 
 ## [0.2.1.dev46]
