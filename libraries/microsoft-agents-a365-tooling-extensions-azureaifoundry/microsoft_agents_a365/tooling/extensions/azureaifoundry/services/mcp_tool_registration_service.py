@@ -27,7 +27,10 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
     McpToolServerConfigurationService,
 )
 from microsoft_agents_a365.tooling.utils.constants import Constants
-from microsoft_agents_a365.tooling.utils.utility import get_mcp_platform_authentication_scope
+from microsoft_agents_a365.tooling.utils.utility import (
+    get_mcp_platform_authentication_scope,
+    sanitize_text_for_header,
+)
 
 
 class McpToolRegistrationService:
@@ -108,7 +111,7 @@ class McpToolRegistrationService:
             agentic_app_id = Utility.resolve_agent_identity(context, auth_token)
             # Get the tool definitions and resources using the async implementation
             tool_definitions, tool_resources = await self._get_mcp_tool_definitions_and_resources(
-                agentic_app_id, auth_token or ""
+                agentic_app_id, auth_token or "", context
             )
 
             # Update the agent with the tools
@@ -127,7 +130,7 @@ class McpToolRegistrationService:
             raise
 
     async def _get_mcp_tool_definitions_and_resources(
-        self, agentic_app_id: str, auth_token: str
+        self, agentic_app_id: str, auth_token: str, context: TurnContext
     ) -> Tuple[List[McpTool], Optional[ToolResources]]:
         """
         Internal method to get MCP tool definitions and resources.
@@ -137,6 +140,7 @@ class McpToolRegistrationService:
         Args:
             agentic_app_id: Agentic App ID for the agent.
             auth_token: Authentication token to access the MCP servers.
+            context: Turn context for the current operation.
 
         Returns:
             Tuple containing tool definitions and resources.
@@ -203,6 +207,10 @@ class McpToolRegistrationService:
             mcp_tool.update_headers(
                 Constants.Headers.USER_AGENT, Utility.get_user_agent_header(self._orchestrator_name)
             )
+
+            sanitized = sanitize_text_for_header(context.activity.text)
+            if sanitized is not None:
+                mcp_tool.update_headers(Constants.Headers.USER_MESSAGE, sanitized)
 
             # Add to collections
             tool_definitions.extend(mcp_tool.definitions)

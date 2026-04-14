@@ -37,6 +37,7 @@ class TestAddToolServersHttpxClientConfiguration:
         mock_conversation.id = "conv-test-123"
         mock_activity.conversation = mock_conversation
         mock_activity.id = "msg-test-456"
+        mock_activity.text = "Hello world"
 
         mock_context.activity = mock_activity
         return mock_context
@@ -186,6 +187,122 @@ class TestAddToolServersHttpxClientConfiguration:
 
             assert "headers" in call_kwargs
             assert call_kwargs["headers"][Constants.Headers.USER_AGENT] == expected_user_agent
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_httpx_client_has_user_message_header(
+        self,
+        service,
+        mock_turn_context,
+        mock_auth,
+        mock_chat_client,
+        mock_mcp_server_config,
+    ):
+        """Test that httpx.AsyncClient is created with x-ms-usermessage header."""
+        auth_token = "test-bearer-token-xyz"
+
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_mcp_server_config],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value="TestAgent/1.0",
+            ),
+        ):
+            mock_http_client_instance = MagicMock()
+            mock_httpx_client.return_value = mock_http_client_instance
+
+            await service.add_tool_servers_to_agent(
+                chat_client=mock_chat_client,
+                agent_instructions="Test instructions",
+                initial_tools=[],
+                auth=mock_auth,
+                auth_handler_name="test-auth-handler",
+                turn_context=mock_turn_context,
+                auth_token=auth_token,
+            )
+
+            # Verify httpx.AsyncClient was called with x-ms-usermessage header
+            mock_httpx_client.assert_called_once()
+            call_kwargs = mock_httpx_client.call_args[1]
+
+            assert "headers" in call_kwargs
+            assert call_kwargs["headers"][Constants.Headers.USER_MESSAGE] == "Hello world"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_httpx_client_omits_user_message_header_when_text_is_none(
+        self,
+        service,
+        mock_turn_context,
+        mock_auth,
+        mock_chat_client,
+        mock_mcp_server_config,
+    ):
+        """Test that x-ms-usermessage header is absent when activity.text is None."""
+        auth_token = "test-bearer-token-xyz"
+        mock_turn_context.activity.text = None
+
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[mock_mcp_server_config],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ) as mock_httpx_client,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.get_user_agent_header",
+                return_value="TestAgent/1.0",
+            ),
+        ):
+            mock_http_client_instance = MagicMock()
+            mock_httpx_client.return_value = mock_http_client_instance
+
+            await service.add_tool_servers_to_agent(
+                chat_client=mock_chat_client,
+                agent_instructions="Test instructions",
+                initial_tools=[],
+                auth=mock_auth,
+                auth_handler_name="test-auth-handler",
+                turn_context=mock_turn_context,
+                auth_token=auth_token,
+            )
+
+            mock_httpx_client.assert_called_once()
+            call_kwargs = mock_httpx_client.call_args[1]
+
+            assert "headers" in call_kwargs
+            assert Constants.Headers.USER_MESSAGE not in call_kwargs["headers"]
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -438,6 +555,7 @@ class TestHttpxClientLifecycle:
         mock_conversation.id = "conv-test-123"
         mock_activity.conversation = mock_conversation
         mock_activity.id = "msg-test-456"
+        mock_activity.text = "Hello world"
 
         mock_context.activity = mock_activity
         return mock_context

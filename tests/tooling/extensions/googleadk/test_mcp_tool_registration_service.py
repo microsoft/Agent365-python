@@ -6,6 +6,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from microsoft_agents_a365.tooling.utils.constants import Constants
 
 
 class TestMcpToolRegistrationServiceInit:
@@ -88,6 +89,7 @@ class TestAddToolServersToAgent:
         mock_conversation = MagicMock()
         mock_conversation.id = "conv-123"
         mock_activity.conversation = mock_conversation
+        mock_activity.text = "Hello world"
         mock.activity = mock_activity
         return mock
 
@@ -458,6 +460,145 @@ class TestAddToolServersToAgent:
             # Agent should still have the one existing tool
             assert len(mock_agent.tools) == 1
             assert mock_agent.tools[0] == existing_toolset
+
+
+class TestUserMessageHeader:
+    """Tests for x-ms-usermessage header in add_tool_servers_to_agent."""
+
+    @pytest.fixture
+    def mock_agent(self):
+        """Create a mock Google ADK Agent."""
+        mock = MagicMock()
+        mock.tools = []
+        return mock
+
+    @pytest.fixture
+    def mock_authorization(self):
+        """Create a mock Authorization object."""
+        mock = AsyncMock()
+        mock_token = MagicMock()
+        mock_token.token = "test-token-123"
+        mock.exchange_token = AsyncMock(return_value=mock_token)
+        return mock
+
+    @pytest.fixture
+    def mock_turn_context(self):
+        """Create a mock TurnContext."""
+        mock = MagicMock()
+        mock_activity = MagicMock()
+        mock_conversation = MagicMock()
+        mock_conversation.id = "conv-123"
+        mock_activity.conversation = mock_conversation
+        mock_activity.text = "Hello world"
+        mock.activity = mock_activity
+        return mock
+
+    @pytest.fixture
+    def mock_server_config(self):
+        """Create a mock MCP server configuration."""
+        mock = MagicMock()
+        mock.mcp_server_name = "test-server"
+        mock.mcp_server_unique_name = "test-server"
+        mock.url = "https://test-server.example.com/mcp"
+        return mock
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_user_message_header_present(
+        self, mock_agent, mock_authorization, mock_turn_context, mock_server_config
+    ):
+        """Test that x-ms-usermessage header is included in StreamableHTTPConnectionParams."""
+        with (
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            ) as mock_config_service_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
+            ) as mock_utility,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolset"
+            ) as mock_toolset_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.StreamableHTTPConnectionParams"
+            ) as mock_params_class,
+        ):
+            mock_utility.resolve_agent_identity.return_value = "agent-123"
+            mock_utility.get_user_agent_header.return_value = "Agent365SDK/1.0"
+
+            mock_config_service = AsyncMock()
+            mock_config_service.list_tool_servers = AsyncMock(return_value=[mock_server_config])
+            mock_config_service_class.return_value = mock_config_service
+
+            mock_toolset_class.return_value = MagicMock()
+
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
+
+            service = McpToolRegistrationService()
+
+            await service.add_tool_servers_to_agent(
+                agent=mock_agent,
+                auth=mock_authorization,
+                auth_handler_name="graph",
+                context=mock_turn_context,
+                auth_token="test-token",
+            )
+
+            # Verify StreamableHTTPConnectionParams was called with user message header
+            mock_params_class.assert_called_once()
+            call_kwargs = mock_params_class.call_args[1]
+            assert Constants.Headers.USER_MESSAGE in call_kwargs["headers"]
+            assert call_kwargs["headers"][Constants.Headers.USER_MESSAGE] == "Hello world"
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_user_message_header_absent_when_text_is_none(
+        self, mock_agent, mock_authorization, mock_turn_context, mock_server_config
+    ):
+        """Test that x-ms-usermessage header is absent when activity.text is None."""
+        mock_turn_context.activity.text = None
+
+        with (
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"
+            ) as mock_config_service_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.Utility"
+            ) as mock_utility,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolset"
+            ) as mock_toolset_class,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.StreamableHTTPConnectionParams"
+            ) as mock_params_class,
+        ):
+            mock_utility.resolve_agent_identity.return_value = "agent-123"
+            mock_utility.get_user_agent_header.return_value = "Agent365SDK/1.0"
+
+            mock_config_service = AsyncMock()
+            mock_config_service.list_tool_servers = AsyncMock(return_value=[mock_server_config])
+            mock_config_service_class.return_value = mock_config_service
+
+            mock_toolset_class.return_value = MagicMock()
+
+            from microsoft_agents_a365.tooling.extensions.googleadk import (
+                McpToolRegistrationService,
+            )
+
+            service = McpToolRegistrationService()
+
+            await service.add_tool_servers_to_agent(
+                agent=mock_agent,
+                auth=mock_authorization,
+                auth_handler_name="graph",
+                context=mock_turn_context,
+                auth_token="test-token",
+            )
+
+            mock_params_class.assert_called_once()
+            call_kwargs = mock_params_class.call_args[1]
+            assert Constants.Headers.USER_MESSAGE not in call_kwargs["headers"]
 
 
 class TestCleanup:

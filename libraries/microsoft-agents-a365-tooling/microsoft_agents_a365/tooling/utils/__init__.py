@@ -11,6 +11,7 @@ from .utility import (
     get_mcp_base_url,
     build_mcp_server_url,
     get_mcp_platform_authentication_scope,
+    sanitize_text_for_header,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "get_mcp_base_url",
     "build_mcp_server_url",
     "get_mcp_platform_authentication_scope",
+    "sanitize_text_for_header",
 ]
