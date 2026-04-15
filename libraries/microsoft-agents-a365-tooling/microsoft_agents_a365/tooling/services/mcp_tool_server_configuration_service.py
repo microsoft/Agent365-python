@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 from urllib.parse import urlparse
@@ -150,7 +151,9 @@ class McpToolServerConfigurationService:
             # BEARER_TOKEN_<MCPSERVERNAME_UPPER> takes precedence; BEARER_TOKEN is the fallback.
             acquire: TokenAcquirer = self._create_dev_token_acquirer()
         else:
-            servers = await self._load_servers_from_gateway(agentic_app_id, auth_token, options)
+            servers = await self._load_servers_from_gateway(
+                agentic_app_id, auth_token, options, turn_context
+            )
             if (
                 authorization is not None
                 and auth_handler_name is not None
@@ -475,7 +478,11 @@ class McpToolServerConfigurationService:
     # --------------------------------------------------------------------------
 
     async def _load_servers_from_gateway(
-        self, agentic_app_id: str, auth_token: str, options: ToolOptions
+        self,
+        agentic_app_id: str,
+        auth_token: str,
+        options: ToolOptions,
+        turn_context: Optional[TurnContext] = None,
     ) -> List[MCPServerConfig]:
         """
         Reads MCP server configurations from tooling gateway endpoint for production scenario.
@@ -484,6 +491,8 @@ class McpToolServerConfigurationService:
             agentic_app_id: Agentic App ID for the agent.
             auth_token: Authentication token to access the tooling gateway.
             options: ToolOptions instance containing optional parameters.
+            turn_context: Optional TurnContext used to derive the correlation ID from
+                          ``activity.id``. A new UUID is generated when not provided.
 
         Returns:
             List[MCPServerConfig]: List of MCP server configurations from tooling gateway.
@@ -495,7 +504,7 @@ class McpToolServerConfigurationService:
 
         try:
             config_endpoint = get_tooling_gateway_for_digital_worker(agentic_app_id)
-            headers = self._prepare_gateway_headers(auth_token, options)
+            headers = self._prepare_gateway_headers(auth_token, options, turn_context)
 
             self._logger.info(f"Calling tooling gateway endpoint: {config_endpoint}")
 
@@ -533,7 +542,8 @@ class McpToolServerConfigurationService:
         Args:
             auth_token: Authentication token.
             options: ToolOptions instance containing optional parameters.
-            turn_context: Optional TurnContext for extracting agent blueprint ID for request headers.
+            turn_context: Optional TurnContext for extracting agent blueprint ID and
+                          correlation ID from ``activity.id``.
 
         Returns:
             Dictionary of HTTP headers.
@@ -550,7 +560,38 @@ class McpToolServerConfigurationService:
         if agent_id:
             headers[Constants.Headers.AGENT_ID] = agent_id
 
+        # Add x-ms-correlation-id: prefer activity.id from TurnContext, fall back to a new UUID
+        correlation_id = self._resolve_correlation_id(turn_context)
+        headers[Constants.Headers.CORRELATION_ID] = correlation_id
+        self._logger.debug(f"Gateway request correlation ID: {correlation_id}")
+
         return headers
+
+    def _resolve_correlation_id(self, turn_context: Optional[TurnContext] = None) -> str:
+        """
+        Resolves the correlation ID to attach to outbound gateway requests.
+
+        Uses ``turn_context.activity.id`` when available so the gateway log entry can be
+        correlated with the inbound activity. Falls back to a newly generated UUID4 when
+        no context is provided.
+
+        Args:
+            turn_context: Optional TurnContext to extract the activity ID from.
+
+        Returns:
+            str: Correlation ID string (non-empty).
+        """
+        try:
+            if (
+                turn_context is not None
+                and turn_context.activity is not None
+                and turn_context.activity.id
+            ):
+                return turn_context.activity.id
+        except (AttributeError, TypeError):
+            pass
+
+        return str(uuid.uuid4())
 
     def _resolve_agent_id_for_header(
         self, auth_token: str, turn_context: Optional[TurnContext] = None
