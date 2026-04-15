@@ -8,7 +8,9 @@ This module provides helper functions to dynamically set internal package versio
 at build time, ensuring all packages in the monorepo use the exact same version.
 """
 
+import re
 from os import environ
+from pathlib import Path
 
 
 def get_package_version() -> str:
@@ -101,6 +103,120 @@ def get_next_major_version(base_version: str) -> str:
         return base_version
 
 
+def _find_root_pyproject(start_path: Path | None = None) -> Path | None:
+    """
+    Walk up from start_path to find the monorepo root pyproject.toml.
+
+    The root is identified by having [tool.uv.workspace] or a
+    constraint-dependencies key under [tool.uv].
+
+    Args:
+        start_path: A path to start walking up from (e.g. a package's pyproject.toml).
+                    If None, starts from the current working directory.
+
+    Returns:
+        Path to the root pyproject.toml, or None if not found.
+    """
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return None
+
+    if start_path is None:
+        start_path = Path.cwd()
+    else:
+        start_path = Path(start_path).resolve()
+
+    # If start_path is a file, begin from its parent directory
+    if start_path.is_file():
+        start_path = start_path.parent
+
+    for parent in [start_path] + list(start_path.parents):
+        candidate = parent / "pyproject.toml"
+        if not candidate.exists():
+            continue
+        try:
+            with open(candidate, "rb") as f:
+                data = tomllib.load(f)
+            uv_cfg = data.get("tool", {}).get("uv", {})
+            if "workspace" in uv_cfg or "constraint-dependencies" in uv_cfg:
+                return candidate
+        except Exception:
+            continue
+    return None
+
+
+def _parse_root_constraints(start_path: Path | None = None) -> dict[str, str]:
+    """
+    Parse constraint-dependencies from the monorepo root pyproject.toml.
+
+    Walks up from start_path to find the root, then parses constraints.
+
+    Args:
+        start_path: A path to start walking up from (e.g. a package's pyproject.toml).
+                    If None, starts from the current working directory.
+
+    Returns:
+        A dict mapping normalized package names to their full constraint strings.
+        Example: {"semantic-kernel": "semantic-kernel >= 1.39.3"}
+    """
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return {}
+
+    root_pyproject_path = _find_root_pyproject(start_path)
+    if root_pyproject_path is None:
+        return {}
+
+    try:
+        with open(root_pyproject_path, "rb") as f:
+            root_data = tomllib.load(f)
+    except (FileNotFoundError, PermissionError):
+        return {}
+
+    from packaging.requirements import Requirement
+
+    constraints_list = root_data.get("tool", {}).get("uv", {}).get("constraint-dependencies", [])
+    constraints: dict[str, str] = {}
+    for entry in constraints_list:
+        if not isinstance(entry, str):
+            continue
+        try:
+            req = Requirement(entry)
+            normalized = req.name.lower().replace("_", "-")
+        except Exception:
+            # Fallback for entries that packaging can't parse
+            pkg_name = re.split(r"\s*[<>=!~]", entry, maxsplit=1)[0].strip()
+            normalized = pkg_name.lower().replace("_", "-")
+        constraints[normalized] = entry
+    return constraints
+
+
+def _has_version_constraint(dep: str) -> bool:
+    """Check if a dependency string already includes a version constraint.
+
+    Uses packaging.requirements.Requirement for robust parsing that correctly
+    ignores environment markers (e.g. ``; python_version < '3.12'``).
+    """
+    from packaging.requirements import Requirement
+
+    try:
+        req = Requirement(dep)
+        return bool(req.specifier)
+    except Exception:
+        # If packaging can't parse it, fall back to simple heuristic
+        # on the portion before any marker.
+        base = dep.split(";", 1)[0].strip()
+        return bool(re.search(r"[<>=!~]", base))
+
+
 def get_dynamic_dependencies(
     pyproject_path: str = "pyproject.toml",
     use_exact_match: bool = False,
@@ -126,7 +242,9 @@ def get_dynamic_dependencies(
        Example: == 0.1.0.dev5
        - Forces exact version match
 
-    External packages keep their original version constraints.
+    External packages without version constraints get the centralized constraint
+    from the root pyproject.toml constraint-dependencies, ensuring published packages
+    enforce minimum versions for security and compatibility.
 
     Args:
         pyproject_path: Path to the pyproject.toml file (default: "pyproject.toml")
@@ -204,6 +322,13 @@ def get_dynamic_dependencies(
             file=sys.stderr,
         )
 
+    # Load centralized constraints from root pyproject.toml so that published
+    # packages enforce the same minimum versions used during development.
+    # Uses walk-up approach to find the root, independent of directory depth.
+    root_constraints = _parse_root_constraints(Path(pyproject_path).resolve())
+
+    from packaging.requirements import Requirement
+
     # Update internal package versions dynamically
     updated_dependencies = []
     for dep in dependencies:
@@ -215,22 +340,39 @@ def get_dynamic_dependencies(
             )
             continue
 
-        if dep.startswith("microsoft-agents-a365-"):
-            # Extract package name (everything before >=, ==, or other operators)
-            pkg_name = dep.split(">=")[0].split("==")[0].split("<")[0].strip()
+        # Parse with packaging.requirements.Requirement for robust handling
+        # of version specifiers, extras, and environment markers.
+        try:
+            req = Requirement(dep)
+            pkg_name = req.name
+            has_specifier = bool(req.specifier)
+            marker_suffix = f" ; {req.marker}" if req.marker else ""
+        except Exception:
+            # Fallback for unparseable entries
+            pkg_name = dep.split(">=")[0].split("==")[0].split("<")[0].split(";")[0].strip()
+            has_specifier = _has_version_constraint(dep)
+            base_part, sep, marker_rest = dep.partition(";")
+            marker_suffix = f";{marker_rest}" if sep else ""
 
+        if pkg_name.startswith("microsoft-agents-a365-"):
             if use_exact_match:
-                # Exact match: == current_version
-                updated_dependencies.append(f"{pkg_name} == {package_version}")
+                updated_dependencies.append(f"{pkg_name} == {package_version}{marker_suffix}")
             elif use_compatible_release:
-                # Compatible release: >= base_version, < next_major
                 next_major = get_next_major_version(base_version)
-                updated_dependencies.append(f"{pkg_name} >= {base_version}, < {next_major}")
+                updated_dependencies.append(
+                    f"{pkg_name} >= {base_version}, < {next_major}{marker_suffix}"
+                )
             else:
-                # Minimum version (default): >= base_version
-                updated_dependencies.append(f"{pkg_name} >= {base_version}")
+                updated_dependencies.append(f"{pkg_name} >= {base_version}{marker_suffix}")
+        elif not has_specifier:
+            # External dep with no version constraint — apply root constraint if available
+            normalized = pkg_name.lower().replace("_", "-")
+            if normalized in root_constraints:
+                updated_dependencies.append(f"{root_constraints[normalized]}{marker_suffix}")
+            else:
+                updated_dependencies.append(dep)
         else:
-            # Keep external dependencies as-is
+            # External dependency already has a version constraint — keep as-is
             updated_dependencies.append(dep)
 
     return updated_dependencies

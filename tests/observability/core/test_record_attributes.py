@@ -9,10 +9,12 @@ from unittest.mock import Mock, patch
 from microsoft_agents_a365.observability.core import AgentDetails
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
+from microsoft_agents_a365.observability.core.span_details import SpanDetails
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind
 
 
 class TestRecordAttributes(unittest.TestCase):
@@ -79,10 +81,10 @@ class TestRecordAttributes(unittest.TestCase):
         )
 
         with OpenTelemetryScope(
-            kind="Internal",
             operation_name="test_operation",
             activity_name="test_activity",
             agent_details=agent_details,
+            span_details=SpanDetails(span_kind=SpanKind.INTERNAL),
         ) as scope:
             # Record custom attributes using a dictionary
             attributes = {
@@ -106,10 +108,10 @@ class TestRecordAttributes(unittest.TestCase):
         agent_details = AgentDetails(agent_id="test-agent")
 
         with OpenTelemetryScope(
-            kind="Internal",
             operation_name="test_operation",
             activity_name="test_activity",
             agent_details=agent_details,
+            span_details=SpanDetails(span_kind=SpanKind.INTERNAL),
         ) as scope:
             # First batch of attributes
             scope.record_attributes({"batch1.key1": "value1", "batch1.key2": "value2"})
@@ -139,10 +141,10 @@ class TestRecordAttributes(unittest.TestCase):
             agent_details = AgentDetails(agent_id="test-agent")
 
             with OpenTelemetryScope(
-                kind="Internal",
                 operation_name="test_operation",
                 activity_name="test_activity",
                 agent_details=agent_details,
+                span_details=SpanDetails(span_kind=SpanKind.INTERNAL),
             ) as scope:
                 # This should be a no-op
                 scope.record_attributes({"custom.key": "value"})
@@ -169,10 +171,10 @@ class TestRecordAttributes(unittest.TestCase):
         agent_details = AgentDetails(agent_id="test-agent-logging")
 
         with OpenTelemetryScope(
-            kind="Internal",
             operation_name="test_logging_operation",
             activity_name=activity_name,
             agent_details=agent_details,
+            span_details=SpanDetails(span_kind=SpanKind.INTERNAL),
         ):
             pass
 
@@ -213,10 +215,10 @@ class TestRecordAttributes(unittest.TestCase):
             mock_get_tracer.return_value = mock_tracer
 
             with OpenTelemetryScope(
-                kind="Internal",
                 operation_name="test_error_operation",
                 activity_name=activity_name,
                 agent_details=agent_details,
+                span_details=SpanDetails(span_kind=SpanKind.INTERNAL),
             ):
                 pass
 

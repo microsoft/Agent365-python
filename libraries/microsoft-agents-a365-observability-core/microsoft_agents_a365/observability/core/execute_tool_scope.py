@@ -12,6 +12,7 @@ from .constants import (
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
+    GEN_AI_TOOL_CALL_RESULT_KEY,
     GEN_AI_TOOL_DESCRIPTION_KEY,
     GEN_AI_TOOL_NAME_KEY,
     GEN_AI_TOOL_TYPE_KEY,
@@ -21,12 +22,12 @@ from .constants import (
     USER_ID_KEY,
     USER_NAME_KEY,
 )
+from .utils import safe_json_dumps, validate_and_normalize_ip
 from .models.user_details import UserDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .span_details import SpanDetails
 from .tool_call_details import ToolCallDetails
-from .utils import validate_and_normalize_ip
 
 
 class ExecuteToolScope(OpenTelemetryScope):
@@ -77,25 +78,26 @@ class ExecuteToolScope(OpenTelemetryScope):
             user_details: Optional human user details
             span_details: Optional span configuration (parent context, timing, kind)
         """
-        kind = SpanKind.INTERNAL
-        parent_context = None
-        start_time = None
-        end_time = None
-        if span_details is not None:
-            if span_details.span_kind is not None:
-                kind = span_details.span_kind
-            parent_context = span_details.parent_context
-            start_time = span_details.start_time
-            end_time = span_details.end_time
+        # spanKind defaults to INTERNAL; allow override via span_details
+        resolved_span_details = (
+            SpanDetails(
+                span_kind=span_details.span_kind
+                if span_details and span_details.span_kind
+                else SpanKind.INTERNAL,
+                parent_context=span_details.parent_context if span_details else None,
+                start_time=span_details.start_time if span_details else None,
+                end_time=span_details.end_time if span_details else None,
+                span_links=span_details.span_links if span_details else None,
+            )
+            if span_details
+            else SpanDetails(span_kind=SpanKind.INTERNAL)
+        )
 
         super().__init__(
-            kind=kind,
             operation_name=EXECUTE_TOOL_OPERATION_NAME,
             activity_name=f"{EXECUTE_TOOL_OPERATION_NAME} {details.tool_name}",
             agent_details=agent_details,
-            parent_context=parent_context,
-            start_time=start_time,
-            end_time=end_time,
+            span_details=resolved_span_details,
         )
 
         # Extract details
@@ -107,7 +109,9 @@ class ExecuteToolScope(OpenTelemetryScope):
         endpoint = details.endpoint
 
         self.set_tag_maybe(GEN_AI_TOOL_NAME_KEY, tool_name)
-        self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, arguments)
+        if arguments is not None:
+            serialized = safe_json_dumps(arguments) if isinstance(arguments, dict) else arguments
+            self.set_tag_maybe(GEN_AI_TOOL_ARGS_KEY, serialized)
         self.set_tag_maybe(GEN_AI_TOOL_TYPE_KEY, tool_type)
         self.set_tag_maybe(GEN_AI_TOOL_CALL_ID_KEY, tool_call_id)
         self.set_tag_maybe(GEN_AI_TOOL_DESCRIPTION_KEY, description)
@@ -133,13 +137,15 @@ class ExecuteToolScope(OpenTelemetryScope):
                 validate_and_normalize_ip(user_details.user_client_ip),
             )
 
-    def record_response(self, response: str) -> None:
-        """Records response information for telemetry tracking.
+    def record_response(self, result: dict[str, object] | str) -> None:
+        """Record the tool call result for telemetry tracking.
 
-        Note: This method is intentionally a no-op as GEN_AI_EVENT_CONTENT was removed.
-        The method is kept for interface compatibility.
+        Per OTEL spec, the result is expected to be an object. If a string
+        is provided, it is recorded as-is (JSON string fallback). If a dict
+        is provided, it is serialized to JSON.
 
         Args:
-            response: The response to record
+            result: Tool call result as a structured dict or JSON string
         """
-        pass
+        serialized = safe_json_dumps(result) if isinstance(result, dict) else result
+        self.set_tag_maybe(GEN_AI_TOOL_CALL_RESULT_KEY, serialized)
