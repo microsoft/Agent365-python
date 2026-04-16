@@ -244,6 +244,84 @@ class TestMcpToolServerConfigurationService:
             assert servers[0].mcp_server_unique_name == "prod_server"
             assert servers[0].url == "https://prod.custom.url/mcp"
 
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_legacy_prod_path_raises_for_v2_server(self, service):
+        """Legacy call (no auth context) raises immediately when a V2 server is discovered.
+
+        Callers that omit
+        authorization/auth_handler_name/turn_context must migrate to the full
+        TurnContext overload once V2 servers are present.
+        """
+        v2_server_data = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "V2Server",
+                    "mcpServerUniqueName": "v2_server",
+                    "url": "https://v2.example.com/mcp",
+                    "audience": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                }
+            ]
+        }
+
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_response = MagicMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value=v2_server_data)
+            mock_response_cm = MagicMock()
+            mock_response_cm.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response_cm.__aexit__ = AsyncMock(return_value=None)
+            mock_session = MagicMock()
+            mock_session.get = MagicMock(return_value=mock_response_cm)
+            mock_session_cm = MagicMock()
+            mock_session_cm.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session_cm.__aexit__ = AsyncMock(return_value=None)
+            mock_session_class.return_value = mock_session_cm
+
+            with pytest.raises(Exception, match="V2Server"):
+                await service.list_tool_servers(
+                    agentic_app_id="test-app-id",
+                    auth_token="test-token",
+                    # No authorization / auth_handler_name / turn_context → legacy path
+                )
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_legacy_prod_path_ok_for_v1_only_servers(self, service):
+        """Legacy call succeeds when all discovered servers are V1 (no audience)."""
+        v1_server_data = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "V1Server",
+                    "mcpServerUniqueName": "v1_server",
+                    "url": "https://v1.example.com/mcp",
+                }
+            ]
+        }
+
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_response = MagicMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value=v1_server_data)
+            mock_response_cm = MagicMock()
+            mock_response_cm.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response_cm.__aexit__ = AsyncMock(return_value=None)
+            mock_session = MagicMock()
+            mock_session.get = MagicMock(return_value=mock_response_cm)
+            mock_session_cm = MagicMock()
+            mock_session_cm.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session_cm.__aexit__ = AsyncMock(return_value=None)
+            mock_session_class.return_value = mock_session_cm
+
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id",
+                auth_token="test-token",
+                # No authorization context — fine for V1-only
+            )
+
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "V1Server"
+
 
 class TestResolveTokenScopeForServer:
     """Tests for resolve_token_scope_for_server() utility function."""
@@ -532,6 +610,49 @@ class TestAttachPerAudienceTokens:
             result = await service._attach_per_audience_tokens([server], acquire)
 
         assert result[0].headers["Authorization"] == "Bearer per-server-tok"
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_warns_when_shared_token_used_for_v2_server(self, service):
+        """Warning emitted when BEARER_TOKEN is used for a V2 server with a different scope."""
+        v2_server = self._make_server("MailV2", audience="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+        with patch.dict(
+            os.environ,
+            {"BEARER_TOKEN": "shared-token"},
+            clear=False,
+        ):
+            # Ensure the per-server key is absent so the fallback path is taken.
+            os.environ.pop("BEARER_TOKEN_MAILV2", None)
+            with patch.object(service, "_logger") as mock_logger:
+                acquire = service._create_dev_token_acquirer()
+                await service._attach_per_audience_tokens([v2_server], acquire)
+                mock_logger.warning.assert_called_once()
+                warning_msg = mock_logger.warning.call_args[0][0]
+                assert "BEARER_TOKEN_MAILV2" in warning_msg
+                assert "401" in warning_msg
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_no_warning_when_per_server_token_set(self, service):
+        """No warning when a per-server BEARER_TOKEN_<NAME> is present for a V2 server."""
+        v2_server = self._make_server("MailV2", audience="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+        with patch.dict(
+            os.environ,
+            {"BEARER_TOKEN": "shared-token", "BEARER_TOKEN_MAILV2": "per-server-token"},
+        ):
+            with patch.object(service, "_logger") as mock_logger:
+                acquire = service._create_dev_token_acquirer()
+                await service._attach_per_audience_tokens([v2_server], acquire)
+                mock_logger.warning.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_no_warning_for_v1_server(self, service):
+        """No warning when shared BEARER_TOKEN is used for a V1 server (scope == shared scope)."""
+        v1_server = self._make_server("mail")  # no audience → V1 → scope == shared_scope
+        with patch.dict(os.environ, {"BEARER_TOKEN": "shared-token"}):
+            os.environ.pop("BEARER_TOKEN_MAIL", None)
+            with patch.object(service, "_logger") as mock_logger:
+                acquire = service._create_dev_token_acquirer()
+                await service._attach_per_audience_tokens([v1_server], acquire)
+                mock_logger.warning.assert_not_called()
 
 
 class TestPrepareGatewayHeaders:

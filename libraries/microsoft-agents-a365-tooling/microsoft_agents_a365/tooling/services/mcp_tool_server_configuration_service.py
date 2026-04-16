@@ -40,6 +40,7 @@ from ..utils.utility import (
     ATG_APP_ID_URI,
     build_mcp_server_url,
     get_chat_history_endpoint,
+    get_mcp_platform_authentication_scope,
     get_tooling_gateway_for_digital_worker,
     is_development_environment,
     resolve_token_scope_for_server,
@@ -233,23 +234,35 @@ class McpToolServerConfigurationService:
         a ``Bearer `` prefix (any casing), it is stripped so that
         ``_attach_per_audience_tokens`` does not produce ``Authorization: Bearer Bearer …``.
 
+        A WARNING is emitted when the shared ``BEARER_TOKEN`` is used for a V2 server
+        whose resolved scope differs from the shared ATG scope, because the shared token
+        is audience-locked and will cause a 401 against that server's endpoint.
+
         Returns:
             TokenAcquirer: Async callable ``(server, scope) → Optional[str]``.
         """
-        shared_token = os.getenv("BEARER_TOKEN")
+        shared_scope = get_mcp_platform_authentication_scope()[0]
 
-        async def acquire(server: MCPServerConfig, _scope: str) -> Optional[str]:
+        async def acquire(server: MCPServerConfig, scope: str) -> Optional[str]:
             server_name = server.mcp_server_name or ""
-            per_server_token = os.getenv(f"BEARER_TOKEN_{server_name.upper()}")
-            token = per_server_token or shared_token
+            per_server_key = f"BEARER_TOKEN_{server_name.upper()}"
+            has_per_server = per_server_key in os.environ
+            token = os.environ.get(per_server_key) or os.environ.get("BEARER_TOKEN")
             if not token:
                 return None
+            if token and not has_per_server and scope != shared_scope:
+                self._logger.warning(
+                    f"Dev: MCP server '{server_name}' requires scope '{scope}' "
+                    f"but only BEARER_TOKEN is set. The shared token is scoped to "
+                    f"a different audience and will likely cause a 401. "
+                    f"Set {per_server_key} to a token acquired for the correct audience."
+                )
             # Strip an existing "Bearer " prefix (case-insensitive) so the caller
             # always receives a raw token and the Authorization header is never doubled.
             if token.lower().startswith("bearer "):
                 token = token[7:]
             self._logger.debug(
-                f"Attached {'per-server' if per_server_token else 'shared'} "
+                f"Attached {'per-server' if has_per_server else 'shared'} "
                 f"dev token for '{server.mcp_server_name}'"
             )
             return token
