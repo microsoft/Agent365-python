@@ -27,7 +27,10 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
     McpToolServerConfigurationService,
 )
 from microsoft_agents_a365.tooling.utils.constants import Constants
-from microsoft_agents_a365.tooling.utils.utility import get_mcp_platform_authentication_scope
+from microsoft_agents_a365.tooling.utils.utility import (
+    get_mcp_platform_authentication_scope,
+    is_development_environment,
+)
 
 
 class McpToolRegistrationService:
@@ -99,13 +102,14 @@ class McpToolRegistrationService:
         if project_client is None:
             raise ValueError("project_client cannot be None")
 
-        if not auth_token:
+        is_dev = is_development_environment()
+        if not auth_token and not is_dev:
             scopes = get_mcp_platform_authentication_scope()
             authToken = await auth.exchange_token(context, scopes, auth_handler_name)
             auth_token = authToken.token
 
         try:
-            agentic_app_id = Utility.resolve_agent_identity(context, auth_token)
+            agentic_app_id = "" if is_dev else Utility.resolve_agent_identity(context, auth_token)
             # Get the tool definitions and resources — pass auth context so each server receives
             # its own per-audience Authorization token (V1 = shared ATG, V2 = per-GUID).
             tool_definitions, tool_resources = await self._get_mcp_tool_definitions_and_resources(

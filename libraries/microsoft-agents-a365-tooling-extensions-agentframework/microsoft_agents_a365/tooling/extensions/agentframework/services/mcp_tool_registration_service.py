@@ -1,14 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from __future__ import annotations
+
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Sequence
+from typing import TYPE_CHECKING, List, Optional, Sequence
 
 from agent_framework import RawAgent, Message, HistoryProvider, MCPStreamableHTTPTool
-from agent_framework.openai import OpenAIChatClient
 import httpx
+
+if TYPE_CHECKING:
+    from agent_framework.openai import OpenAIChatClient
 
 from microsoft_agents.hosting.core import Authorization, TurnContext
 

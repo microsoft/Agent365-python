@@ -115,6 +115,7 @@ class TestAuthContextForwardedToListToolServers:
 
         with (
             patch(f"{_MODULE}.McpTool", return_value=mock_mcp_tool),
+            patch(f"{_MODULE}.is_development_environment", return_value=False),
             patch(f"{_MODULE}.Utility.resolve_agent_identity", return_value="test-aai"),
             patch(f"{_MODULE}.Utility.get_user_agent_header", return_value="AzureAIFoundry/1.0"),
         ):
