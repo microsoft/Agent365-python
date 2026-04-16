@@ -95,7 +95,7 @@ class TestMcpToolServerConfigurationService:
             "url": "https://my.custom.server/mcp",
         }
 
-        config = service._parse_manifest_server_config(server_element)
+        config = service._parse_server_config(server_element)
 
         assert config is not None
         assert config.mcp_server_name == "CustomServer"
@@ -114,7 +114,7 @@ class TestMcpToolServerConfigurationService:
             "mcpServerUniqueName": "test_server",
         }
 
-        config = service._parse_manifest_server_config(server_element)
+        config = service._parse_server_config(server_element)
 
         assert config is not None
         assert config.mcp_server_name == "DefaultServer"
@@ -132,7 +132,7 @@ class TestMcpToolServerConfigurationService:
             "url": "https://gateway.custom.url/mcp",
         }
 
-        config = service._parse_gateway_server_config(server_element)
+        config = service._parse_server_config(server_element)
 
         assert config is not None
         assert config.mcp_server_name == "GatewayServer"
@@ -151,7 +151,7 @@ class TestMcpToolServerConfigurationService:
             "mcpServerUniqueName": "gateway_server",
         }
 
-        config = service._parse_gateway_server_config(server_element)
+        config = service._parse_server_config(server_element)
 
         assert config is not None
         assert config.mcp_server_name == "GatewayServer"
@@ -202,13 +202,15 @@ class TestMcpToolServerConfigurationService:
         mock_gateway_url.return_value = "https://gateway.test/agents/test-app-id/mcpServers"
 
         # Mock aiohttp response
+        # V1 server (no audience) — this test verifies URL preservation, not token exchange.
+        # V2 servers (with a non-ATG audience) require auth context to be passed; that
+        # behaviour is tested separately in the per-audience token tests.
         mock_response_data = {
             "mcpServers": [
                 {
                     "mcpServerName": "ProdServer",
                     "mcpServerUniqueName": "prod_server",
                     "url": "https://prod.custom.url/mcp",
-                    "audience": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 }
             ]
         }
@@ -217,7 +219,7 @@ class TestMcpToolServerConfigurationService:
             # Create proper async context managers
             mock_response = MagicMock()
             mock_response.status = 200
-            mock_response.text = AsyncMock(return_value=json.dumps(mock_response_data))
+            mock_response.json = AsyncMock(return_value=mock_response_data)
 
             # Create async context manager for response
             mock_response_cm = MagicMock()
@@ -242,7 +244,6 @@ class TestMcpToolServerConfigurationService:
             assert servers[0].mcp_server_name == "ProdServer"
             assert servers[0].mcp_server_unique_name == "prod_server"
             assert servers[0].url == "https://prod.custom.url/mcp"
-            assert servers[0].audience == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
 
 class TestResolveTokenScopeForServer:
@@ -494,6 +495,45 @@ class TestAttachPerAudienceTokens:
 
         assert result[0].headers["X-Custom"] == "my-value"
         assert result[0].headers["Authorization"] == "Bearer tok"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "env_value",
+        [
+            "Bearer rawtoken123",
+            "bearer rawtoken123",
+            "BEARER rawtoken123",
+            "BeArEr rawtoken123",
+        ],
+    )
+    async def test_dev_acquirer_strips_bearer_prefix(self, service, env_value):
+        """Dev acquirer strips an existing 'Bearer ' prefix to prevent doubled headers."""
+        server = self._make_server("mail")
+        with patch.dict(os.environ, {"BEARER_TOKEN": env_value}):
+            acquire = service._create_dev_token_acquirer()
+            result = await service._attach_per_audience_tokens([server], acquire)
+
+        assert result[0].headers["Authorization"] == "Bearer rawtoken123"
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_raw_token_unchanged(self, service):
+        """Dev acquirer leaves a raw token (no prefix) unchanged."""
+        server = self._make_server("mail")
+        with patch.dict(os.environ, {"BEARER_TOKEN": "rawtoken456"}):
+            acquire = service._create_dev_token_acquirer()
+            result = await service._attach_per_audience_tokens([server], acquire)
+
+        assert result[0].headers["Authorization"] == "Bearer rawtoken456"
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_per_server_token_strips_bearer_prefix(self, service):
+        """Per-server BEARER_TOKEN_<NAME> env var also has its Bearer prefix stripped."""
+        server = self._make_server("mail")
+        with patch.dict(os.environ, {"BEARER_TOKEN_MAIL": "Bearer per-server-tok"}):
+            acquire = service._create_dev_token_acquirer()
+            result = await service._attach_per_audience_tokens([server], acquire)
+
+        assert result[0].headers["Authorization"] == "Bearer per-server-tok"
 
 
 class TestPrepareGatewayHeaders:

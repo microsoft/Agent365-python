@@ -26,6 +26,7 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
+    is_development_environment,
 )
 
 
@@ -76,12 +77,15 @@ class McpToolRegistrationService:
         Returns:
             None
         """
-        if not auth_token:
+        is_dev = is_development_environment()
+        if not auth_token and not is_dev:
+            # Only exchange a token in production; dev mode uses BEARER_TOKEN* env vars instead.
             scopes = get_mcp_platform_authentication_scope()
             auth_token_obj = await auth.exchange_token(context, scopes, auth_handler_name)
             auth_token = auth_token_obj.token
 
-        agentic_app_id = Utility.resolve_agent_identity(context, auth_token)
+        # In dev mode, agentic_app_id is not needed for manifest-based discovery.
+        agentic_app_id = "" if is_dev else Utility.resolve_agent_identity(context, auth_token)
         self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
         options = ToolOptions(orchestrator_name=self._orchestrator_name)
@@ -124,6 +128,13 @@ class McpToolRegistrationService:
                     )
                 }
                 server_headers = dict(server_config.headers) if server_config.headers else {}
+                # Fall back to the shared discovery token when no per-server
+                # Authorization header was attached (e.g. dev mode without
+                # BEARER_TOKEN* env vars, or legacy V1 callers).
+                if Constants.Headers.AUTHORIZATION not in server_headers and auth_token:
+                    server_headers[Constants.Headers.AUTHORIZATION] = (
+                        f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                    )
                 headers = {**base_headers, **server_headers}  # per-audience token takes precedence
 
                 server_info = McpToolset(

@@ -68,6 +68,34 @@ def build_mcp_server_url(server_name: str) -> str:
     return f"{base_url}/{server_name}"
 
 
+def is_development_environment() -> bool:
+    """
+    Returns True if the current environment is configured as development.
+
+    Resolution order (first non-empty value wins):
+    1. ``PYTHON_ENVIRONMENT``     — explicit Python SDK variable used in current samples.
+    2. ``ENVIRONMENT``            — legacy Python SDK variable (backward compatibility).
+    3. ``ASPNETCORE_ENVIRONMENT`` — .NET / Azure hosting convention.
+    4. ``DOTNET_ENVIRONMENT``     — .NET generic-host convention.
+    5. Defaults to ``"Development"`` when none of the above are set.
+
+    ``PYTHON_ENVIRONMENT`` and ``ENVIRONMENT`` are checked before the .NET variables
+    so legacy Python agents that set ``ENVIRONMENT=Production`` are not affected if an
+    unrelated process also sets ``ASPNETCORE_ENVIRONMENT`` (e.g. a .NET sidecar).
+
+    Returns:
+        bool: True when the resolved environment is "development" (case-insensitive).
+    """
+    environment = (
+        os.getenv("PYTHON_ENVIRONMENT")
+        or os.getenv("ENVIRONMENT")
+        or os.getenv("ASPNETCORE_ENVIRONMENT")
+        or os.getenv("DOTNET_ENVIRONMENT")
+        or "Development"
+    )
+    return environment.lower() == "development"
+
+
 def _get_current_environment() -> str:
     """
     Gets the current environment name.
@@ -135,15 +163,20 @@ def resolve_token_scope_for_server(server: MCPServerConfig) -> str:
         str: The OAuth scope string, e.g. ``"<guid>/Tools.ListInvoke.All"``,
         ``"api://<guid>/.default"``, or the shared ATG ``"<atg-guid>/.default"``.
     """
-    if (
-        server.audience is not None
-        and server.audience.lower() != "default"
-        and server.audience != ATG_APP_ID
-        and server.audience != ATG_APP_ID_URI
-    ):
-        # V2: use explicit scope when present, fall back to /.default (pre-consented)
-        if server.scope:
-            return f"{server.audience}/{server.scope}"
-        return f"{server.audience}/.default"
-    # V1: shared ATG platform token
-    return f"{ATG_APP_ID}/.default"
+    if server.audience is not None:
+        # Normalize once: strip whitespace and lowercase so that GUID casing differences
+        # (e.g. "EA9FFC3E-..." vs "ea9ffc3e-...") and api:// scheme variations do not
+        # misclassify V1 servers as V2 or produce inconsistent OAuth cache keys.
+        audience = server.audience.strip().lower()
+        if (
+            audience != "default"
+            and audience != ATG_APP_ID  # already lowercase constant
+            and audience != ATG_APP_ID_URI  # already lowercase constant
+        ):
+            # V2: use explicit scope when present, fall back to /.default (pre-consented).
+            # Use the normalized audience so scope strings are consistent cache keys.
+            if server.scope:
+                return f"{audience}/{server.scope}"
+            return f"{audience}/.default"
+    # V1: shared ATG platform token, configurable via MCP_PLATFORM_AUTHENTICATION_SCOPE env var
+    return get_mcp_platform_authentication_scope()[0]

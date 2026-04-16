@@ -4,7 +4,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Union
 
 from agent_framework import RawAgent, Message, BaseHistoryProvider, MCPStreamableHTTPTool
 from agent_framework.azure import AzureOpenAIChatClient
@@ -22,6 +22,7 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
+    is_development_environment,
 )
 
 
@@ -57,7 +58,7 @@ class McpToolRegistrationService:
         self,
         chat_client: Union[OpenAIChatClient, AzureOpenAIChatClient],
         agent_instructions: str,
-        initial_tools: List[Any],
+        initial_tools: List[object],
         auth: Authorization,
         auth_handler_name: str,
         turn_context: TurnContext,
@@ -82,13 +83,15 @@ class McpToolRegistrationService:
             Exception: If agent creation fails.
         """
         try:
-            # Exchange token if not provided
-            if not auth_token:
+            is_dev = is_development_environment()
+            if not auth_token and not is_dev:
+                # Only exchange a token in production; dev mode uses BEARER_TOKEN* env vars instead.
                 scopes = get_mcp_platform_authentication_scope()
                 authToken = await auth.exchange_token(turn_context, scopes, auth_handler_name)
                 auth_token = authToken.token
 
-            agentic_app_id = Utility.resolve_agent_identity(turn_context, auth_token)
+            # In dev mode, agentic_app_id is not needed for manifest-based discovery.
+            agentic_app_id = "" if is_dev else Utility.resolve_agent_identity(turn_context, auth_token)
 
             self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
@@ -124,6 +127,13 @@ class McpToolRegistrationService:
                         )
                     }
                     server_headers = dict(config.headers) if config.headers else {}
+                    # Fall back to the shared discovery token when no per-server
+                    # Authorization header was attached (e.g. dev mode without
+                    # BEARER_TOKEN* env vars, or legacy V1 callers).
+                    if Constants.Headers.AUTHORIZATION not in server_headers and auth_token:
+                        server_headers[Constants.Headers.AUTHORIZATION] = (
+                            f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                        )
                     headers = {**base_headers, **server_headers}  # server auth takes precedence
 
                     # Create httpx client with auth headers configured
