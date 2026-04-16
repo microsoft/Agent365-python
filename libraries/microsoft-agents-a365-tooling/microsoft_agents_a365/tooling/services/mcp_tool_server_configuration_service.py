@@ -170,8 +170,8 @@ class McpToolServerConfigurationService:
             else:
                 # Legacy call without auth context — guard against V2 servers.
                 # V2 servers require per-audience OBO exchange; returning them without a
-                # token would cause silent 401s downstream. Raise early with a clear message
-                # so callers get an actionable migration hint (mirrors Node.js behaviour).
+                # token would cause silent 401s downstream. Raise early with a clear
+                # migration hint so callers know which parameters to add.
                 v2_servers = [s for s in servers if self._is_v2_server(s)]
                 if v2_servers:
                     names = ", ".join(
@@ -226,7 +226,7 @@ class McpToolServerConfigurationService:
         The CLI (``a365 develop get-token``) writes tokens to the environment before the agent
         starts. Resolution order per server:
 
-        1. ``BEARER_TOKEN_<MCP_SERVER_NAME_UPPER>`` — per-server token (aligns with Node.js)
+        1. ``BEARER_TOKEN_<MCP_SERVER_NAME_UPPER>`` — per-server token
         2. ``BEARER_TOKEN`` — shared fallback token
 
         Tokens are returned **without** a ``Bearer `` prefix. If the env var already contains

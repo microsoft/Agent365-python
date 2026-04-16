@@ -75,13 +75,13 @@ def is_development_environment() -> bool:
     Resolution order (first non-empty value wins):
     1. ``PYTHON_ENVIRONMENT``     — explicit Python SDK variable used in current samples.
     2. ``ENVIRONMENT``            — legacy Python SDK variable (backward compatibility).
-    3. ``ASPNETCORE_ENVIRONMENT`` — .NET / Azure hosting convention.
-    4. ``DOTNET_ENVIRONMENT``     — .NET generic-host convention.
+    3. ``ASPNETCORE_ENVIRONMENT`` — Azure hosting convention.
+    4. ``DOTNET_ENVIRONMENT``     — generic-host convention.
     5. Defaults to ``"Development"`` when none of the above are set.
 
-    ``PYTHON_ENVIRONMENT`` and ``ENVIRONMENT`` are checked before the .NET variables
-    so legacy Python agents that set ``ENVIRONMENT=Production`` are not affected if an
-    unrelated process also sets ``ASPNETCORE_ENVIRONMENT`` (e.g. a .NET sidecar).
+    ``PYTHON_ENVIRONMENT`` and ``ENVIRONMENT`` are checked first so that agents
+    which explicitly set ``ENVIRONMENT=Production`` are not affected if a host
+    process also sets ``ASPNETCORE_ENVIRONMENT``.
 
     Returns:
         bool: True when the resolved environment is "development" (case-insensitive).

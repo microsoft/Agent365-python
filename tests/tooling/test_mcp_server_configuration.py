@@ -288,20 +288,19 @@ class TestResolveTokenScopeForServer:
         assert resolve_token_scope_for_server(server) == f"{self.PROD_ATG_APP_ID}/.default"
 
     # ------------------------------------------------------------------
-    # V1 test-env — ATG_APP_ID overridden via MCP_PLATFORM_APP_ID
+    # V1 test-env — non-prod ATG audience falls through to V2 scope resolution
     # ------------------------------------------------------------------
 
     def test_v1_test_env_shared_audience_not_treated_as_v2(self):
-        """V1 test env: test audience GUID is a different GUID from prod ATG — treated as V2
-        unless the caller configures ATG_APP_ID to match. This test documents that the SDK
-        uses the prod ATG_APP_ID constant; test environments must set MCP_PLATFORM_APP_ID
-        via the CLI / .env so gateway returns the correct shared audience in discovery."""
+        """Non-prod ATG audience GUID is different from the hardcoded prod ATG_APP_ID constant,
+        so it is classified as V2 and resolved to its own /.default scope. This is intentional:
+        the V2 token exchange works correctly for test app registrations because
+        Tools.ListInvoke.All is pre-consented. Use MCP_PLATFORM_AUTHENTICATION_SCOPE or
+        MCP_PLATFORM_ENDPOINT env vars to point the SDK at a non-prod gateway."""
         from microsoft_agents_a365.tooling.utils.utility import resolve_token_scope_for_server
 
-        # test env audience is a different GUID — with prod ATG_APP_ID hardcoded,
-        # it is treated as V2 (resolved to its own /.default scope).
-        # This is intentional: V2 logic handles it correctly since Tools.ListInvoke.All
-        # is pre-consented on the test app registration.
+        # Non-prod ATG audience — classified as V2 because it does not match
+        # the hardcoded prod ATG_APP_ID constant. Resolved to its own /.default scope.
         server = self._make_server(audience=self.TEST_ATG_APP_ID, scope=None)
         assert resolve_token_scope_for_server(server) == f"{self.TEST_ATG_APP_ID}/.default"
 
