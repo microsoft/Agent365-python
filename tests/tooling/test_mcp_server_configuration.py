@@ -3,7 +3,6 @@
 
 """Unit tests for MCP Server Configuration Service."""
 
-import json
 import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch

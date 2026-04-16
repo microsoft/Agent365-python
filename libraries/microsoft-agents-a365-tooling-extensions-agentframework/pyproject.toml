@@ -26,7 +26,7 @@ license = {text = "MIT"}
 dependencies = [
     "microsoft-agents-a365-tooling",
     "microsoft-agents-hosting-core",
-    "agent-framework-azure-ai",
+    "agent-framework",
     "azure-identity",
     "typing-extensions",
     "httpx",

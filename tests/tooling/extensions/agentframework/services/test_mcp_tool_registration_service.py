@@ -52,7 +52,7 @@ class TestAddToolServersHttpxClientConfiguration:
 
     @pytest.fixture
     def mock_chat_client(self):
-        """Create a mock OpenAIChatClient or AzureOpenAIChatClient."""
+        """Create a mock OpenAIChatClient."""
         return Mock()
 
     @pytest.fixture

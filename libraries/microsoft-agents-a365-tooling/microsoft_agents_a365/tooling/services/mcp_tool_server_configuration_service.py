@@ -217,11 +217,7 @@ class McpToolServerConfigurationService:
         if server.audience is None:
             return False
         audience = server.audience.strip().lower()
-        return (
-            audience != "default"
-            and audience != ATG_APP_ID
-            and audience != ATG_APP_ID_URI
-        )
+        return audience != "default" and audience != ATG_APP_ID and audience != ATG_APP_ID_URI
 
     def _create_dev_token_acquirer(self) -> TokenAcquirer:
         """
@@ -673,9 +669,7 @@ class McpToolServerConfigurationService:
     # CONFIGURATION PARSING HELPERS
     # --------------------------------------------------------------------------
 
-    def _parse_server_config(
-        self, server_element: Dict[str, object]
-    ) -> Optional[MCPServerConfig]:
+    def _parse_server_config(self, server_element: Dict[str, object]) -> Optional[MCPServerConfig]:
         """
         Parses a server configuration from manifest or gateway response data.
 
@@ -703,8 +697,7 @@ class McpToolServerConfigurationService:
             scope_raw = server_element.get("scope")
             scope = (
                 None
-                if not scope_raw
-                or (isinstance(scope_raw, str) and scope_raw.lower() == "null")
+                if not scope_raw or (isinstance(scope_raw, str) and scope_raw.lower() == "null")
                 else str(scope_raw)
             )
 

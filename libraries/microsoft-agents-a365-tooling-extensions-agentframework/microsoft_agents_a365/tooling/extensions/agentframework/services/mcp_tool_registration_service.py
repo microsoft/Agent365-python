@@ -4,10 +4,9 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence
 
-from agent_framework import RawAgent, Message, BaseHistoryProvider, MCPStreamableHTTPTool
-from agent_framework.azure import AzureOpenAIChatClient
+from agent_framework import RawAgent, Message, HistoryProvider, MCPStreamableHTTPTool
 from agent_framework.openai import OpenAIChatClient
 import httpx
 
@@ -56,7 +55,7 @@ class McpToolRegistrationService:
 
     async def add_tool_servers_to_agent(
         self,
-        chat_client: Union[OpenAIChatClient, AzureOpenAIChatClient],
+        chat_client: OpenAIChatClient,
         agent_instructions: str,
         initial_tools: List[object],
         auth: Authorization,
@@ -68,7 +67,7 @@ class McpToolRegistrationService:
         Add MCP tool servers to a RawAgent (mirrors .NET implementation).
 
         Args:
-            chat_client: The chat client instance (Union[OpenAIChatClient, AzureOpenAIChatClient])
+            chat_client: The chat client instance (OpenAIChatClient supports both OpenAI and Azure OpenAI)
             agent_instructions: Instructions for the agent behavior
             initial_tools: List of initial tools to add to the agent
             auth: Authorization context for token exchange
@@ -91,7 +90,9 @@ class McpToolRegistrationService:
                 auth_token = authToken.token
 
             # In dev mode, agentic_app_id is not needed for manifest-based discovery.
-            agentic_app_id = "" if is_dev else Utility.resolve_agent_identity(turn_context, auth_token)
+            agentic_app_id = (
+                "" if is_dev else Utility.resolve_agent_identity(turn_context, auth_token)
+            )
 
             self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
@@ -320,18 +321,18 @@ class McpToolRegistrationService:
 
     async def send_chat_history_from_store(
         self,
-        chat_message_store: BaseHistoryProvider,
+        chat_message_store: HistoryProvider,
         turn_context: TurnContext,
         tool_options: Optional[ToolOptions] = None,
     ) -> OperationResult:
         """
-        Send chat history from a BaseHistoryProvider to the MCP platform.
+        Send chat history from a HistoryProvider to the MCP platform.
 
         This is a convenience method that extracts messages from the store
         and delegates to send_chat_history_messages().
 
         Args:
-            chat_message_store: BaseHistoryProvider containing the conversation history.
+            chat_message_store: HistoryProvider containing the conversation history.
             turn_context: TurnContext from the Agents SDK containing conversation info.
             tool_options: Optional configuration for the request.
 

@@ -65,7 +65,7 @@ class TestSendChatHistoryAsync:
 
     @pytest.fixture
     def mock_chat_message_store(self, sample_chat_messages):
-        """Create a mock BaseHistoryProvider."""
+        """Create a mock HistoryProvider."""
         store = AsyncMock()
         store.get_messages = AsyncMock(return_value=sample_chat_messages)
         return store
