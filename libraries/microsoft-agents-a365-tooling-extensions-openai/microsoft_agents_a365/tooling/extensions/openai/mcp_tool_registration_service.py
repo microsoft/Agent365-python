@@ -166,7 +166,11 @@ class McpToolRegistrationService:
                     # BEARER_TOKEN* env vars, or legacy V1 callers).
                     if Constants.Headers.AUTHORIZATION not in server_headers and auth_token:
                         server_headers[Constants.Headers.AUTHORIZATION] = (
-                            f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                            auth_token
+                            if auth_token.lower().startswith(
+                                f"{Constants.Headers.BEARER_PREFIX.lower()} "
+                            )
+                            else f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
                         )
                     headers = {
                         **base_headers,
