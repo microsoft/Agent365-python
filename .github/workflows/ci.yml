@@ -85,6 +85,8 @@ jobs:
     defaults:
       run:
         working-directory: ./
+    env:
+      PYTHONPATH: ${{ github.workspace }}/versioning/helper
 
     strategy:
       matrix:
@@ -105,8 +107,6 @@ jobs:
     
     - name: Install the project
       run: uv lock && uv sync --locked --all-extras --dev
-      env:
-        PYTHONPATH: ${{ github.workspace }}/versioning/helper
 
     - name: Verify centralized version constraints
       run: uv run --frozen tox -e verify-constraints

@@ -10,7 +10,7 @@ wheels only from CI.
 
 Usage in package pyproject.toml:
   [build-system]
-  requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit"]
+  requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit", "packaging"]
   build-backend = "build_backend"
 
 The build backend module is resolved via PYTHONPATH, which must include the
