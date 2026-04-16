@@ -176,9 +176,7 @@ class McpToolRegistrationService:
                 # Tools can be invoked because their underlying connections stay alive.
                 self._connected_plugins.append(plugin)
 
-                self._logger.info(
-                    f"Connected and added MCP plugin for: {server.mcp_server_name}"
-                )
+                self._logger.info(f"Connected and added MCP plugin for: {server.mcp_server_name}")
 
             except Exception as e:
                 self._logger.error(f"Failed to add tools from {server.mcp_server_name}: {str(e)}")
