@@ -33,3 +33,6 @@ class Constants:
 
         #: Header name for the subchannel ID.
         SUBCHANNEL_ID = "x-ms-subchannel-id"
+
+        #: Header name for the correlation ID used to trace a request across services.
+        CORRELATION_ID = "x-ms-correlation-id"
