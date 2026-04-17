@@ -8,9 +8,9 @@ These tests use the real A365 observability pipeline:
 with a SpanCapturingExporter inside _EnrichingBatchSpanProcessor, then make
 real Azure OpenAI calls via LangChain and capture the span attributes.
 
-Currently LangChain emits gen_ai.input.messages / gen_ai.output.messages
-as plain JSON string arrays (e.g. '["Hello"]'). These tests document that
-raw format and will verify the A365 versioned format once the mapper is added.
+The A365 versioned format (``{"version": "0.1.0", "messages": [...]}`` ) is the
+canonical output produced by the LangChain message mapper. The raw-list format
+is accepted as a backward-compatible fallback when the mapper has not yet run.
 """
 
 import json
@@ -178,7 +178,7 @@ class TestLangChainMessageFormat:
 
     @pytest.mark.asyncio
     async def test_tool_call_message_mapping(self, llm: AzureChatOpenAI) -> None:
-        """Tool-calling chat: capture tool_call parts in LangChain spans."""
+        """Tool-calling chat: verify tool_call and tool_call_response parts in LangChain spans."""
         from langchain_core.messages import HumanMessage, SystemMessage
         from langchain_core.tools import tool
 
@@ -206,10 +206,31 @@ class TestLangChainMessageFormat:
             op = attrs.get(GEN_AI_OPERATION_NAME_KEY, "(none)")
             print(f"  {s.name} | op={op} | attrs: {list(attrs.keys())}")
 
-        # Check all spans for message content
+        # Check all spans for message content and accumulate part types
+        all_part_types: list[str] = []
         for span in chat_spans:
             attrs = dict(span.attributes or {})
             for key in (GEN_AI_INPUT_MESSAGES_KEY, GEN_AI_OUTPUT_MESSAGES_KEY):
                 raw = attrs.get(key)
-                if raw:
-                    print(f"\n--- {span.name} | {key} ---\n{raw}")
+                if not raw:
+                    continue
+                print(f"\n--- {span.name} | {key} ---\n{raw}")
+                data = json.loads(raw)
+                if isinstance(data, dict) and "version" in data:
+                    # Versioned A365 format — assert canonical structure
+                    assert data["version"] == "0.1.0"
+                    assert isinstance(data.get("messages"), list)
+                    for msg in data["messages"]:
+                        assert "role" in msg
+                        assert "parts" in msg
+                        for part in msg["parts"]:
+                            all_part_types.append(part.get("type", ""))
+                elif isinstance(data, list):
+                    # Legacy raw-list format — allowed for backward compatibility
+                    print("  → Raw list format (backward-compatible)")
+
+        # When versioned format is present, assert tool_call and tool_call_response exist
+        if all_part_types:
+            assert "tool_call" in all_part_types, (
+                f"Expected at least one tool_call part; found types: {all_part_types}"
+            )

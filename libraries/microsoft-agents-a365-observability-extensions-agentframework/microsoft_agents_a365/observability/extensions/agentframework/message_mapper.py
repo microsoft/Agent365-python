@@ -153,7 +153,7 @@ def _map_single_part(part: dict[str, Any]) -> MessagePart | None:
         return ToolCallRequestPart(
             name=name,
             id=part.get("id"),
-            arguments=part.get("arguments"),
+            arguments=_parse_arguments(part.get("arguments")),
         )
 
     if part_type == "tool_call_response":
@@ -186,3 +186,28 @@ def _map_single_part(part: dict[str, Any]) -> MessagePart | None:
     # Fallback: GenericPart for unknown/future part types
     data = {k: v for k, v in part.items() if k != "type"}
     return GenericPart(type=part_type, data=data) if part_type else None
+
+
+def _parse_arguments(
+    raw: dict[str, object] | list[object] | str | None,
+) -> dict[str, object] | list[object] | str | None:
+    """Return structured arguments when possible, keeping strings that fail JSON parsing.
+
+    If ``raw`` is already a ``dict`` or ``list``, it is returned as-is.
+    If ``raw`` is a ``str``, an attempt is made to parse it with :func:`json.loads`.
+    A successfully parsed ``dict`` or ``list`` is returned; any other parsed
+    value (scalar) or a parse failure returns the original string.
+    ``None`` is returned unchanged.
+    """
+    if raw is None or isinstance(raw, (dict, list)):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            logger.debug("Failed to parse tool call arguments as JSON: %s", raw[:200])
+            return raw
+        if isinstance(parsed, (dict, list)):
+            return parsed
+        return raw
+    return raw  # pragma: no cover — unexpected type, pass through unchanged

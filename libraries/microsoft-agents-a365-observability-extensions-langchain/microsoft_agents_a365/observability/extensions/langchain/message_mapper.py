@@ -11,6 +11,7 @@ versioned format (``InputMessages`` / ``OutputMessages``).
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterable, Mapping
 from typing import Any
@@ -185,22 +186,11 @@ def _extract_parts(msg: BaseMessage | Mapping[str, Any]) -> list[MessagePart]:
             name = tc.get("name")
             if not name:
                 continue
-            args = tc.get("args")
-            args_str = None
-            if args is not None:
-                import json
-
-                try:
-                    args_str = json.dumps(args) if not isinstance(args, str) else args
-                except (TypeError, ValueError):
-                    logger.debug("Failed to serialize tool call args for '%s': %s", name, args)
-                    args_str = str(args)
-
             parts.append(
                 ToolCallRequestPart(
                     name=name,
                     id=tc.get("id"),
-                    arguments=args_str,
+                    arguments=_parse_tool_call_args(name, tc.get("args")),
                 )
             )
 
@@ -238,3 +228,26 @@ def _map_to_output_message(
         finish_reason = gen_info.get("finish_reason")
 
     return OutputMessage(role=role, parts=parts, finish_reason=finish_reason)
+
+
+def _parse_tool_call_args(
+    name: str,
+    args: dict[str, object] | list[object] | str | None,
+) -> dict[str, object] | list[object] | str | None:
+    """Return structured tool-call arguments when possible.
+
+    ``dict`` and ``list`` values are returned as-is.  A ``str`` is attempted
+    as JSON; if parsing succeeds and yields a ``dict`` or ``list``, the parsed
+    value is returned.  Otherwise the original string is kept so no information
+    is lost.
+    """
+    if args is None or isinstance(args, (dict, list)):
+        return args
+    if isinstance(args, str):
+        try:
+            decoded = json.loads(args)
+            return decoded if isinstance(decoded, (dict, list)) else args
+        except (json.JSONDecodeError, ValueError):
+            logger.debug("Failed to parse tool call args for '%s': %s", name, args)
+            return args
+    return args  # pragma: no cover — unexpected type, pass through unchanged
