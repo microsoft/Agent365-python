@@ -24,7 +24,7 @@ classifiers = [
 license = {text = "MIT"}
 dependencies = [
     "microsoft-agents-a365-tooling",
-    "azure-ai-projects>=1.0.0b12,<2.0.0",
+    "azure-ai-projects",
     "azure-ai-agents",
     "azure-identity",
 ]
