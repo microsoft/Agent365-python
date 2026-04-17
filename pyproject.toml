@@ -57,6 +57,7 @@ dev-dependencies = [
     "agent-framework",
     "azure-identity",
     "openai-agents",
+    "langchain-openai",
 ]
 
 # Override semantic-kernel's azure-ai-projects constraint to allow 2.x
