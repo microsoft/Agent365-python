@@ -193,6 +193,7 @@ def _extract_parts(msg: BaseMessage | Mapping[str, Any]) -> list[MessagePart]:
                 try:
                     args_str = json.dumps(args) if not isinstance(args, str) else args
                 except (TypeError, ValueError):
+                    logger.debug("Failed to serialize tool call args for '%s': %s", name, args)
                     args_str = str(args)
 
             parts.append(

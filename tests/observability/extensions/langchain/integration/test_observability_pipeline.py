@@ -7,9 +7,20 @@ These tests verify the full A365 observability pipeline:
   InvokeAgentScope → Inference (auto-instrumented) → ToolExecution (auto-instrumented)
 
 The CustomLangChainInstrumentor automatically creates inference spans for LLM
-calls and execute_tool spans for tool runs. Wrapping the entire call in
-InvokeAgentScope makes all auto-instrumented spans children of the invoke_agent
-span (since separate_trace_from_runtime_context defaults to False).
+calls and execute_tool spans for tool runs.  Its built-in message mapper
+converts LangChain messages into the versioned A365 message format
+(``{"version": "0.1.0", "messages": [...]}``) on ``gen_ai.input.messages``
+and ``gen_ai.output.messages`` span attributes.
+
+Wrapping the entire call in InvokeAgentScope makes all auto-instrumented spans
+children of the invoke_agent span (since ``separate_trace_from_runtime_context``
+defaults to ``False``).
+
+Note: the message-format assertions accept both the versioned dict structure
+*and* a raw JSON list.  The raw-list branch exists for backward compatibility
+with older instrumentation versions or third-party LangChain instrumentors that
+emit ``gen_ai.*.messages`` as plain JSON arrays before the A365 mapper was
+integrated.
 """
 
 import json
@@ -101,7 +112,7 @@ class TestLangChainObservabilityPipeline:
 
     Verifies that wrapping LangChain calls inside InvokeAgentScope
     produces a single trace with correct parent-child span hierarchy,
-    operation names, and A365 message format attributes.
+    operation names, and A365 versioned message format attributes.
     """
 
     @pytest.fixture(autouse=True)
@@ -302,6 +313,9 @@ class TestLangChainObservabilityPipeline:
             print(f"\n✓ Found {len(tool_spans)} tool execution spans")
 
         # --- 8. A365 message format on inference spans ---
+        # The A365 mapper emits the versioned format {"version": "0.1.0", "messages": [...]}.
+        # Older or third-party instrumentors may emit a raw JSON list instead;
+        # the raw-list branch is kept for backward compatibility.
         for inf_span in inference_spans:
             attrs = dict(inf_span.attributes or {})
             if GEN_AI_INPUT_MESSAGES_KEY in attrs:

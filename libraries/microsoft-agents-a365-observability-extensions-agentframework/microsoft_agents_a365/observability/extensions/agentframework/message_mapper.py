@@ -55,6 +55,7 @@ def map_input_messages(messages_json: str) -> str | None:
     try:
         raw = json.loads(messages_json)
     except (json.JSONDecodeError, TypeError):
+        logger.debug("Failed to parse input messages JSON: %s", messages_json[:200])
         return None
 
     if not isinstance(raw, list):
@@ -88,6 +89,7 @@ def map_output_messages(messages_json: str) -> str | None:
     try:
         raw = json.loads(messages_json)
     except (json.JSONDecodeError, TypeError):
+        logger.debug("Failed to parse output messages JSON: %s", messages_json[:200])
         return None
 
     if not isinstance(raw, list):
