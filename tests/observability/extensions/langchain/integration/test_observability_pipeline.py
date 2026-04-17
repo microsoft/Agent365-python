@@ -194,7 +194,7 @@ class TestLangChainObservabilityPipeline:
             request=request,
             scope_details=InvokeAgentScopeDetails(),
             agent_details=agent_details,
-        ) as invoke_scope:
+        ):
             messages = [
                 SystemMessage(
                     content=(
@@ -217,10 +217,8 @@ class TestLangChainObservabilityPipeline:
 
                 # Second LLM call with tool results
                 final_response = await llm_with_tools.ainvoke(messages)
-                invoke_scope.set_output(str(final_response.content))
             else:
                 final_response = ai_response
-                invoke_scope.set_output(str(final_response.content))
 
         assert final_response is not None
         assert len(str(final_response.content)) > 0
@@ -345,13 +343,12 @@ class TestLangChainObservabilityPipeline:
             request=request,
             scope_details=InvokeAgentScopeDetails(),
             agent_details=agent_details,
-        ) as invoke_scope:
+        ):
             messages = [
                 SystemMessage(content="You are a helpful assistant. Reply in one sentence."),
                 HumanMessage(content="Say hello in exactly 5 words."),
             ]
             result = await llm.ainvoke(messages)
-            invoke_scope.set_output(str(result.content))
 
         assert result is not None
         assert len(str(result.content)) > 0

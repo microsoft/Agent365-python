@@ -19,7 +19,7 @@ from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 
 try:
-    from agent_framework import RawAgent, ai_function
+    from agent_framework import RawAgent, tool as ai_function
     from agent_framework.azure import AzureOpenAIChatClient
     from agent_framework.observability import enable_instrumentation
     from azure.identity import AzureCliCredential
@@ -205,9 +205,8 @@ class TestAgentFrameworkObservabilityPipeline:
             request=request,
             scope_details=InvokeAgentScopeDetails(),
             agent_details=agent_details,
-        ) as invoke_scope:
+        ):
             result = await agent.run("What is 15 + 27?")
-            invoke_scope.set_output("42")
 
         assert result is not None
         assert len(result.text) > 0
@@ -352,9 +351,8 @@ class TestAgentFrameworkObservabilityPipeline:
             request=request,
             scope_details=InvokeAgentScopeDetails(),
             agent_details=agent_details,
-        ) as invoke_scope:
+        ):
             result = await agent.run("Say hello in exactly 5 words.")
-            invoke_scope.set_output(result.text)
 
         assert result is not None
         assert len(result.text) > 0
