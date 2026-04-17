@@ -19,7 +19,8 @@ from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 
 try:
-    from agent_framework import RawAgent, tool as ai_function
+    from agent_framework import RawAgent
+    from agent_framework import tool as ai_function
     from agent_framework.azure import AzureOpenAIChatClient
     from agent_framework.observability import enable_instrumentation
     from azure.identity import AzureCliCredential
