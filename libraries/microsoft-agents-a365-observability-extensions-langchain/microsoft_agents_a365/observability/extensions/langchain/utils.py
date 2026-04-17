@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 import json
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping
 from copy import deepcopy
 from typing import Any
 
@@ -35,6 +35,9 @@ from microsoft_agents_a365.observability.core.utils import (
     safe_json_dumps,
     stop_on_exception,
 )
+
+from .message_mapper import map_input_messages as _map_input
+from .message_mapper import map_output_messages as _map_output
 
 IGNORED_EXCEPTION_PATTERNS = [
     r"^Command\(",
@@ -207,42 +210,13 @@ def _parse_message_data(message_data: Mapping[str, Any] | None) -> Iterator[tupl
 def input_messages(
     inputs: Mapping[str, Any] | None,
 ) -> Iterator[tuple[str, str]]:
-    """Yields chat messages as a JSON array of content strings."""
+    """Yields input messages in A365 versioned format."""
     if not inputs:
         return
-    if not isinstance(inputs, Mapping):
-        return
-    # There may be more than one set of messages. We'll use just the first set.
-    if not (multiple_messages := inputs.get("messages")):
-        return
-    if not isinstance(multiple_messages, Iterable):
-        return
-    # This will only get the first set of messages.
-    if not (first_messages := next(iter(multiple_messages), None)):
-        return
-    contents: list[str] = []
-    if isinstance(first_messages, list):
-        for message_data in first_messages:
-            if isinstance(message_data, BaseMessage):
-                if hasattr(message_data, "content") and message_data.content:
-                    contents.append(str(message_data.content))
-            elif hasattr(message_data, "get"):
-                if content := message_data.get("content"):
-                    contents.append(str(content))
-                elif kwargs := message_data.get("kwargs"):
-                    if hasattr(kwargs, "get") and (content := kwargs.get("content")):
-                        contents.append(str(content))
-    elif isinstance(first_messages, BaseMessage):
-        if hasattr(first_messages, "content") and first_messages.content:
-            contents.append(str(first_messages.content))
-    elif hasattr(first_messages, "get"):
-        if content := first_messages.get("content"):
-            contents.append(str(content))
-    elif isinstance(first_messages, Sequence) and len(first_messages) == 2:
-        role, content = first_messages
-        contents.append(str(content))
-    if contents:
-        yield GEN_AI_INPUT_MESSAGES_KEY, safe_json_dumps(contents)
+
+    mapped = _map_input(inputs)
+    if mapped is not None:
+        yield GEN_AI_INPUT_MESSAGES_KEY, mapped
 
 
 @stop_on_exception
@@ -266,11 +240,12 @@ def metadata(run: Run) -> Iterator[tuple[str, str]]:
 def output_messages(
     outputs: Mapping[str, Any] | None,
 ) -> Iterator[tuple[str, str]]:
-    """Yields chat messages as a JSON array of content strings."""
+    """Yields output messages in A365 versioned format."""
     if not outputs:
         return
     if not isinstance(outputs, Mapping):
         return
+    # Preserve response ID extraction
     output_type = outputs.get("type")
     if output_type and output_type.lower() == "llmresult":
         llm_output = outputs.get("llm_output")
@@ -278,32 +253,10 @@ def output_messages(
             response_id = llm_output.get("id")
             if response_id:
                 yield GEN_AI_RESPONSE_ID_KEY, response_id
-    # There may be more than one set of generations. We'll use just the first set.
-    if not (multiple_generations := outputs.get("generations")):
-        return
-    if not isinstance(multiple_generations, Iterable):
-        return
-    # This will only get the first set of generations.
-    if not (first_generations := next(iter(multiple_generations), None)):
-        return
-    if not isinstance(first_generations, Iterable):
-        return
-    contents: list[str] = []
-    for generation in first_generations:
-        if not isinstance(generation, Mapping):
-            continue
-        if message_data := generation.get("message"):
-            if isinstance(message_data, BaseMessage):
-                if hasattr(message_data, "content") and message_data.content:
-                    contents.append(str(message_data.content))
-            elif hasattr(message_data, "get"):
-                if content := message_data.get("content"):
-                    contents.append(str(content))
-                elif kwargs := message_data.get("kwargs"):
-                    if hasattr(kwargs, "get") and (content := kwargs.get("content")):
-                        contents.append(str(content))
-    if contents:
-        yield GEN_AI_OUTPUT_MESSAGES_KEY, safe_json_dumps(contents)
+
+    mapped = _map_output(outputs)
+    if mapped is not None:
+        yield GEN_AI_OUTPUT_MESSAGES_KEY, mapped
 
 
 @stop_on_exception
