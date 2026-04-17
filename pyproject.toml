@@ -57,6 +57,7 @@ dev-dependencies = [
     "agent-framework",
     "azure-identity",
     "openai-agents",
+    "langchain-openai",
 ]
 
 # azure-ai-projects is capped at <2.0.0 because:
