@@ -91,7 +91,7 @@ constraint-dependencies = [
     "agent-framework-core >= 1.0.0",
     "langchain >= 0.1.0",
     "langchain-core >= 0.1.0",
-    "openai-agents >= 0.2.6",
+    "openai-agents >= 0.4.2",
     "semantic-kernel >= 1.39.3",
     "google-adk >= 1.0.0",
 
