@@ -8,7 +8,7 @@ Utility logic for environment-related operations.
 import os
 
 # Authentication scopes for different environments
-PROD_OBSERVABILITY_SCOPE = "https://api.powerplatform.com/.default"
+PROD_OBSERVABILITY_SCOPE = "api://9b975845-388f-4429-889e-eab1ef63949c/Agent365.Observability.OtelWrite"
 
 # Cluster categories for different environments
 PROD_OBSERVABILITY_CLUSTER_CATEGORY = "prod"
