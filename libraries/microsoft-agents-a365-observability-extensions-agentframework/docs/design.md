@@ -55,5 +55,5 @@ microsoft_agents_a365/observability/extensions/agentframework/
 
 ## Dependencies
 
-- `agent-framework-azure-ai` - Microsoft Agents SDK
+- `agent-framework` - Microsoft Agents SDK
 - `microsoft-agents-a365-observability-core` - Core observability
