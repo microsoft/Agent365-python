@@ -18,6 +18,8 @@ class AgentLifecycleEvent(str, Enum):
         USERUNDELETED: Event triggered when an agentic user identity is un-deleted.
         USERUPDATED: Event triggered when an agentic user identity is updated.
         USERMANAGERUPDATED: Event triggered when an agentic user's manager is updated.
+        USERENABLED: Event triggered when an agentic user is enabled.
+        USERDISABLED: Event triggered when an agentic user is disabled.
     """
 
     USERCREATED = "agenticuseridentitycreated"
@@ -26,3 +28,5 @@ class AgentLifecycleEvent(str, Enum):
     USERUNDELETED = "agenticuserundeleted"
     USERUPDATED = "agenticuseridentityupdated"
     USERMANAGERUPDATED = "agenticusermanagerupdated"
+    USERENABLED = "agenticuserenabled"
+    USERDISABLED = "agenticuserdisabled"

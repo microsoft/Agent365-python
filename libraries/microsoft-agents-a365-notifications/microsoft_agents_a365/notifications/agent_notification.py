@@ -495,6 +495,52 @@ class AgentNotification:
         """
         return self.on_lifecycle_notification(AgentLifecycleEvent.USERMANAGERUPDATED, **kwargs)
 
+    def on_user_enabled(
+        self, **kwargs: Any
+    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+        """Register a handler for user enabled lifecycle events.
+
+        This is a convenience decorator that registers a handler specifically for
+        agentic user enabled events.
+
+        Args:
+            **kwargs: Additional keyword arguments passed to the app's add_route method.
+
+        Returns:
+            A decorator function that registers the handler with the application.
+
+        Example:
+            ```python
+            @notifications.on_user_enabled()
+            async def handle_user_enabled(context, state, notification):
+                print("Agentic user enabled")
+            ```
+        """
+        return self.on_lifecycle_notification(AgentLifecycleEvent.USERENABLED, **kwargs)
+
+    def on_user_disabled(
+        self, **kwargs: Any
+    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+        """Register a handler for user disabled lifecycle events.
+
+        This is a convenience decorator that registers a handler specifically for
+        agentic user disabled events.
+
+        Args:
+            **kwargs: Additional keyword arguments passed to the app's add_route method.
+
+        Returns:
+            A decorator function that registers the handler with the application.
+
+        Example:
+            ```python
+            @notifications.on_user_disabled()
+            async def handle_user_disabled(context, state, notification):
+                print("Agentic user disabled")
+            ```
+        """
+        return self.on_lifecycle_notification(AgentLifecycleEvent.USERDISABLED, **kwargs)
+
     @staticmethod
     def _normalize_subchannel(value: str | AgentSubChannel | None) -> str:
         """Normalize a subchannel value to a lowercase string.
