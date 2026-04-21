@@ -34,9 +34,7 @@ class TestExportConfigConsistency(unittest.TestCase):
     # ---- pinned production values ----
 
     EXPECTED_ENDPOINT = "https://agent365.svc.cloud.microsoft"
-    EXPECTED_SCOPE = (
-        "api://9b975845-388f-4429-889e-eab1ef63949c/Agent365.Observability.OtelWrite"
-    )
+    EXPECTED_SCOPE = "api://9b975845-388f-4429-889e-eab1ef63949c/Agent365.Observability.OtelWrite"
     EXPECTED_STANDARD_PATH = "/observability/tenants/{tid}/otlp/agents/{aid}/traces"
     EXPECTED_S2S_PATH = "/observabilityService/tenants/{tid}/otlp/agents/{aid}/traces"
 
