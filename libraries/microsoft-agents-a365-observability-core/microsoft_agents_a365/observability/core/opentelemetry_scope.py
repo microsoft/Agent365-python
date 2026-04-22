@@ -9,7 +9,9 @@ from datetime import datetime
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
-from opentelemetry import baggage, context, trace
+from opentelemetry import context, trace
+from opentelemetry.context import Context
+from opentelemetry.propagate import inject
 from opentelemetry.trace import (
     Span,
     SpanKind,
@@ -22,15 +24,16 @@ from opentelemetry.trace import (
 from .constants import (
     ENABLE_A365_OBSERVABILITY,
     ENABLE_OBSERVABILITY,
+    ERROR_TYPE_CANCELLED,
     ERROR_TYPE_KEY,
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_DESCRIPTION_KEY,
+    GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
     GEN_AI_AGENT_PLATFORM_ID_KEY,
-    GEN_AI_AGENT_UPN_KEY,
-    GEN_AI_CONVERSATION_ID_KEY,
+    GEN_AI_AGENT_VERSION_KEY,
     GEN_AI_ICON_URI_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -43,11 +46,11 @@ from .constants import (
     TELEMETRY_SDK_VERSION_KEY,
     TENANT_ID_KEY,
 )
-from .utils import get_sdk_version, parse_parent_id_to_context
+from .utils import get_sdk_version
 
 if TYPE_CHECKING:
     from .agent_details import AgentDetails
-    from .tenant_details import TenantDetails
+    from .span_details import SpanDetails
 
 # Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
 logger = logging.getLogger(__name__)
@@ -92,33 +95,38 @@ class OpenTelemetryScope:
 
     def __init__(
         self,
-        kind: "str | SpanKind",
         operation_name: str,
         activity_name: str,
         agent_details: "AgentDetails | None" = None,
-        tenant_details: "TenantDetails | None" = None,
-        parent_id: str | None = None,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
+        span_details: "SpanDetails | None" = None,
     ):
         """Initialize the OpenTelemetry scope.
 
         Args:
-            kind: The kind of activity. Accepts a string (e.g. ``"Client"``,
-                ``"Server"``, ``"Internal"``) or an ``opentelemetry.trace.SpanKind``
-                enum value directly.
             operation_name: The name of the operation being traced
             activity_name: The name of the activity for display purposes
             agent_details: Optional agent details
-            tenant_details: Optional tenant details
-            parent_id: Optional parent Activity ID used to link this span to an upstream
-                operation
-            start_time: Optional explicit start time as a datetime object.
-                Useful when recording an operation after it has already completed.
-            end_time: Optional explicit end time as a datetime object.
-                When provided, the span will use this timestamp when disposed
-                instead of the current wall-clock time.
+            span_details: Optional span configuration including parent context,
+                start/end times, span kind, and span links. Subclasses may override
+                ``span_details.span_kind`` before calling this constructor;
+                defaults to ``SpanKind.CLIENT``.
         """
+        parent_context = span_details.parent_context if span_details else None
+        start_time = span_details.start_time if span_details else None
+        end_time = span_details.end_time if span_details else None
+        span_links = span_details.span_links if span_details else None
+        kind = (
+            span_details.span_kind if span_details and span_details.span_kind else SpanKind.CLIENT
+        )
+        if not isinstance(kind, SpanKind):
+            logger.warning(
+                "span_details.span_kind has invalid type %s (value: %r); "
+                "falling back to SpanKind.CLIENT",
+                type(kind).__name__,
+                kind,
+            )
+            kind = SpanKind.CLIENT
+
         self._span: Span | None = None
         self._custom_start_time: datetime | None = start_time
         self._custom_end_time: datetime | None = end_time
@@ -130,25 +138,11 @@ class OpenTelemetryScope:
         if self._is_telemetry_enabled():
             tracer = self._get_tracer()
 
-            # Resolve activity_kind from either a SpanKind enum or a string
-            if isinstance(kind, SpanKind):
-                activity_kind = kind
-            else:
-                # Map string kind to SpanKind enum
-                activity_kind = SpanKind.INTERNAL
-                if kind.lower() == "client":
-                    activity_kind = SpanKind.CLIENT
-                elif kind.lower() == "server":
-                    activity_kind = SpanKind.SERVER
-                elif kind.lower() == "producer":
-                    activity_kind = SpanKind.PRODUCER
-                elif kind.lower() == "consumer":
-                    activity_kind = SpanKind.CONSUMER
+            activity_kind = kind
 
             # Get context for parent relationship
-            # If parent_id is provided, parse it and use it as the parent context
+            # If parent_context is provided, use it directly
             # Otherwise, use the current context
-            parent_context = parse_parent_id_to_context(parent_id)
             span_context = parent_context if parent_context else context.get_current()
 
             # Convert custom start time to OTel-compatible format (nanoseconds since epoch)
@@ -159,6 +153,7 @@ class OpenTelemetryScope:
                 kind=activity_kind,
                 context=span_context,
                 start_time=otel_start_time,
+                links=span_links,
             )
 
             # Log span creation
@@ -184,8 +179,9 @@ class OpenTelemetryScope:
                     self.set_tag_maybe(
                         GEN_AI_AGENT_DESCRIPTION_KEY, agent_details.agent_description
                     )
-                    self.set_tag_maybe(GEN_AI_AGENT_AUID_KEY, agent_details.agent_auid)
-                    self.set_tag_maybe(GEN_AI_AGENT_UPN_KEY, agent_details.agent_upn)
+                    self.set_tag_maybe(GEN_AI_AGENT_VERSION_KEY, agent_details.agent_version)
+                    self.set_tag_maybe(GEN_AI_AGENT_AUID_KEY, agent_details.agentic_user_id)
+                    self.set_tag_maybe(GEN_AI_AGENT_EMAIL_KEY, agent_details.agentic_user_email)
                     self.set_tag_maybe(
                         GEN_AI_AGENT_BLUEPRINT_ID_KEY, agent_details.agent_blueprint_id
                     )
@@ -193,14 +189,9 @@ class OpenTelemetryScope:
                         GEN_AI_AGENT_PLATFORM_ID_KEY, agent_details.agent_platform_id
                     )
                     self.set_tag_maybe(TENANT_ID_KEY, agent_details.tenant_id)
-                    self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, agent_details.conversation_id)
                     self.set_tag_maybe(GEN_AI_ICON_URI_KEY, agent_details.icon_uri)
                     # Set provider name dynamically from agent details
                     self.set_tag_maybe(GEN_AI_PROVIDER_NAME_KEY, agent_details.provider_name)
-
-                # Set tenant details if provided
-                if tenant_details:
-                    self.set_tag_maybe(TENANT_ID_KEY, str(tenant_details.tenant_id))
 
     def record_error(self, exception: Exception) -> None:
         """Record an error in the span.
@@ -227,7 +218,7 @@ class OpenTelemetryScope:
     def record_cancellation(self) -> None:
         """Record task cancellation."""
         if self._span and self._is_telemetry_enabled():
-            self._error_type = "TaskCanceledException"
+            self._error_type = ERROR_TYPE_CANCELLED
             self._span.set_attribute(ERROR_TYPE_KEY, self._error_type)
             self._span.set_status(Status(StatusCode.ERROR, "Task was cancelled"))
 
@@ -240,21 +231,6 @@ class OpenTelemetryScope:
         """
         if value is not None and self._span and self._is_telemetry_enabled():
             self._span.set_attribute(name, value)
-
-    def add_baggage(self, key: str, value: str) -> None:
-        """Add baggage to the current context.
-
-        Args:
-            key: The baggage key
-            value: The baggage value
-        """
-        # Set baggage in the current context
-        if self._is_telemetry_enabled():
-            # Set baggage on the current context
-            # This will be inherited by child spans created within this context
-            baggage_context = baggage.set_baggage(key, value)
-            # The context needs to be made current for child spans to inherit the baggage
-            context.attach(baggage_context)
 
     def record_attributes(self, attributes: dict[str, Any] | list[tuple[str, Any]]) -> None:
         """Record multiple attribute key/value pairs for telemetry tracking.
@@ -300,6 +276,49 @@ class OpenTelemetryScope:
                 self._span.end(end_time=otel_end_time)
             else:
                 self._span.end()
+
+    def get_context(self) -> Context | None:
+        """Get the OpenTelemetry context for this scope's span.
+
+        This method returns a Context object containing this scope's span,
+        which can be used to propagate trace context to child operations
+        or downstream services.
+
+        Returns:
+            A Context containing this scope's span, or None if telemetry
+            is disabled or no span exists.
+        """
+        if self._span and self._is_telemetry_enabled():
+            return set_span_in_context(self._span)
+        return None
+
+    def inject_context_to_headers(self) -> dict[str, str]:
+        """Inject this span's trace context into W3C HTTP headers.
+
+        Returns a dictionary of headers containing ``traceparent`` and
+        optionally ``tracestate`` that can be forwarded to downstream services
+        or stored for later context propagation.
+
+        Example usage:
+
+        .. code-block:: python
+
+            scope = OpenTelemetryScope(...)
+            headers = scope.inject_context_to_headers()
+            # Add headers to outgoing HTTP request
+            requests.get("https://downstream-service/api", headers=headers)
+
+        Returns:
+            A dictionary containing W3C trace context headers. Returns an
+            empty dictionary if telemetry is disabled or no span exists.
+        """
+        headers: dict[str, str] = {}
+        if self._span and self._is_telemetry_enabled():
+            # Create a context with the current span
+            ctx = set_span_in_context(self._span)
+            # Use the global propagator to inject trace context into headers
+            inject(headers, context=ctx)
+        return headers
 
     def __enter__(self):
         """Enter the context manager and make span active."""

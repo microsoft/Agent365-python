@@ -3,7 +3,6 @@
 
 """Unit tests for MCP Server Configuration Service."""
 
-import json
 import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -95,7 +94,7 @@ class TestMcpToolServerConfigurationService:
             "url": "https://my.custom.server/mcp",
         }
 
-        config = service._parse_manifest_server_config(server_element)
+        config = service._parse_server_config(server_element)
 
         assert config is not None
         assert config.mcp_server_name == "CustomServer"
@@ -114,7 +113,7 @@ class TestMcpToolServerConfigurationService:
             "mcpServerUniqueName": "test_server",
         }
 
-        config = service._parse_manifest_server_config(server_element)
+        config = service._parse_server_config(server_element)
 
         assert config is not None
         assert config.mcp_server_name == "DefaultServer"
@@ -132,7 +131,7 @@ class TestMcpToolServerConfigurationService:
             "url": "https://gateway.custom.url/mcp",
         }
 
-        config = service._parse_gateway_server_config(server_element)
+        config = service._parse_server_config(server_element)
 
         assert config is not None
         assert config.mcp_server_name == "GatewayServer"
@@ -151,7 +150,7 @@ class TestMcpToolServerConfigurationService:
             "mcpServerUniqueName": "gateway_server",
         }
 
-        config = service._parse_gateway_server_config(server_element)
+        config = service._parse_server_config(server_element)
 
         assert config is not None
         assert config.mcp_server_name == "GatewayServer"
@@ -202,6 +201,9 @@ class TestMcpToolServerConfigurationService:
         mock_gateway_url.return_value = "https://gateway.test/agents/test-app-id/mcpServers"
 
         # Mock aiohttp response
+        # V1 server (no audience) — this test verifies URL preservation, not token exchange.
+        # V2 servers (with a non-ATG audience) require auth context to be passed; that
+        # behaviour is tested separately in the per-audience token tests.
         mock_response_data = {
             "mcpServers": [
                 {
@@ -216,7 +218,7 @@ class TestMcpToolServerConfigurationService:
             # Create proper async context managers
             mock_response = MagicMock()
             mock_response.status = 200
-            mock_response.text = AsyncMock(return_value=json.dumps(mock_response_data))
+            mock_response.json = AsyncMock(return_value=mock_response_data)
 
             # Create async context manager for response
             mock_response_cm = MagicMock()
@@ -241,6 +243,416 @@ class TestMcpToolServerConfigurationService:
             assert servers[0].mcp_server_name == "ProdServer"
             assert servers[0].mcp_server_unique_name == "prod_server"
             assert servers[0].url == "https://prod.custom.url/mcp"
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_legacy_prod_path_raises_for_v2_server(self, service):
+        """Legacy call (no auth context) raises immediately when a V2 server is discovered.
+
+        Callers that omit
+        authorization/auth_handler_name/turn_context must migrate to the full
+        TurnContext overload once V2 servers are present.
+        """
+        v2_server_data = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "V2Server",
+                    "mcpServerUniqueName": "v2_server",
+                    "url": "https://v2.example.com/mcp",
+                    "audience": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                }
+            ]
+        }
+
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_response = MagicMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value=v2_server_data)
+            mock_response_cm = MagicMock()
+            mock_response_cm.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response_cm.__aexit__ = AsyncMock(return_value=None)
+            mock_session = MagicMock()
+            mock_session.get = MagicMock(return_value=mock_response_cm)
+            mock_session_cm = MagicMock()
+            mock_session_cm.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session_cm.__aexit__ = AsyncMock(return_value=None)
+            mock_session_class.return_value = mock_session_cm
+
+            with pytest.raises(Exception, match="V2Server"):
+                await service.list_tool_servers(
+                    agentic_app_id="test-app-id",
+                    auth_token="test-token",
+                    # No authorization / auth_handler_name / turn_context → legacy path
+                )
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_legacy_prod_path_ok_for_v1_only_servers(self, service):
+        """Legacy call succeeds when all discovered servers are V1 (no audience)."""
+        v1_server_data = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "V1Server",
+                    "mcpServerUniqueName": "v1_server",
+                    "url": "https://v1.example.com/mcp",
+                }
+            ]
+        }
+
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_response = MagicMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value=v1_server_data)
+            mock_response_cm = MagicMock()
+            mock_response_cm.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response_cm.__aexit__ = AsyncMock(return_value=None)
+            mock_session = MagicMock()
+            mock_session.get = MagicMock(return_value=mock_response_cm)
+            mock_session_cm = MagicMock()
+            mock_session_cm.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session_cm.__aexit__ = AsyncMock(return_value=None)
+            mock_session_class.return_value = mock_session_cm
+
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id",
+                auth_token="test-token",
+                # No authorization context — fine for V1-only
+            )
+
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "V1Server"
+
+
+class TestResolveTokenScopeForServer:
+    """Tests for resolve_token_scope_for_server() utility function."""
+
+    PROD_ATG_APP_ID = "ea9ffc3e-8a23-4a7d-836d-234d7c7565c1"
+    TEST_ATG_APP_ID = "05879165-0320-489e-b644-f72b33f3edf0"
+    V2_GUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    def _make_server(
+        self, audience: str | None = None, scope: str | None = None
+    ) -> MCPServerConfig:
+        return MCPServerConfig(
+            mcp_server_name="TestServer",
+            mcp_server_unique_name="test_server",
+            audience=audience,
+            scope=scope,
+        )
+
+    # ------------------------------------------------------------------
+    # V1 scenarios — all fall back to shared ATG scope
+    # ------------------------------------------------------------------
+
+    def test_v1_no_audience_returns_atg_scope(self):
+        """V1: no audience → shared ATG /.default."""
+        from microsoft_agents_a365.tooling.utils.utility import resolve_token_scope_for_server
+
+        server = self._make_server(audience=None, scope=None)
+        assert resolve_token_scope_for_server(server) == f"{self.PROD_ATG_APP_ID}/.default"
+
+    def test_v1_atg_guid_audience_falls_back_to_atg_scope(self):
+        """V1: audience == ATG AppId bare GUID → shared ATG /.default."""
+        from microsoft_agents_a365.tooling.utils.utility import resolve_token_scope_for_server
+
+        server = self._make_server(audience=self.PROD_ATG_APP_ID, scope="McpServers.Teams.All")
+        assert resolve_token_scope_for_server(server) == f"{self.PROD_ATG_APP_ID}/.default"
+
+    def test_v1_atg_audience_in_uri_form_falls_back_to_atg_scope(self):
+        """V1: audience == api://<atg-guid> → shared ATG /.default."""
+        from microsoft_agents_a365.tooling.utils.utility import resolve_token_scope_for_server
+
+        server = self._make_server(audience=f"api://{self.PROD_ATG_APP_ID}")
+        assert resolve_token_scope_for_server(server) == f"{self.PROD_ATG_APP_ID}/.default"
+
+    # ------------------------------------------------------------------
+    # V1 test-env — non-prod ATG audience falls through to V2 scope resolution
+    # ------------------------------------------------------------------
+
+    def test_v1_test_env_shared_audience_not_treated_as_v2(self):
+        """Non-prod ATG audience GUID is different from the hardcoded prod ATG_APP_ID constant,
+        so it is classified as V2 and resolved to its own /.default scope. This is intentional:
+        the V2 token exchange works correctly for test app registrations because
+        Tools.ListInvoke.All is pre-consented. Use MCP_PLATFORM_AUTHENTICATION_SCOPE or
+        MCP_PLATFORM_ENDPOINT env vars to point the SDK at a non-prod gateway."""
+        from microsoft_agents_a365.tooling.utils.utility import resolve_token_scope_for_server
+
+        # Non-prod ATG audience — classified as V2 because it does not match
+        # the hardcoded prod ATG_APP_ID constant. Resolved to its own /.default scope.
+        server = self._make_server(audience=self.TEST_ATG_APP_ID, scope=None)
+        assert resolve_token_scope_for_server(server) == f"{self.TEST_ATG_APP_ID}/.default"
+
+    # ------------------------------------------------------------------
+    # V2 scenarios — unique audience, explicit scope
+    # ------------------------------------------------------------------
+
+    def test_v2_guid_audience_with_explicit_scope(self):
+        """V2: unique GUID audience + explicit scope → <guid>/<scope>."""
+        from microsoft_agents_a365.tooling.utils.utility import resolve_token_scope_for_server
+
+        server = self._make_server(audience=self.V2_GUID, scope="Tools.ListInvoke.All")
+        assert resolve_token_scope_for_server(server) == f"{self.V2_GUID}/Tools.ListInvoke.All"
+
+    def test_v2_api_uri_audience_with_explicit_scope(self):
+        """V2: api:// audience + explicit scope → api://<guid>/<scope>."""
+        from microsoft_agents_a365.tooling.utils.utility import resolve_token_scope_for_server
+
+        server = self._make_server(
+            audience="api://mcp-calendartools", scope="McpServers.Calendar.All"
+        )
+        assert (
+            resolve_token_scope_for_server(server)
+            == "api://mcp-calendartools/McpServers.Calendar.All"
+        )
+
+    def test_v2_guid_audience_null_scope_falls_back_to_default(self):
+        """V2: unique GUID audience + null scope → <guid>/.default (pre-consented)."""
+        from microsoft_agents_a365.tooling.utils.utility import resolve_token_scope_for_server
+
+        server = self._make_server(audience=self.V2_GUID, scope=None)
+        assert resolve_token_scope_for_server(server) == f"{self.V2_GUID}/.default"
+
+    def test_v2_api_uri_audience_null_scope_falls_back_to_default(self):
+        """V2: api:// audience + null scope → api://<guid>/.default (pre-consented)."""
+        from microsoft_agents_a365.tooling.utils.utility import resolve_token_scope_for_server
+
+        server = self._make_server(audience="api://mcp-mailtools", scope=None)
+        assert resolve_token_scope_for_server(server) == "api://mcp-mailtools/.default"
+
+
+class TestAttachPerAudienceTokens:
+    """Tests for McpToolServerConfigurationService._attach_per_audience_tokens().
+
+    Since _attach_per_audience_tokens now accepts a TokenAcquirer callable,
+    these tests use service._create_obo_token_acquirer() to build the acquirer
+    from a mock authorization object — matching real production usage.
+    """
+
+    ATG_APP_ID = "ea9ffc3e-8a23-4a7d-836d-234d7c7565c1"
+
+    @pytest.fixture
+    def service(self):
+        return McpToolServerConfigurationService()
+
+    def _make_server(self, name: str, audience: str | None = None) -> MCPServerConfig:
+        return MCPServerConfig(
+            mcp_server_name=name,
+            mcp_server_unique_name=name.lower(),
+            url=f"https://{name}.example.com/mcp",
+            audience=audience,
+        )
+
+    def _make_auth_context(self, token: str = "tok"):
+        authorization = MagicMock()
+        token_result = MagicMock()
+        token_result.token = token
+        authorization.exchange_token = AsyncMock(return_value=token_result)
+        turn_context = MagicMock()
+        return authorization, turn_context
+
+    @pytest.mark.asyncio
+    async def test_v1_server_gets_atg_token(self, service):
+        """V1 server (no audience) receives ATG-scoped token."""
+        servers = [self._make_server("mail")]
+        authorization, turn_context = self._make_auth_context("atg-token")
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
+
+        result = await service._attach_per_audience_tokens(servers, acquire)
+
+        assert len(result) == 1
+        assert result[0].headers["Authorization"] == "Bearer atg-token"
+        authorization.exchange_token.assert_called_once_with(
+            turn_context, [f"{self.ATG_APP_ID}/.default"], "handler"
+        )
+
+    @pytest.mark.asyncio
+    async def test_v2_server_gets_per_audience_token(self, service):
+        """V2 server gets token scoped to its own audience GUID."""
+        guid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        servers = [self._make_server("calendar", audience=guid)]
+        authorization, turn_context = self._make_auth_context("v2-token")
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
+
+        result = await service._attach_per_audience_tokens(servers, acquire)
+
+        assert result[0].headers["Authorization"] == "Bearer v2-token"
+        authorization.exchange_token.assert_called_once_with(
+            turn_context, [f"{guid}/.default"], "handler"
+        )
+
+    @pytest.mark.asyncio
+    async def test_multiple_v1_servers_share_one_token_exchange(self, service):
+        """Multiple V1 servers deduplicate to a single token exchange."""
+        servers = [
+            self._make_server("mail"),
+            self._make_server("calendar"),
+            self._make_server("files"),
+        ]
+        authorization, turn_context = self._make_auth_context("shared-atg-token")
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
+
+        result = await service._attach_per_audience_tokens(servers, acquire)
+
+        assert all(s.headers["Authorization"] == "Bearer shared-atg-token" for s in result)
+        authorization.exchange_token.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_mixed_v1_v2_servers_deduplicate_by_scope(self, service):
+        """Mixed V1/V2 list: one exchange per unique scope."""
+        guid1 = "aaaaaaaa-0000-0000-0000-000000000001"
+        guid2 = "bbbbbbbb-0000-0000-0000-000000000002"
+        servers = [
+            self._make_server("mail"),  # V1
+            self._make_server("cal1", guid1),  # V2 guid1
+            self._make_server("cal2", guid2),  # V2 guid2
+            self._make_server("files"),  # V1 (same scope as mail → no 2nd exchange)
+            self._make_server("cal3", guid1),  # V2 guid1 again → no 2nd exchange
+        ]
+
+        authorization = MagicMock()
+        call_count = [0]
+
+        async def fake_exchange(ctx, scopes, handler):
+            call_count[0] += 1
+            result = MagicMock()
+            result.token = f"token-for-{scopes[0]}"
+            return result
+
+        authorization.exchange_token = fake_exchange
+        turn_context = MagicMock()
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
+
+        result = await service._attach_per_audience_tokens(servers, acquire)
+
+        assert call_count[0] == 3  # ATG + guid1 + guid2
+        assert result[0].headers["Authorization"] == f"Bearer token-for-{self.ATG_APP_ID}/.default"
+        assert result[1].headers["Authorization"] == f"Bearer token-for-{guid1}/.default"
+        assert result[2].headers["Authorization"] == f"Bearer token-for-{guid2}/.default"
+        assert result[3].headers["Authorization"] == f"Bearer token-for-{self.ATG_APP_ID}/.default"
+        assert result[4].headers["Authorization"] == f"Bearer token-for-{guid1}/.default"
+
+    @pytest.mark.asyncio
+    async def test_raises_when_token_exchange_returns_none(self, service):
+        """Exception raised when OBO token exchange returns None."""
+        servers = [self._make_server("mail")]
+        authorization = MagicMock()
+        authorization.exchange_token = AsyncMock(return_value=None)
+        acquire = service._create_obo_token_acquirer(authorization, "handler", MagicMock())
+
+        with pytest.raises(Exception, match="Failed to obtain token"):
+            await service._attach_per_audience_tokens(servers, acquire)
+
+    @pytest.mark.asyncio
+    async def test_raises_when_token_is_empty(self, service):
+        """Exception raised when OBO token result has an empty token string."""
+        servers = [self._make_server("mail")]
+        authorization = MagicMock()
+        token_result = MagicMock()
+        token_result.token = ""
+        authorization.exchange_token = AsyncMock(return_value=token_result)
+        acquire = service._create_obo_token_acquirer(authorization, "handler", MagicMock())
+
+        with pytest.raises(Exception, match="Failed to obtain token"):
+            await service._attach_per_audience_tokens(servers, acquire)
+
+    @pytest.mark.asyncio
+    async def test_preserves_existing_server_headers(self, service):
+        """Existing server headers are preserved alongside the new Authorization header."""
+        server = MCPServerConfig(
+            mcp_server_name="TestServer",
+            mcp_server_unique_name="test_server",
+            url="https://test.example.com/mcp",
+            headers={"X-Custom": "my-value"},
+        )
+        authorization, turn_context = self._make_auth_context("tok")
+        acquire = service._create_obo_token_acquirer(authorization, "handler", turn_context)
+
+        result = await service._attach_per_audience_tokens([server], acquire)
+
+        assert result[0].headers["X-Custom"] == "my-value"
+        assert result[0].headers["Authorization"] == "Bearer tok"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "env_value",
+        [
+            "Bearer rawtoken123",
+            "bearer rawtoken123",
+            "BEARER rawtoken123",
+            "BeArEr rawtoken123",
+        ],
+    )
+    async def test_dev_acquirer_strips_bearer_prefix(self, service, env_value):
+        """Dev acquirer strips an existing 'Bearer ' prefix to prevent doubled headers."""
+        server = self._make_server("mail")
+        with patch.dict(os.environ, {"BEARER_TOKEN": env_value}):
+            acquire = service._create_dev_token_acquirer()
+            result = await service._attach_per_audience_tokens([server], acquire)
+
+        assert result[0].headers["Authorization"] == "Bearer rawtoken123"
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_raw_token_unchanged(self, service):
+        """Dev acquirer leaves a raw token (no prefix) unchanged."""
+        server = self._make_server("mail")
+        with patch.dict(os.environ, {"BEARER_TOKEN": "rawtoken456"}):
+            acquire = service._create_dev_token_acquirer()
+            result = await service._attach_per_audience_tokens([server], acquire)
+
+        assert result[0].headers["Authorization"] == "Bearer rawtoken456"
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_per_server_token_strips_bearer_prefix(self, service):
+        """Per-server BEARER_TOKEN_<NAME> env var also has its Bearer prefix stripped."""
+        server = self._make_server("mail")
+        with patch.dict(os.environ, {"BEARER_TOKEN_MAIL": "Bearer per-server-tok"}):
+            acquire = service._create_dev_token_acquirer()
+            result = await service._attach_per_audience_tokens([server], acquire)
+
+        assert result[0].headers["Authorization"] == "Bearer per-server-tok"
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_warns_when_shared_token_used_for_v2_server(self, service):
+        """Warning emitted when BEARER_TOKEN is used for a V2 server with a different scope."""
+        v2_server = self._make_server("MailV2", audience="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+        with patch.dict(
+            os.environ,
+            {"BEARER_TOKEN": "shared-token"},
+            clear=False,
+        ):
+            # Ensure the per-server key is absent so the fallback path is taken.
+            os.environ.pop("BEARER_TOKEN_MAILV2", None)
+            with patch.object(service, "_logger") as mock_logger:
+                acquire = service._create_dev_token_acquirer()
+                await service._attach_per_audience_tokens([v2_server], acquire)
+                mock_logger.warning.assert_called_once()
+                warning_msg = mock_logger.warning.call_args[0][0]
+                assert "BEARER_TOKEN_MAILV2" in warning_msg
+                assert "401" in warning_msg
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_no_warning_when_per_server_token_set(self, service):
+        """No warning when a per-server BEARER_TOKEN_<NAME> is present for a V2 server."""
+        v2_server = self._make_server("MailV2", audience="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+        with patch.dict(
+            os.environ,
+            {"BEARER_TOKEN": "shared-token", "BEARER_TOKEN_MAILV2": "per-server-token"},
+        ):
+            with patch.object(service, "_logger") as mock_logger:
+                acquire = service._create_dev_token_acquirer()
+                await service._attach_per_audience_tokens([v2_server], acquire)
+                mock_logger.warning.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dev_acquirer_no_warning_for_v1_server(self, service):
+        """No warning when shared BEARER_TOKEN is used for a V1 server (scope == shared scope)."""
+        v1_server = self._make_server("mail")  # no audience → V1 → scope == shared_scope
+        with patch.dict(os.environ, {"BEARER_TOKEN": "shared-token"}):
+            os.environ.pop("BEARER_TOKEN_MAIL", None)
+            with patch.object(service, "_logger") as mock_logger:
+                acquire = service._create_dev_token_acquirer()
+                await service._attach_per_audience_tokens([v1_server], acquire)
+                mock_logger.warning.assert_not_called()
 
 
 class TestPrepareGatewayHeaders:

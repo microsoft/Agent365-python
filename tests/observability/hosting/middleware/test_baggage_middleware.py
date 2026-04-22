@@ -13,8 +13,8 @@ from microsoft_agents.activity import (
 )
 from microsoft_agents.hosting.core import TurnContext
 from microsoft_agents_a365.observability.core.constants import (
-    GEN_AI_CALLER_ID_KEY,
     TENANT_ID_KEY,
+    USER_ID_KEY,
 )
 from microsoft_agents_a365.observability.hosting.middleware.baggage_middleware import (
     BaggageMiddleware,
@@ -64,7 +64,7 @@ async def test_baggage_middleware_propagates_baggage():
 
     async def logic():
         nonlocal captured_caller_id, captured_tenant_id
-        captured_caller_id = baggage.get_baggage(GEN_AI_CALLER_ID_KEY)
+        captured_caller_id = baggage.get_baggage(USER_ID_KEY)
         captured_tenant_id = baggage.get_baggage(TENANT_ID_KEY)
 
     await middleware.on_turn(ctx, logic)
@@ -88,7 +88,7 @@ async def test_baggage_middleware_skips_async_reply():
     async def logic():
         nonlocal logic_called, captured_caller_id
         logic_called = True
-        captured_caller_id = baggage.get_baggage(GEN_AI_CALLER_ID_KEY)
+        captured_caller_id = baggage.get_baggage(USER_ID_KEY)
 
     await middleware.on_turn(ctx, logic)
 

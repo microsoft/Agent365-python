@@ -52,16 +52,18 @@ class TestAddToolServersHttpxClientConfiguration:
 
     @pytest.fixture
     def mock_chat_client(self):
-        """Create a mock OpenAIChatClient or AzureOpenAIChatClient."""
+        """Create a mock OpenAIChatClient."""
         return Mock()
 
     @pytest.fixture
     def mock_mcp_server_config(self):
-        """Create a mock MCP server configuration."""
+        """Create a mock V2 MCP server configuration (has GUID audience for per-audience token)."""
         config = Mock()
         config.mcp_server_name = "test-mcp-server"
         config.mcp_server_unique_name = "test-mcp-server-unique"
         config.url = "https://test-mcp-server.example.com/api"
+        config.headers = None  # per-audience headers attached by list_tool_servers
+        config.audience = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"  # V2: GUID audience
         return config
 
     @pytest.fixture
@@ -79,8 +81,17 @@ class TestAddToolServersHttpxClientConfiguration:
         mock_chat_client,
         mock_mcp_server_config,
     ):
-        """Test that httpx.AsyncClient is created with Authorization header."""
+        """Test that httpx.AsyncClient is created with Authorization header.
+
+        In the V1/V2 model, list_tool_servers (via _attach_per_audience_tokens) attaches
+        the per-audience Authorization header to config.headers before returning. The
+        mock server config must reflect this to verify the header reaches the httpx client.
+        """
         auth_token = "test-bearer-token-xyz"
+        # Simulate the Authorization header that _attach_per_audience_tokens would attach
+        mock_mcp_server_config.headers = {
+            Constants.Headers.AUTHORIZATION: (f"{Constants.Headers.BEARER_PREFIX} {auth_token}")
+        }
 
         with (
             patch.object(
@@ -96,7 +107,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -156,7 +167,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -214,7 +225,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -277,7 +288,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ) as mock_mcp_tool,
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -339,7 +350,7 @@ class TestAddToolServersHttpxClientConfiguration:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -481,6 +492,7 @@ class TestHttpxClientLifecycle:
         mock_server_config.mcp_server_name = "test-server"
         mock_server_config.mcp_server_unique_name = "test-server-unique"
         mock_server_config.url = "https://test.example.com/api"
+        mock_server_config.headers = None  # per-audience headers attached by list_tool_servers
 
         mock_http_client_instance = MagicMock()
 
@@ -498,7 +510,7 @@ class TestHttpxClientLifecycle:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -553,16 +565,19 @@ class TestHttpxClientLifecycle:
         mock_server_config1.mcp_server_name = "server-1"
         mock_server_config1.mcp_server_unique_name = "server-1-unique"
         mock_server_config1.url = "https://server1.example.com/api"
+        mock_server_config1.headers = None  # per-audience headers attached by list_tool_servers
 
         mock_server_config2 = Mock()
         mock_server_config2.mcp_server_name = "server-2"
         mock_server_config2.mcp_server_unique_name = "server-2-unique"
         mock_server_config2.url = "https://server2.example.com/api"
+        mock_server_config2.headers = None
 
         mock_server_config3 = Mock()
         mock_server_config3.mcp_server_name = "server-3"
         mock_server_config3.mcp_server_unique_name = "server-3-unique"
         mock_server_config3.url = "https://server3.example.com/api"
+        mock_server_config3.headers = None
 
         # Create unique mock clients for each server
         mock_clients = [MagicMock() for _ in range(3)]
@@ -582,7 +597,7 @@ class TestHttpxClientLifecycle:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
@@ -661,6 +676,7 @@ class TestHttpxClientLifecycle:
         mock_server_config.mcp_server_name = "test-server"
         mock_server_config.mcp_server_unique_name = "test-server-unique"
         mock_server_config.url = "https://test.example.com/api"
+        mock_server_config.headers = None  # per-audience headers attached by list_tool_servers
 
         mock_http_client_instance = MagicMock()
 
@@ -678,7 +694,7 @@ class TestHttpxClientLifecycle:
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
             ),
             patch(
-                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.ChatAgent"
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",

@@ -38,6 +38,7 @@ GEN_AI_RESPONSE_ID_KEY = "gen_ai.response.id"
 GEN_AI_AGENT_ID_KEY = "gen_ai.agent.id"
 GEN_AI_AGENT_NAME_KEY = "gen_ai.agent.name"
 GEN_AI_AGENT_DESCRIPTION_KEY = "gen_ai.agent.description"
+GEN_AI_AGENT_VERSION_KEY = "gen_ai.agent.version"
 GEN_AI_AGENT_PLATFORM_ID_KEY = "microsoft.a365.agent.platform.id"
 GEN_AI_AGENT_THOUGHT_PROCESS_KEY = "microsoft.a365.agent.thought.process"
 GEN_AI_CONVERSATION_ID_KEY = "gen_ai.conversation.id"
@@ -60,19 +61,20 @@ GEN_AI_TOOL_ARGS_KEY = "gen_ai.tool.call.arguments"
 GEN_AI_TOOL_CALL_RESULT_KEY = "gen_ai.tool.call.result"
 GEN_AI_TOOL_TYPE_KEY = "gen_ai.tool.type"
 
-# Agent user (user tied to agent instance during creation) or caller dimensions
-GEN_AI_CALLER_ID_KEY = "microsoft.caller.id"
-GEN_AI_CALLER_NAME_KEY = "microsoft.caller.name"
-GEN_AI_CALLER_UPN_KEY = "microsoft.caller.upn"
+# Human caller dimensions (OTel user.* namespace)
+USER_ID_KEY = "user.id"
+USER_NAME_KEY = "user.name"
+USER_EMAIL_KEY = "user.email"
 GEN_AI_CALLER_CLIENT_IP_KEY = "client.address"
 
 # Agent to Agent caller agent dimensions
 GEN_AI_CALLER_AGENT_USER_ID_KEY = "microsoft.a365.caller.agent.user.id"
-GEN_AI_CALLER_AGENT_UPN_KEY = "microsoft.a365.caller.agent.user.upn"
+GEN_AI_CALLER_AGENT_EMAIL_KEY = "microsoft.a365.caller.agent.user.email"
 GEN_AI_CALLER_AGENT_NAME_KEY = "microsoft.a365.caller.agent.name"
 GEN_AI_CALLER_AGENT_ID_KEY = "microsoft.a365.caller.agent.id"
 GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY = "microsoft.a365.caller.agent.blueprint.id"
 GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY = "microsoft.a365.caller.agent.platform.id"
+GEN_AI_CALLER_AGENT_VERSION_KEY = "microsoft.a365.caller.agent.version"
 
 # Agent-specific dimensions
 AGENT_ID_KEY = "gen_ai.agent.id"
@@ -84,11 +86,13 @@ TENANT_ID_KEY = "microsoft.tenant.id"
 
 # Baggage keys
 GEN_AI_AGENT_AUID_KEY = "microsoft.agent.user.id"
-GEN_AI_AGENT_UPN_KEY = "microsoft.agent.user.upn"
+GEN_AI_AGENT_EMAIL_KEY = "microsoft.agent.user.email"
 GEN_AI_AGENT_BLUEPRINT_ID_KEY = "microsoft.a365.agent.blueprint.id"
 
+# Error type constants
+ERROR_TYPE_CANCELLED = "TaskCanceledException"
+
 # Execution context dimensions
-GEN_AI_EXECUTION_TYPE_KEY = "gen_ai.execution.type"
 GEN_AI_EXECUTION_PAYLOAD_KEY = "gen_ai.execution.payload"
 
 # Channel dimensions

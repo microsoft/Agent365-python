@@ -8,7 +8,6 @@ from microsoft_agents_a365.observability.core import configure, get_tracer_provi
 from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
-    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -232,14 +231,14 @@ class TestOpenAITraceProcessorIntegration:
                     BaggageBuilder()
                     .agent_id("test-agent-id")
                     .agent_name("TestAgent")
-                    .agent_auid("test-agent-auid")
-                    .agent_upn("test-agent@test.com")
+                    .agentic_user_id("test-agent-auid")
+                    .agentic_user_email("test-agent@test.com")
                     .agent_blueprint_id("test-blueprint-id")
                     .tenant_id("test-tenant-id")
-                    .caller_id("test-caller-id")
-                    .caller_name("Test Caller")
-                    .caller_upn("test-caller@test.com")
-                    .caller_client_ip("127.0.0.1")
+                    .user_id("test-caller-id")
+                    .user_name("Test Caller")
+                    .user_email("test-caller@test.com")
+                    .user_client_ip("127.0.0.1")
                     .conversation_id("test-conversation-id")
                     .channel_name("test-channel")
                     .build()
@@ -269,7 +268,6 @@ class TestOpenAITraceProcessorIntegration:
                 GEN_AI_OPERATION_NAME_KEY,  # "gen_ai.operation.name" - Set by SDK
                 GEN_AI_AGENT_ID_KEY,  # "gen_ai.agent.id"
                 GEN_AI_AGENT_NAME_KEY,  # "gen_ai.agent.name"
-                GEN_AI_EXECUTION_TYPE_KEY,  # "gen_ai.execution.type"
                 GEN_AI_INPUT_MESSAGES_KEY,  # "gen_ai.input.messages"
                 GEN_AI_OUTPUT_MESSAGES_KEY,  # "gen_ai.output.messages"
             ]

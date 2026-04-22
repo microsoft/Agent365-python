@@ -3,6 +3,7 @@
 
 """Unit tests for McpToolRegistrationService in Google ADK extension."""
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -102,10 +103,11 @@ class TestAddToolServersToAgent:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
     async def test_add_tool_servers_exchanges_token_when_not_provided(
         self, mock_agent, mock_authorization, mock_turn_context
     ):
-        """Test that token is exchanged when not provided."""
+        """Test that token is exchanged when not provided (production mode only)."""
         with (
             patch(
                 "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service.McpToolServerConfigurationService"

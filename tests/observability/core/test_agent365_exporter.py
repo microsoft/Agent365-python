@@ -124,7 +124,7 @@ class TestAgent365Exporter(unittest.TestCase):
 
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
             self.assertIn(
-                "/observability/tenants/test-tenant-123/agents/test-agent-456/traces", url
+                "/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces", url
             )
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
@@ -237,10 +237,11 @@ class TestAgent365Exporter(unittest.TestCase):
 
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
             self.assertIn(
-                "/observabilityService/tenants/test-tenant-123/agents/test-agent-456/traces", url
+                "/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces",
+                url,
             )
             self.assertNotIn(
-                "/observability/tenants/test-tenant-123/agents/test-agent-456/traces", url
+                "/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces", url
             )
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
@@ -269,10 +270,11 @@ class TestAgent365Exporter(unittest.TestCase):
 
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
             self.assertIn(
-                "/observability/tenants/test-tenant-123/agents/test-agent-456/traces", url
+                "/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces", url
             )
             self.assertNotIn(
-                "/observabilityService/tenants/test-tenant-123/agents/test-agent-456/traces", url
+                "/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces",
+                url,
             )
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
@@ -313,25 +315,26 @@ class TestAgent365Exporter(unittest.TestCase):
             self.assertEqual(result, SpanExportResult.SUCCESS)
 
             # Verify logging calls - should use default endpoint URL
-            expected_log_calls = [
-                # Should log groups found
-                unittest.mock.call.info("Found 1 identity groups with 2 total spans to export"),
-                # Should log endpoint being used (default endpoint)
-                unittest.mock.call.info(
-                    f"Exporting 2 spans to endpoint: {DEFAULT_ENDPOINT_URL}/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1 "
+            expected_debug_calls = [
+                # Should log groups found at DEBUG
+                unittest.mock.call.debug("Found 1 identity groups with 2 total spans to export"),
+                # Should log endpoint being used at DEBUG (default endpoint)
+                unittest.mock.call.debug(
+                    f"Exporting 2 spans to endpoint: {DEFAULT_ENDPOINT_URL}/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1 "
                     "(tenant: test-tenant-123, agent: test-agent-456)"
                 ),
-                # Should log token resolution success
-                unittest.mock.call.info("Token resolved successfully for agent test-agent-456"),
-                # Should log HTTP success
-                unittest.mock.call.info(
-                    "HTTP 200 success on attempt 1. Correlation ID: test-correlation-123. Response: success"
+                # Should log token resolution success at DEBUG
+                unittest.mock.call.debug("Token resolved successfully for agent test-agent-456"),
+                # Should log HTTP success at DEBUG
+                unittest.mock.call.debug(
+                    "HTTP 200 success on attempt 1. "
+                    "Correlation ID: test-correlation-123. Response: success"
                 ),
             ]
 
-            # Check that all expected info calls were made
-            for expected_call in expected_log_calls:
-                self.assertIn(expected_call, mock_logger.info.call_args_list)
+            # Check that all expected debug calls were made
+            for expected_call in expected_debug_calls:
+                self.assertIn(expected_call, mock_logger.debug.call_args_list)
 
     @patch("microsoft_agents_a365.observability.core.exporters.agent365_exporter.logger")
     def test_export_error_logging(self, mock_logger):
@@ -390,7 +393,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = f"https://{override_domain}/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
+            expected_url = f"https://{override_domain}/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_uses_default_endpoint_when_no_override(self):
@@ -419,7 +422,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = f"{DEFAULT_ENDPOINT_URL}/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
+            expected_url = f"{DEFAULT_ENDPOINT_URL}/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_ignores_empty_domain_override(self):
@@ -473,7 +476,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = "https://override.example.com/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
+            expected_url = "https://override.example.com/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_uses_valid_url_override_with_http(self):
@@ -501,7 +504,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = "http://localhost:8080/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
+            expected_url = "http://localhost:8080/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_uses_valid_domain_override_with_port(self):
@@ -529,7 +532,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = "https://example.com:8080/observability/tenants/test-tenant-123/agents/test-agent-456/traces?api-version=1"
+            expected_url = "https://example.com:8080/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_ignores_invalid_domain_with_protocol(self):

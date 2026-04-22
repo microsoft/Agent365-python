@@ -22,7 +22,6 @@ from agents.tracing.span_data import (
 from microsoft_agents_a365.observability.core.constants import (
     CUSTOM_PARENT_SPAN_ID_KEY,
     EXECUTE_TOOL_OPERATION_NAME,
-    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -32,7 +31,6 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_TOOL_TYPE_KEY,
     INVOKE_AGENT_OPERATION_NAME,
 )
-from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.core.utils import as_utc_nano, safe_json_dumps
 from opentelemetry import trace as ot_trace
 from opentelemetry.context import attach, detach
@@ -78,24 +76,25 @@ Custom Trace Processor for OpenAI Agents SDK
 class OpenAIAgentsTraceProcessor(TracingProcessor):
     _MAX_HANDOFFS_IN_FLIGHT = 1000
     _MAX_PENDING_TOOL_CALLS = 1000
+    _MAX_TRACKED_SPANS = 10000
 
     def __init__(self, tracer: Tracer) -> None:
         self._tracer = tracer
-        self._root_spans: dict[str, OtelSpan] = {}
-        self._otel_spans: dict[str, OtelSpan] = {}
-        self._tokens: dict[str, object] = {}
+        self._root_spans: OrderedDict[str, OtelSpan] = OrderedDict()
+        self._otel_spans: OrderedDict[str, OtelSpan] = OrderedDict()
+        self._tokens: OrderedDict[str, object] = OrderedDict()
         # This captures in flight handoff. Once the handoff is complete, the entry is deleted
         # If the handoff does not complete, the entry stays in the dict.
         # Use an OrderedDict and _MAX_HANDOFFS_IN_FLIGHT to cap the size of the dict
         # in case there are large numbers of orphaned handoffs
         self._reverse_handoffs_dict: OrderedDict[str, str] = OrderedDict()
         # Track input/output messages for agent spans (keyed by agent span_id)
-        self._agent_inputs: dict[str, str] = {}
-        self._agent_outputs: dict[str, str] = {}
+        self._agent_inputs: OrderedDict[str, str] = OrderedDict()
+        self._agent_outputs: OrderedDict[str, str] = OrderedDict()
         # Track agent span IDs to find nearest ancestor
-        self._agent_span_ids: set[str] = set()
+        self._agent_span_ids: OrderedDict[str, None] = OrderedDict()
         # Track parent-child relationships: child_span_id -> parent_span_id
-        self._span_parents: dict[str, str] = {}
+        self._span_parents: OrderedDict[str, str] = OrderedDict()
         # Track tool_call_ids from GenerationSpan: (function_name, trace_id) -> call_id
         # Use an OrderedDict and _MAX_PENDING_TOOL_CALLS to cap the size of the dict
         # in case tool calls are captured but never consumed
@@ -109,6 +108,12 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
         sc = root.get_span_context()
         pid_hex = "0x" + ot_trace.format_span_id(sc.span_id)
         otel_span.set_attribute(CUSTOM_PARENT_SPAN_ID_KEY, pid_hex)
+
+    @staticmethod
+    def _cap_ordered_dict(d: OrderedDict, max_size: int) -> None:
+        """Evict oldest entries from an OrderedDict to stay within max_size."""
+        while len(d) > max_size:
+            d.popitem(last=False)
 
     def on_trace_start(self, trace: Trace) -> None:
         """Called when a trace is started.
@@ -153,13 +158,17 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
             },
         )
         self._otel_spans[span.span_id] = otel_span
+        self._cap_ordered_dict(self._otel_spans, self._MAX_TRACKED_SPANS)
         self._tokens[span.span_id] = attach(set_span_in_context(otel_span))
+        self._cap_ordered_dict(self._tokens, self._MAX_TRACKED_SPANS)
         # Track parent-child relationship for ancestor lookup
         if span.parent_id:
             self._span_parents[span.span_id] = span.parent_id
+            self._cap_ordered_dict(self._span_parents, self._MAX_TRACKED_SPANS)
         # Track AgentSpan IDs
         if isinstance(span.span_data, AgentSpanData):
-            self._agent_span_ids.add(span.span_id)
+            self._agent_span_ids[span.span_id] = None
+            self._cap_ordered_dict(self._agent_span_ids, self._MAX_TRACKED_SPANS)
 
     def on_span_end(self, span: Span[Any]) -> None:
         """Called when a span is finished. Should not block or raise exceptions.
@@ -202,8 +211,10 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
             ):
                 if data.input:
                     capture_input_message(agent_span_id, data.input, self._agent_inputs)
+                    self._cap_ordered_dict(self._agent_inputs, self._MAX_TRACKED_SPANS)
                 if data.output:
                     capture_output_message(agent_span_id, data.output, self._agent_outputs)
+                    self._cap_ordered_dict(self._agent_outputs, self._MAX_TRACKED_SPANS)
             # Capture tool_call_ids for later use by FunctionSpan
             if data.output:
                 capture_tool_call_ids(
@@ -234,7 +245,6 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 while len(self._reverse_handoffs_dict) > self._MAX_HANDOFFS_IN_FLIGHT:
                     self._reverse_handoffs_dict.popitem(last=False)
         elif isinstance(data, AgentSpanData):
-            otel_span.set_attribute(GEN_AI_EXECUTION_TYPE_KEY, ExecutionType.HUMAN_TO_AGENT.value)
             # Lookup the parent node if exists
             key = f"{data.name}:{span.trace_id}"
             if parent_node := self._reverse_handoffs_dict.pop(key, None):
@@ -246,7 +256,7 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 otel_span.set_attribute(GEN_AI_OUTPUT_MESSAGES_KEY, output_msg)
             otel_span.update_name(f"{INVOKE_AGENT_OPERATION_NAME} {get_span_name(span)}")
             # Clean up tracking
-            self._agent_span_ids.discard(span.span_id)
+            self._agent_span_ids.pop(span.span_id, None)
 
         end_time: int | None = None
         if span.ended_at:
