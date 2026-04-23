@@ -48,18 +48,24 @@ dev-dependencies = [
     "pytest-asyncio",
     "pytest-mock",
     "ruff",
+    "tomlkit",
+    "setuptools",
+    "tox>=4.0",
+    "tox-uv>=1.0",
     "python-dotenv",
     "openai",
-    "agent-framework-azure-ai",
+    "agent-framework",
     "azure-identity",
     "openai-agents",
+    "langchain-openai",
 ]
 
-# Override semantic-kernel's azure-ai-projects constraint to allow 2.x
-# semantic-kernel 1.39.3 constrains azure-ai-projects~=1.0.0b12 but this repo needs >=2.0.0b1
-# The functionality is compatible; only the version constraint was tightened
+# azure-ai-projects is capped at <2.0.0 because:
+# 1. semantic-kernel>=1.39.3 requires azure-ai-projects~=1.0.0b12 (<2.0.0)
+# 2. tooling-extensions-azureaifoundry uses the 1.x Agents API (project_client.agents.update_agent)
+#    which was removed in azure-ai-projects 2.x
 override-dependencies = [
-    "azure-ai-projects >= 2.0.0b1",
+    "azure-ai-projects>=1.0.0b12,<2.0.0",
 ]
 
 # Centralized version constraints for all external dependencies
@@ -75,13 +81,14 @@ constraint-dependencies = [
 
     # --- Azure Services ---
     "azure-ai-agents >= 1.0.0b251001",
-    "azure-ai-projects >= 2.0.0b1",
+    "azure-ai-projects>=1.0.0b12,<2.0.0",
     "azure-identity >= 1.12.0",
     "azure-monitor-ingestion >= 1.0.0",
     "azure-monitor-opentelemetry-exporter >= 1.0.0b39",
 
     # --- AI Frameworks ---
-    "agent-framework-azure-ai >= 1.0.0b251114",
+    "agent-framework >= 1.0.0",
+    "agent-framework-core >= 1.0.0",
     "langchain >= 0.1.0",
     "langchain-core >= 0.1.0",
     "openai-agents >= 0.2.6",
@@ -92,6 +99,9 @@ constraint-dependencies = [
     "microsoft-agents-activity >= 0.4.0",
     "microsoft-agents-hosting-core >= 0.4.0",
 
+    # --- Monkey-patching / wrapping ---
+    "wrapt >= 1.14",
+
     # --- Data Validation & Utilities ---
     "aiohttp >= 3.8.0",
     "asyncio-throttle >= 1.0.0",
@@ -100,10 +110,14 @@ constraint-dependencies = [
     "PyJWT >= 2.8.0",
     "typing-extensions >= 4.0.0",
 
+    # --- Tox ---
+    "tox >= 4.23.0",
+    "tox-uv >= 1.18.0",
+
     # --- Development & Testing ---
     "black >= 23.0.0",
     "mypy >= 1.0.0",
-    "openai >= 1.0.0",
+    "openai >= 2.0.0",
     "pytest >= 7.0.0",
     "pytest-asyncio >= 0.21.0",
     "pytest-cov>=7.0.0",
@@ -204,3 +218,35 @@ skip-magic-trailing-comma = false
 
 # Like Black, automatically detect the appropriate line ending.
 line-ending = "auto"
+
+# Tox configuration
+[tool.tox]
+requires = ["tox>=4.23", "tox-uv>=1.18"]
+
+[tool.tox.env_run_base]
+runner = "uv-venv-lock-runner"
+uv_sync_flags = ["--all-extras", "--dev"]
+commands = [["pytest", "tests/", "-v", "--tb=short", "-m", "not integration", { replace = "posargs", default = "", extend = true }]]
+
+[tool.tox.env.py311]
+base_python = ["python3.11"]
+
+[tool.tox.env.py312]
+base_python = ["python3.12"]
+
+[tool.tox.env.lint]
+base_python = ["python3.11"]
+commands = [["ruff", "check", ".", "--preview", { replace = "posargs", default = "", extend = true }]]
+
+[tool.tox.env.format]
+base_python = ["python3.11"]
+commands = [["ruff", "format", "--check", ".", { replace = "posargs", default = "", extend = true }]]
+
+[tool.tox.env.integration]
+base_python = ["python3.11"]
+commands = [["pytest", "-m", "integration", "-v", "--tb=short", { replace = "posargs", default = "", extend = true }]]
+pass_env = ["AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT", "AZURE_OPENAI_API_VERSION", "AGENT365_TEST_TENANT_ID", "AGENT365_TEST_AGENT_ID", "ENABLE_OBSERVABILITY"]
+
+[tool.tox.env.verify-constraints]
+base_python = ["python3.11"]
+commands = [["python", "scripts/verify_constraints.py"]]

@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68", "wheel", "tzdata"]
-build-backend = "setuptools.build_meta"
+requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit", "packaging"]
+build-backend = "build_backend"
 
 [project]
 name = "microsoft-agents-a365-observability-extensions-langchain"
@@ -31,6 +31,7 @@ dependencies = [
     "opentelemetry-api",
     "opentelemetry-sdk",
     "opentelemetry-instrumentation",
+    "wrapt",
 ]
 
 [project.urls]

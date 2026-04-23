@@ -11,24 +11,19 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from typing import Any, final
-from urllib.parse import urlparse
 
 import requests
-from microsoft_agents_a365.runtime.power_platform_api_discovery import PowerPlatformApiDiscovery
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
 
-from ..constants import (
-    GEN_AI_INPUT_MESSAGES_KEY,
-    GEN_AI_OPERATION_NAME_KEY,
-    INVOKE_AGENT_OPERATION_NAME,
-)
 from .utils import (
+    build_export_url,
     get_validated_domain_override,
     hex_span_id,
     hex_trace_id,
     kind_name,
+    parse_retry_after,
     partition_by_identity,
     status_name,
     truncate_span,
@@ -39,6 +34,7 @@ from .utils import (
 # Hardcoded constants - not configurable
 DEFAULT_HTTP_TIMEOUT_SECONDS = 30.0
 DEFAULT_MAX_RETRIES = 3
+DEFAULT_ENDPOINT_URL = "https://agent365.svc.cloud.microsoft"
 
 # Create logger for this module - inherits from 'microsoft_agents_a365.observability.core'
 logger = logging.getLogger(__name__)
@@ -50,7 +46,8 @@ class _Agent365Exporter(SpanExporter):
     Agent 365 span exporter for Agent 365:
       * Partitions spans by (tenantId, agentId)
       * Builds OTLP-like JSON: resourceSpans -> scopeSpans -> spans
-      * POSTs per group to https://{endpoint}/maven/agent365/agents/{agentId}/traces?api-version=1
+      * POSTs per group to https://{endpoint}/observability/tenants/{tenantId}/otlp/agents/{agentId}/traces?api-version=1
+      *   or, when use_s2s_endpoint is True, https://{endpoint}/observabilityService/tenants/{tenantId}/otlp/agents/{agentId}/traces?api-version=1
       * Adds Bearer token via token_resolver(agentId, tenantId)
     """
 
@@ -59,7 +56,6 @@ class _Agent365Exporter(SpanExporter):
         token_resolver: Callable[[str, str], str | None],
         cluster_category: str = "prod",
         use_s2s_endpoint: bool = False,
-        suppress_invoke_agent_input: bool = False,
     ):
         if token_resolver is None:
             raise ValueError("token_resolver must be provided.")
@@ -69,7 +65,6 @@ class _Agent365Exporter(SpanExporter):
         self._token_resolver = token_resolver
         self._cluster_category = cluster_category
         self._use_s2s_endpoint = use_s2s_endpoint
-        self._suppress_invoke_agent_input = suppress_invoke_agent_input
         # Read domain override once at initialization
         self._domain_override = get_validated_domain_override()
 
@@ -86,9 +81,9 @@ class _Agent365Exporter(SpanExporter):
                 logger.info("No spans with tenant/agent identity found; nothing exported.")
                 return SpanExportResult.SUCCESS
 
-            # Debug: Log number of groups and total span count
+            # Log number of groups and total span count
             total_spans = sum(len(activities) for activities in groups.values())
-            logger.info(
+            logger.debug(
                 f"Found {len(groups)} identity groups with {total_spans} total spans to export"
             )
 
@@ -97,33 +92,16 @@ class _Agent365Exporter(SpanExporter):
                 payload = self._build_export_request(activities)
                 body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
-                # Resolve endpoint + token
+                # Resolve endpoint: domain override > default URL
                 if self._domain_override:
                     endpoint = self._domain_override
                 else:
-                    discovery = PowerPlatformApiDiscovery(self._cluster_category)
-                    endpoint = discovery.get_tenant_island_cluster_endpoint(tenant_id)
+                    endpoint = DEFAULT_ENDPOINT_URL
 
-                endpoint_path = (
-                    f"/maven/agent365/service/agents/{agent_id}/traces"
-                    if self._use_s2s_endpoint
-                    else f"/maven/agent365/agents/{agent_id}/traces"
-                )
+                url = build_export_url(endpoint, agent_id, tenant_id, self._use_s2s_endpoint)
 
-                # Construct URL - if endpoint has a scheme (http:// or https://), use it as-is
-                # Otherwise, prepend https://
-                # Note: Check for "://" to distinguish between real protocols and domain:port format
-                # (urlparse treats "example.com:8080" as having scheme="example.com")
-                parsed = urlparse(endpoint)
-                if parsed.scheme and "://" in endpoint:
-                    # Endpoint is a full URL, append path
-                    url = f"{endpoint}{endpoint_path}?api-version=1"
-                else:
-                    # Endpoint is just a domain (possibly with port), prepend https://
-                    url = f"https://{endpoint}{endpoint_path}?api-version=1"
-
-                # Debug: Log endpoint being used
-                logger.info(
+                # Log endpoint details at DEBUG to avoid leaking IDs in production logs
+                logger.debug(
                     f"Exporting {len(activities)} spans to endpoint: {url} "
                     f"(tenant: {tenant_id}, agent: {agent_id})"
                 )
@@ -132,10 +110,16 @@ class _Agent365Exporter(SpanExporter):
                 try:
                     token = self._token_resolver(agent_id, tenant_id)
                     if token:
+                        # Warn if sending bearer token over non-HTTPS connection
+                        if not url.lower().startswith("https://"):
+                            logger.warning(
+                                "Bearer token is being sent over a non-HTTPS connection. "
+                                "This may expose credentials in transit."
+                            )
                         headers["authorization"] = f"Bearer {token}"
-                        logger.info(f"Token resolved successfully for agent {agent_id}")
+                        logger.debug(f"Token resolved successfully for agent {agent_id}")
                     else:
-                        logger.info(f"No token returned for agent {agent_id}")
+                        logger.debug(f"No token returned for agent {agent_id}")
                 except Exception as e:
                     # If token resolution fails, treat as failure for this group
                     logger.error(
@@ -146,6 +130,7 @@ class _Agent365Exporter(SpanExporter):
 
                 # Basic retry loop
                 ok = self._post_with_retries(url, body, headers)
+
                 if not ok:
                     any_failure = True
 
@@ -168,8 +153,6 @@ class _Agent365Exporter(SpanExporter):
 
     def force_flush(self, timeout_millis: int = 30000) -> bool:
         return True
-
-    # ------------- Helper methods -------------------
 
     # ------------- HTTP helper ----------------------
 
@@ -199,7 +182,7 @@ class _Agent365Exporter(SpanExporter):
 
                 # 2xx => success
                 if 200 <= resp.status_code < 300:
-                    logger.info(
+                    logger.debug(
                         f"HTTP {resp.status_code} success on attempt {attempt + 1}. "
                         f"Correlation ID: {correlation_id}. "
                         f"Response: {self._truncate_text(resp.text, 200)}"
@@ -211,12 +194,19 @@ class _Agent365Exporter(SpanExporter):
 
                 # Retry transient
                 if resp.status_code in (408, 429) or 500 <= resp.status_code < 600:
+                    # Respect Retry-After header for 429 responses
+                    retry_after = parse_retry_after(resp.headers)
                     if attempt < DEFAULT_MAX_RETRIES:
-                        time.sleep(0.2 * (attempt + 1))
+                        if retry_after is not None:
+                            time.sleep(min(retry_after, 60.0))
+                        else:
+                            # Exponential backoff with base 0.5s
+                            time.sleep(0.5 * (2**attempt))
                         continue
                     # Final attempt failed
                     logger.error(
-                        f"HTTP {resp.status_code} final failure after {DEFAULT_MAX_RETRIES + 1} attempts. "
+                        f"HTTP {resp.status_code} final failure after "
+                        f"{DEFAULT_MAX_RETRIES + 1} attempts. "
                         f"Correlation ID: {correlation_id}. "
                         f"Response: {response_text}"
                     )
@@ -231,12 +221,11 @@ class _Agent365Exporter(SpanExporter):
 
             except requests.RequestException as e:
                 if attempt < DEFAULT_MAX_RETRIES:
-                    time.sleep(0.2 * (attempt + 1))
+                    # Exponential backoff with base 0.5s
+                    time.sleep(0.5 * (2**attempt))
                     continue
                 # Final attempt failed
-                logger.error(
-                    f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts with exception: {e}"
-                )
+                logger.error(f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts: {e}")
                 return False
         return False
 
@@ -287,19 +276,6 @@ class _Agent365Exporter(SpanExporter):
 
         # attributes
         attrs = dict(sp.attributes or {})
-
-        # Suppress input messages if configured and current span is an InvokeAgent span
-        if self._suppress_invoke_agent_input:
-            # Check if current span is an InvokeAgent span by:
-            # 1. Span name starts with "invoke_agent"
-            # 2. Has attribute gen_ai.operation.name set to INVOKE_AGENT_OPERATION_NAME
-            operation_name = attrs.get(GEN_AI_OPERATION_NAME_KEY)
-            if (
-                sp.name.startswith(INVOKE_AGENT_OPERATION_NAME)
-                and operation_name == INVOKE_AGENT_OPERATION_NAME
-            ):
-                # Remove input messages attribute
-                attrs.pop(GEN_AI_INPUT_MESSAGES_KEY, None)
 
         # events
         events = []

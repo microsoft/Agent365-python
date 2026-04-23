@@ -9,23 +9,24 @@ from pathlib import Path
 import pytest
 from microsoft_agents_a365.observability.core import (
     AgentDetails,
+    Channel,
     ExecuteToolScope,
-    ExecutionType,
     Request,
-    SourceMetadata,
-    TenantDetails,
+    SpanDetails,
     ToolCallDetails,
     configure,
+    extract_context_from_headers,
     get_tracer_provider,
 )
 from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.constants import (
-    GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
-    GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+    CHANNEL_LINK_KEY,
+    CHANNEL_NAME_KEY,
 )
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind
 
 
 class TestExecuteToolScope(unittest.TestCase):
@@ -42,7 +43,6 @@ class TestExecuteToolScope(unittest.TestCase):
             service_namespace="test-namespace",
         )
         # Create test data
-        cls.tenant_details = TenantDetails(tenant_id="12345678-1234-5678-1234-567812345678")
         cls.agent_details = AgentDetails(
             agent_id="test-agent-123",
             agent_name="Test Agent",
@@ -81,10 +81,9 @@ class TestExecuteToolScope(unittest.TestCase):
 
     def test_record_response_method_exists(self):
         """Test that record_response method exists on ExecuteToolScope."""
-        scope = ExecuteToolScope.start(self.tool_details, self.agent_details, self.tenant_details)
+        scope = ExecuteToolScope.start(Request(), self.tool_details, self.agent_details)
 
         if scope is not None:
-            # Test that the method exists
             self.assertTrue(hasattr(scope, "record_response"))
             self.assertTrue(callable(scope.record_response))
             scope.dispose()
@@ -93,14 +92,11 @@ class TestExecuteToolScope(unittest.TestCase):
         """Test that request source metadata is set on span attributes."""
         request = Request(
             content="Execute tool with request metadata",
-            execution_type=ExecutionType.AGENT_TO_AGENT,
             session_id="session-xyz",
-            source_metadata=SourceMetadata(name="Channel 1", description="Link to channel"),
+            channel=Channel(name="Channel 1", link="Link to channel"),
         )
 
-        scope = ExecuteToolScope.start(
-            self.tool_details, self.agent_details, self.tenant_details, request
-        )
+        scope = ExecuteToolScope.start(request, self.tool_details, self.agent_details)
 
         if scope is not None:
             scope.dispose()
@@ -112,33 +108,39 @@ class TestExecuteToolScope(unittest.TestCase):
         span_attributes = getattr(span, "attributes", {}) or {}
 
         self.assertIn(
-            GEN_AI_EXECUTION_SOURCE_NAME_KEY,
+            CHANNEL_NAME_KEY,
             span_attributes,
             "Expected source name to be set on span",
         )
         self.assertEqual(
-            span_attributes[GEN_AI_EXECUTION_SOURCE_NAME_KEY],
-            request.source_metadata.name,
+            span_attributes[CHANNEL_NAME_KEY],
+            request.channel.name,
         )
 
         self.assertIn(
-            GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY,
+            CHANNEL_LINK_KEY,
             span_attributes,
             "Expected source description to be set on span",
         )
         self.assertEqual(
-            span_attributes[GEN_AI_EXECUTION_SOURCE_DESCRIPTION_KEY],
-            request.source_metadata.description,
+            span_attributes[CHANNEL_LINK_KEY],
+            request.channel.link,
         )
 
-    def test_execute_tool_scope_with_parent_id(self):
-        """Test ExecuteToolScope uses parent_id to link span to parent context."""
+    def test_execute_tool_scope_with_parent_context(self):
+        """Test ExecuteToolScope uses parent_context to link span to parent context."""
         parent_trace_id = "1234567890abcdef1234567890abcdef"
         parent_span_id = "abcdefabcdef1234"
-        parent_id = f"00-{parent_trace_id}-{parent_span_id}-01"
+        traceparent = f"00-{parent_trace_id}-{parent_span_id}-01"
+
+        # Extract context from traceparent header
+        parent_context = extract_context_from_headers({"traceparent": traceparent})
 
         with ExecuteToolScope.start(
-            self.tool_details, self.agent_details, self.tenant_details, parent_id=parent_id
+            Request(),
+            self.tool_details,
+            self.agent_details,
+            span_details=SpanDetails(parent_context=parent_context),
         ):
             pass
 
@@ -156,6 +158,29 @@ class TestExecuteToolScope(unittest.TestCase):
         self.assertTrue(hasattr(span.parent, "span_id"), "Expected parent to have span_id")
         span_parent_id = f"{span.parent.span_id:016x}"
         self.assertEqual(span_parent_id, parent_span_id)
+
+    def test_span_kind_defaults_to_internal(self):
+        """Test that ExecuteToolScope defaults to SpanKind.INTERNAL."""
+        scope = ExecuteToolScope.start(Request(), self.tool_details, self.agent_details)
+        scope.dispose()
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+        self.assertEqual(finished_spans[-1].kind, SpanKind.INTERNAL)
+
+    def test_span_kind_override_to_client(self):
+        """Test that ExecuteToolScope accepts SpanKind.CLIENT override."""
+        scope = ExecuteToolScope.start(
+            Request(),
+            self.tool_details,
+            self.agent_details,
+            span_details=SpanDetails(span_kind=SpanKind.CLIENT),
+        )
+        scope.dispose()
+
+        finished_spans = self.span_exporter.get_finished_spans()
+        self.assertTrue(finished_spans, "Expected at least one span to be created")
+        self.assertEqual(finished_spans[-1].kind, SpanKind.CLIENT)
 
 
 if __name__ == "__main__":

@@ -4,8 +4,6 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from .models.agent_type import AgentType
-
 
 @dataclass
 class AgentDetails:
@@ -20,26 +18,26 @@ class AgentDetails:
     agent_description: Optional[str] = None
     """A description of the AI agent's purpose or capabilities."""
 
-    agent_auid: Optional[str] = None
+    agentic_user_id: Optional[str] = None
     """Agentic User ID for the agent."""
 
-    agent_upn: Optional[str] = None
-    """User Principal Name (UPN) for the agentic user."""
+    agentic_user_email: Optional[str] = None
+    """Email address for the agentic user."""
 
     agent_blueprint_id: Optional[str] = None
     """Blueprint/Application ID for the agent."""
 
-    agent_type: Optional[AgentType] = None
-    """The agent type."""
+    agent_platform_id: Optional[str] = None
+    """Platform ID for the agent."""
 
     tenant_id: Optional[str] = None
     """Tenant ID for the agent."""
 
-    conversation_id: Optional[str] = None
-    """Optional conversation ID for compatibility."""
-
     icon_uri: Optional[str] = None
     """Optional icon URI for the agent."""
 
-    agent_client_ip: Optional[str] = None
-    """Client IP address of the agent user."""
+    provider_name: Optional[str] = None
+    """The provider name (e.g., openai, anthropic)."""
+
+    agent_version: Optional[str] = None
+    """Optional version of the agent (e.g., "1.0.0", "2025-05-01")."""

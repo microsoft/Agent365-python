@@ -1,32 +1,29 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from microsoft_agents_a365.observability.core.constants import (
-    EXECUTE_TOOL_OPERATION_NAME,
-    GEN_AI_EVENT_CONTENT,
-    GEN_AI_OPERATION_NAME_KEY,
-)
 from opentelemetry.sdk.trace.export import SpanProcessor
 
 
 class AgentFrameworkSpanProcessor(SpanProcessor):
-    """
-    SpanProcessor for Agent Framework.
-    """
+    """SpanProcessor for Agent Framework.
 
-    TOOL_CALL_RESULT_TAG = "gen_ai.tool.call.result"
+    Attribute mutation happens in the enricher (via :class:`EnrichedReadableSpan`)
+    because OTel Python ``ReadableSpan`` is immutable after ``on_end``.
+    The enricher is invoked at export time by the ``EnrichingSpanProcessor``.
+    """
 
     def __init__(self, service_name: str | None = None):
         self.service_name = service_name
         super().__init__()
 
     def on_start(self, span, parent_context):
-        if hasattr(span, "attributes"):
-            operation_name = span.attributes.get(GEN_AI_OPERATION_NAME_KEY)
-            if isinstance(operation_name, str) and operation_name == EXECUTE_TOOL_OPERATION_NAME:
-                tool_call_result = span.attributes.get(self.TOOL_CALL_RESULT_TAG)
-                if tool_call_result is not None:
-                    span.set_attribute(GEN_AI_EVENT_CONTENT, tool_call_result)
+        """Called when a span starts. Intentionally a no-op."""
+        pass
 
     def on_end(self, span):
+        """Called when a span ends. Intentionally a no-op.
+
+        Message mapping is handled by the span enricher at export time
+        since ReadableSpan is immutable in the Python OTel SDK.
+        """
         pass

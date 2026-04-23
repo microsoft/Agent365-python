@@ -81,12 +81,14 @@ The foundation for distributed tracing in agent applications. Built on OpenTelem
 
 | Class | Purpose |
 |-------|---------|
-| `InvokeAgentDetails` | Agent endpoint, session ID, and invocation metadata |
+| `InvokeAgentScopeDetails` | Agent endpoint and invocation metadata |
 | `AgentDetails` | Agent identification and metadata |
-| `TenantDetails` | Tenant identification for multi-tenant scenarios |
+| `UserDetails` | Human caller identification (user ID, email, name, IP) |
+| `CallerDetails` | Wrapper for user details and/or caller agent details |
+| `SpanDetails` | Parent context, timing, and span kind for custom spans |
 | `InferenceCallDetails` | Model name, tokens, provider information |
 | `ToolCallDetails` | Tool name, arguments, endpoint |
-| `Request` | Execution context and correlation ID |
+| `Request` | Content, correlation ID, and conversation ID |
 
 **Usage Example:**
 
@@ -94,8 +96,8 @@ The foundation for distributed tracing in agent applications. Built on OpenTelem
 from microsoft_agents_a365.observability.core import (
     configure,
     InvokeAgentScope,
-    InvokeAgentDetails,
-    TenantDetails,
+    InvokeAgentScopeDetails,
+    AgentDetails,
     Request,
     BaggageBuilder,
 )
@@ -112,9 +114,9 @@ configure(
 with BaggageBuilder().tenant_id(tenant_id).agent_id(agent_id).build():
     # Trace agent invocation
     with InvokeAgentScope.start(
-        invoke_agent_details=InvokeAgentDetails(...),
-        tenant_details=TenantDetails(...),
-        request=Request(...)
+        request=Request(content="Hello"),
+        invoke_scope_details=InvokeAgentScopeDetails(...),
+        agent_details=AgentDetails(...),
     ) as scope:
         # Agent logic here
         scope.record_response("result")

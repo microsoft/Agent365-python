@@ -8,8 +8,8 @@ from microsoft_agents_a365.observability.core import configure, get_tracer_provi
 from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
+    GEN_AI_PROVIDER_NAME_KEY,
     GEN_AI_REQUEST_MODEL_KEY,
-    GEN_AI_SYSTEM_KEY,
     TENANT_ID_KEY,
 )
 from microsoft_agents_a365.observability.extensions.agentframework.trace_instrumentor import (
@@ -18,7 +18,7 @@ from microsoft_agents_a365.observability.extensions.agentframework.trace_instrum
 
 # AgentFramework SDK
 try:
-    from agent_framework import ChatAgent, ai_function
+    from agent_framework import RawAgent, ai_function
     from agent_framework.azure import AzureOpenAIChatClient
     from agent_framework.observability import setup_observability
     from azure.identity import AzureCliCredential
@@ -80,8 +80,8 @@ class TestAgentFrameworkTraceProcessorIntegration:
             )
 
             # Create agent framework agent
-            agent = ChatAgent(
-                chat_client=chat_client,
+            agent = RawAgent(
+                client=chat_client,
                 instructions="You are a helpful assistant.",
                 tools=[],
             )
@@ -149,8 +149,8 @@ class TestAgentFrameworkTraceProcessorIntegration:
             )
 
             # Create agent framework agent
-            agent = ChatAgent(
-                chat_client=chat_client,
+            agent = RawAgent(
+                client=chat_client,
                 instructions="You are a helpful agent framework assistant.",
                 tools=[add_numbers],
             )
@@ -201,7 +201,10 @@ class TestAgentFrameworkTraceProcessorIntegration:
                 assert attributes[TENANT_ID_KEY] == agent365_config["tenant_id"]
 
             # Check for LLM spans (generation spans)
-            if GEN_AI_SYSTEM_KEY in attributes and attributes[GEN_AI_SYSTEM_KEY] == "openai":
+            if (
+                GEN_AI_PROVIDER_NAME_KEY in attributes
+                and attributes[GEN_AI_PROVIDER_NAME_KEY] == "openai"
+            ):
                 if GEN_AI_REQUEST_MODEL_KEY in attributes:
                     llm_spans_found += 1
                     # Validate LLM span attributes
