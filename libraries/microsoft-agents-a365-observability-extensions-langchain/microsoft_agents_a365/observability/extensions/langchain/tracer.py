@@ -84,14 +84,15 @@ class CustomLangChainTracer(BaseTracer):
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        """Initialize the OpenInferenceTracer.
+        """Initialize the CustomLangChainTracer.
 
         Args:
-            tracer (trace_api.Tracer): The OpenTelemetry tracer for creating spans.
-            separate_trace_from_runtime_context (bool): When True, always start a new trace for each
-                span without a parent, isolating it from any existing trace in the runtime context.
-            *args (Any): Positional arguments for BaseTracer.
-            **kwargs (Any): Keyword arguments for BaseTracer.
+            tracer: The OpenTelemetry tracer for creating spans.
+            separate_trace_from_runtime_context: When True, always start a new
+                trace for each span without a parent, isolating it from any
+                existing trace in the runtime context.
+            *args: Positional arguments forwarded to BaseTracer.
+            **kwargs: Keyword arguments forwarded to BaseTracer.
         """
         super().__init__(*args, **kwargs)
         if TYPE_CHECKING:
@@ -203,17 +204,13 @@ class CustomLangChainTracer(BaseTracer):
         return super().on_tool_error(error, *args, run_id=run_id, **kwargs)
 
     def on_chat_model_start(self, *args: Any, **kwargs: Any) -> Run:
+        """Handle chat model start events.
+
+        Delegates to ``LangChainTracer.on_chat_model_start`` to obtain correct
+        chat-formatted spans. The ``BaseTracer`` implementation requires setting
+        an internal ``_schema_format`` flag; delegating to ``LangChainTracer``
+        avoids depending on that private attribute.
         """
-        This emulates the behavior of the LangChainTracer.
-        https://github.com/langchain-ai/langchain/blob/c01467b1f4f9beae8f1edb105b17aa4f36bf6573/libs/core/langchain_core/tracers/langchain.py#L115
-
-        Although this method exists on the parent class, i.e. `BaseTracer`,
-        it requires setting `self._schema_format = "original+chat"`.
-        https://github.com/langchain-ai/langchain/blob/c01467b1f4f9beae8f1edb105b17aa4f36bf6573/libs/core/langchain_core/tracers/base.py#L170
-
-        But currently self._schema_format is marked for internal use.
-        https://github.com/langchain-ai/langchain/blob/c01467b1f4f9beae8f1edb105b17aa4f36bf6573/libs/core/langchain_core/tracers/base.py#L60
-        """  # noqa: E501
         return LangChainTracer.on_chat_model_start(self, *args, **kwargs)  # type: ignore
 
 
