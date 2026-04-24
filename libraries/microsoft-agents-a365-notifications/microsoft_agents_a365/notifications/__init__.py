@@ -12,6 +12,7 @@ This module provides utilities for handling agent notifications and routing.
 from .agent_notification import (
     AgentHandler,
     AgentNotification,
+    RouteHandler,
 )
 
 # Import all models from the models subpackage
@@ -29,6 +30,7 @@ __all__ = [
     # Main notification handler
     "AgentNotification",
     "AgentHandler",
+    "RouteHandler",
     # Models and data classes
     "AgentNotificationActivity",
     "EmailReference",

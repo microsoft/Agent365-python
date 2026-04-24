@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterable
-from typing import Any, TypeVar
+from typing import Any, TypeAlias
 
 from microsoft_agents.activity import ChannelId
 from microsoft_agents.hosting.core import TurnContext
@@ -14,8 +14,12 @@ from .models.agent_lifecycle_event import AgentLifecycleEvent
 from .models.agent_notification_activity import AgentNotificationActivity, NotificationTypes
 from .models.agent_subchannel import AgentSubChannel
 
-TContext = TypeVar("TContext", bound=TurnContext)
-TState = TypeVar("TState", bound=TurnState)
+#: Type alias for the route handler function registered with the application.
+#:
+#: Route handlers are the inner async functions that the application framework calls
+#: when a matching notification is received. They accept a :class:`~microsoft_agents.hosting.core.TurnContext`
+#: and a :class:`~microsoft_agents.hosting.core.app.state.TurnState`.
+RouteHandler: TypeAlias = Callable[[TurnContext, TurnState], Awaitable[None]]
 
 #: Type alias for agent notification handler functions.
 #:
@@ -26,7 +30,8 @@ TState = TypeVar("TState", bound=TurnState)
 #: Args:
 #:     context: The turn context for the current conversation turn.
 #:     state: The application state for the current turn.
-#:     notification: The typed notification activity with parsed entities.
+#:     notification: The typed :class:`~microsoft_agents_a365.notifications.AgentNotificationActivity`
+#:         with parsed entities.
 #:
 #: Example:
 #:
@@ -40,7 +45,9 @@ TState = TypeVar("TState", bound=TurnState)
 #:             email = notification.email
 #:             if email:
 #:                 print(f"Processing email: {email.id}")
-AgentHandler = Callable[[TContext, TState, AgentNotificationActivity], Awaitable[None]]
+AgentHandler: TypeAlias = Callable[
+    [TurnContext, TurnState, AgentNotificationActivity], Awaitable[None]
+]
 
 
 class AgentNotification:
@@ -220,9 +227,7 @@ class AgentNotification:
 
         return decorator
 
-    def on_email(
-        self, **kwargs: Any
-    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+    def on_email(self, **kwargs: Any) -> Callable[[AgentHandler], RouteHandler]:
         """Register a handler for Outlook email notifications.
 
         This is a convenience decorator that registers a handler for notifications
@@ -251,9 +256,7 @@ class AgentNotification:
             ChannelId(channel="agents", sub_channel=AgentSubChannel.EMAIL), **kwargs
         )
 
-    def on_word(
-        self, **kwargs: Any
-    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+    def on_word(self, **kwargs: Any) -> Callable[[AgentHandler], RouteHandler]:
         """Register a handler for Microsoft Word comment notifications.
 
         This is a convenience decorator that registers a handler for notifications
@@ -278,9 +281,7 @@ class AgentNotification:
             ChannelId(channel="agents", sub_channel=AgentSubChannel.WORD), **kwargs
         )
 
-    def on_excel(
-        self, **kwargs: Any
-    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+    def on_excel(self, **kwargs: Any) -> Callable[[AgentHandler], RouteHandler]:
         """Register a handler for Microsoft Excel comment notifications.
 
         This is a convenience decorator that registers a handler for notifications
@@ -305,9 +306,7 @@ class AgentNotification:
             ChannelId(channel="agents", sub_channel=AgentSubChannel.EXCEL), **kwargs
         )
 
-    def on_powerpoint(
-        self, **kwargs: Any
-    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+    def on_powerpoint(self, **kwargs: Any) -> Callable[[AgentHandler], RouteHandler]:
         """Register a handler for Microsoft PowerPoint comment notifications.
 
         This is a convenience decorator that registers a handler for notifications
@@ -332,9 +331,7 @@ class AgentNotification:
             ChannelId(channel="agents", sub_channel=AgentSubChannel.POWERPOINT), **kwargs
         )
 
-    def on_lifecycle(
-        self, **kwargs: Any
-    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+    def on_lifecycle(self, **kwargs: Any) -> Callable[[AgentHandler], RouteHandler]:
         """Register a handler for all agent lifecycle event notifications.
 
         This is a convenience decorator that registers a handler for all lifecycle
@@ -353,11 +350,9 @@ class AgentNotification:
                 async def handle_any_lifecycle_event(context, state, notification):
                     print(f"Lifecycle event type: {notification.notification_type}")
         """
-        return self.on_lifecycle_notification("*", **kwargs)
+        return self.on_agent_lifecycle_notification("*", **kwargs)
 
-    def on_user_created(
-        self, **kwargs: Any
-    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+    def on_user_created(self, **kwargs: Any) -> Callable[[AgentHandler], RouteHandler]:
         """Register a handler for user creation lifecycle events.
 
         This is a convenience decorator that registers a handler specifically for
@@ -376,11 +371,9 @@ class AgentNotification:
                 async def handle_user_created(context, state, notification):
                     print("New agentic user identity created")
         """
-        return self.on_lifecycle_notification(AgentLifecycleEvent.USERCREATED, **kwargs)
+        return self.on_agent_lifecycle_notification(AgentLifecycleEvent.USERCREATED, **kwargs)
 
-    def on_user_workload_onboarding(
-        self, **kwargs: Any
-    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+    def on_user_workload_onboarding(self, **kwargs: Any) -> Callable[[AgentHandler], RouteHandler]:
         """Register a handler for user workload onboarding update events.
 
         This is a convenience decorator that registers a handler for events that occur
@@ -399,13 +392,11 @@ class AgentNotification:
                 async def handle_onboarding_update(context, state, notification):
                     print("User workload onboarding status updated")
         """
-        return self.on_lifecycle_notification(
+        return self.on_agent_lifecycle_notification(
             AgentLifecycleEvent.USERWORKLOADONBOARDINGUPDATED, **kwargs
         )
 
-    def on_user_deleted(
-        self, **kwargs: Any
-    ) -> Callable[[AgentHandler], Callable[[TurnContext, TurnState], Awaitable[None]]]:
+    def on_user_deleted(self, **kwargs: Any) -> Callable[[AgentHandler], RouteHandler]:
         """Register a handler for user deletion lifecycle events.
 
         This is a convenience decorator that registers a handler specifically for
@@ -424,7 +415,7 @@ class AgentNotification:
                 async def handle_user_deleted(context, state, notification):
                     print("Agentic user identity deleted")
         """
-        return self.on_lifecycle_notification(AgentLifecycleEvent.USERDELETED, **kwargs)
+        return self.on_agent_lifecycle_notification(AgentLifecycleEvent.USERDELETED, **kwargs)
 
     @staticmethod
     def _normalize_subchannel(value: str | AgentSubChannel | None) -> str:
