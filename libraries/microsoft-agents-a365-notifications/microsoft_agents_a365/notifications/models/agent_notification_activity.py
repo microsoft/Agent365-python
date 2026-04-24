@@ -7,7 +7,7 @@ from .notification_types import NotificationTypes
 from .email_reference import EmailReference
 from .wpx_comment import WpxComment
 
-TModel = TypeVar("TModel")
+_TModel = TypeVar("_TModel")
 
 
 class AgentNotificationActivity:
@@ -148,7 +148,7 @@ class AgentNotificationActivity:
         return self._notification_type
 
     # Generic escape hatch
-    def as_model(self, model: Type[TModel]) -> Optional[TModel]:
+    def as_model(self, model: Type[_TModel]) -> Optional[_TModel]:
         """Parse the activity value as a custom model type.
 
         This method provides a generic way to validate and parse the activity's value
