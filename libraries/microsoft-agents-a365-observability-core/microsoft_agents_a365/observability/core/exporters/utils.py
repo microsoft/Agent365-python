@@ -14,15 +14,46 @@ from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.trace import SpanKind, StatusCode
 
 from ..constants import (
+    CHAT_OPERATION_NAME,
     ENABLE_A365_OBSERVABILITY_EXPORTER,
+    EXECUTE_TOOL_OPERATION_NAME,
     GEN_AI_AGENT_ID_KEY,
+    GEN_AI_OPERATION_NAME_KEY,
+    INVOKE_AGENT_OPERATION_NAME,
+    OUTPUT_MESSAGES_OPERATION_NAME,
     TENANT_ID_KEY,
 )
+from ..inference_operation_type import InferenceOperationType
 
 logger = logging.getLogger(__name__)
 
 # Maximum allowed span size in bytes (250KB)
 MAX_SPAN_SIZE_BYTES = 250 * 1024
+
+# Operation names that identify a span as a genAI span eligible for export to
+# the Agent 365 observability ingest service. Spans without a known
+# gen_ai.operation.name are filtered out of the export batch.
+GEN_AI_OPERATION_NAMES: frozenset[str] = frozenset(
+    {
+        INVOKE_AGENT_OPERATION_NAME,
+        EXECUTE_TOOL_OPERATION_NAME,
+        OUTPUT_MESSAGES_OPERATION_NAME,
+        CHAT_OPERATION_NAME,
+        InferenceOperationType.CHAT.value,
+        InferenceOperationType.TEXT_COMPLETION.value,
+        InferenceOperationType.GENERATE_CONTENT.value,
+    }
+)
+
+# Inference operation type values that the ingest service expects to be
+# normalized to the canonical "chat" gen_ai.operation.name.
+INFERENCE_OPERATION_TYPE_NAMES: frozenset[str] = frozenset(
+    {
+        InferenceOperationType.CHAT.value,
+        InferenceOperationType.TEXT_COMPLETION.value,
+        InferenceOperationType.GENERATE_CONTENT.value,
+    }
+)
 
 
 def hex_trace_id(value: int) -> str:
@@ -131,18 +162,41 @@ def partition_by_identity(
     spans: Sequence[ReadableSpan],
 ) -> dict[tuple[str, str], list[ReadableSpan]]:
     """
-    Extract (tenantId, agentId). Prefer attributes; if you also stamp baggage
-    into attributes via a processor, they'll be here already.
+    Partition spans by (tenantId, agentId).
+
+    Only genAI spans (those with a known ``gen_ai.operation.name``) are
+    included; non-genAI spans (e.g. HTTP, DB) are filtered out. Spans
+    without both tenant and agent identity are also skipped.
     """
     groups: dict[tuple[str, str], list[ReadableSpan]] = {}
+    non_gen_ai_count = 0
+    missing_identity_count = 0
     for sp in spans:
         attrs = sp.attributes or {}
+        operation_name = as_str(attrs.get(GEN_AI_OPERATION_NAME_KEY))
+        if not operation_name or operation_name not in GEN_AI_OPERATION_NAMES:
+            non_gen_ai_count += 1
+            continue
         tenant = as_str(attrs.get(TENANT_ID_KEY))
         agent = as_str(attrs.get(GEN_AI_AGENT_ID_KEY))
         if not tenant or not agent:
+            missing_identity_count += 1
             continue
         key = (tenant, agent)
         groups.setdefault(key, []).append(sp)
+
+    if non_gen_ai_count > 0:
+        logger.info(f"[Agent365Exporter] {non_gen_ai_count} non-genAI spans filtered out")
+    if missing_identity_count > 0:
+        logger.warning(
+            f"[Agent365Exporter] {missing_identity_count} spans skipped due to "
+            "missing tenant or agent ID"
+        )
+    skipped = non_gen_ai_count + missing_identity_count
+    logger.info(
+        f"[Agent365Exporter] Partitioned into {len(groups)} identity groups "
+        f"({skipped} spans skipped)"
+    )
     return groups
 
 

@@ -19,6 +19,7 @@ from opentelemetry.trace import StatusCode
 
 from .utils import (
     DEFAULT_MAX_PAYLOAD_BYTES,
+    INFERENCE_OPERATION_TYPE_NAMES,
     build_export_url,
     chunk_by_size,
     estimate_span_bytes,
@@ -31,6 +32,7 @@ from .utils import (
     status_name,
     truncate_span,
 )
+from ..constants import CHAT_OPERATION_NAME, GEN_AI_OPERATION_NAME_KEY
 
 # ---- Exporter ---------------------------------------------------------------
 
@@ -338,6 +340,14 @@ class _Agent365Exporter(SpanExporter):
 
         # attributes
         attrs = dict(sp.attributes or {})
+
+        # Normalize gen_ai.operation.name from any InferenceOperationType enum
+        # value (Chat, TextCompletion, GenerateContent) to the canonical "chat"
+        # value the ingest service accepts. This is applied only on the export
+        # payload; the underlying span attribute is left untouched.
+        op_name = attrs.get(GEN_AI_OPERATION_NAME_KEY)
+        if isinstance(op_name, str) and op_name in INFERENCE_OPERATION_TYPE_NAMES:
+            attrs[GEN_AI_OPERATION_NAME_KEY] = CHAT_OPERATION_NAME
 
         # events
         events = []
