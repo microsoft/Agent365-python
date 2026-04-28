@@ -40,18 +40,6 @@ GEN_AI_OPERATION_NAMES: frozenset[str] = frozenset(
         OUTPUT_MESSAGES_OPERATION_NAME,
         CHAT_OPERATION_NAME,
         InferenceOperationType.CHAT.value,
-        InferenceOperationType.TEXT_COMPLETION.value,
-        InferenceOperationType.GENERATE_CONTENT.value,
-    }
-)
-
-# Inference operation type values that the ingest service expects to be
-# normalized to the canonical "chat" gen_ai.operation.name.
-INFERENCE_OPERATION_TYPE_NAMES: frozenset[str] = frozenset(
-    {
-        InferenceOperationType.CHAT.value,
-        InferenceOperationType.TEXT_COMPLETION.value,
-        InferenceOperationType.GENERATE_CONTENT.value,
     }
 )
 

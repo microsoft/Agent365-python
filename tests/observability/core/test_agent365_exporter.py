@@ -703,12 +703,27 @@ class TestAgent365Exporter(unittest.TestCase):
             self.assertEqual(result, SpanExportResult.SUCCESS)
             mock_post.assert_not_called()
 
-    def test_export_includes_inference_operation_type_spans(self):
-        """Spans with InferenceOperationType enum values are kept and normalized."""
-        # Arrange
+    def test_export_includes_inference_operation_type_chat_spans(self):
+        """Spans with InferenceOperationType.CHAT value ('Chat') are kept without normalization."""
+        # Arrange — server accepts 'Chat' via case-insensitive matching
         chat_span = self._create_mock_span(
             "chat_span", trace_id=1, span_id=2, operation_name="Chat"
         )
+
+        with patch.object(self.exporter, "_post_with_retries", return_value=True) as mock_post:
+            result = self.exporter.export([chat_span])
+
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_called_once()
+            _, body, _ = mock_post.call_args[0]
+            request_data = json.loads(body)
+            spans_out = request_data["resourceSpans"][0]["scopeSpans"][0]["spans"]
+            self.assertEqual(len(spans_out), 1)
+            # Value is preserved as-is; no normalization
+            self.assertEqual(spans_out[0]["attributes"]["gen_ai.operation.name"], "Chat")
+
+    def test_export_filters_out_unsupported_inference_operation_types(self):
+        """Spans with TextCompletion / GenerateContent are filtered out."""
         text_completion_span = self._create_mock_span(
             "text_completion_span", trace_id=3, span_id=4, operation_name="TextCompletion"
         )
@@ -717,18 +732,11 @@ class TestAgent365Exporter(unittest.TestCase):
         )
 
         with patch.object(self.exporter, "_post_with_retries", return_value=True) as mock_post:
-            # Act
-            result = self.exporter.export([chat_span, text_completion_span, generate_content_span])
+            result = self.exporter.export([text_completion_span, generate_content_span])
 
-            # Assert: all three are exported and normalized to "chat"
+            # Both are filtered out — nothing to export
             self.assertEqual(result, SpanExportResult.SUCCESS)
-            mock_post.assert_called_once()
-            _, body, _ = mock_post.call_args[0]
-            request_data = json.loads(body)
-            spans_out = request_data["resourceSpans"][0]["scopeSpans"][0]["spans"]
-            self.assertEqual(len(spans_out), 3)
-            for span in spans_out:
-                self.assertEqual(span["attributes"]["gen_ai.operation.name"], "chat")
+            mock_post.assert_not_called()
 
     def test_export_does_not_normalize_canonical_operation_names(self):
         """invoke_agent / execute_tool / output_messages / chat are not rewritten."""
