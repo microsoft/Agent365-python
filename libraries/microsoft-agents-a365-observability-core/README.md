@@ -5,6 +5,8 @@
 
 Telemetry, tracing, and monitoring components for AI agents built on OpenTelemetry. This package provides structured spans for agent invocation, tool execution, and LLM inference with context propagation and pluggable exporters.
 
+> **Already using OpenTelemetry?** This SDK detects an existing `TracerProvider` and adds its processors to it — your spans flow to both your existing backend (Azure Monitor, OTLP collector, vendor exporter, etc.) and Agent 365. See [Integrating with existing OpenTelemetry](../../docs/integrating-with-existing-opentelemetry.md) for setup patterns and troubleshooting.
+
 ## Installation
 
 ```bash
