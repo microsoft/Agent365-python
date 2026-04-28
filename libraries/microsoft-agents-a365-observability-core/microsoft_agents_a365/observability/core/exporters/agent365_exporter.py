@@ -104,7 +104,8 @@ class _Agent365Exporter(SpanExporter):
                 )
 
                 if len(chunks) > 1:
-                    logger.info(
+                    # Logged at DEBUG to avoid leaking tenant/agent IDs in production logs.
+                    logger.debug(
                         f"Split {len(activities)} spans into {len(chunks)} chunks "
                         f"for tenantId: {tenant_id}, agentId: {agent_id}"
                     )
@@ -151,10 +152,21 @@ class _Agent365Exporter(SpanExporter):
                     payload = self._build_envelope(chunk, resource_attrs)
                     body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
                     body_bytes = len(body.encode("utf-8"))
-                    logger.info(
+                    logger.debug(
                         f"Sending chunk {i + 1} of {len(chunks)} "
                         f"({len(chunk)} spans, {body_bytes} bytes)"
                     )
+                    # Defensive check: the estimator covers per-span content but not
+                    # envelope overhead (resource attributes, scope wrappers). Warn if
+                    # the assembled body exceeds the configured limit so operators can
+                    # observe estimator drift before the server starts rejecting requests.
+                    if body_bytes > self._max_payload_bytes:
+                        logger.warning(
+                            f"Chunk {i + 1} of {len(chunks)} body size ({body_bytes} bytes) "
+                            f"exceeds max_payload_bytes ({self._max_payload_bytes}); "
+                            "estimator may be under-counting envelope overhead. "
+                            f"Tenant: {tenant_id}, agent: {agent_id}, spans: {len(chunk)}."
+                        )
 
                     ok = self._post_with_retries(url, body, headers)
                     if not ok:

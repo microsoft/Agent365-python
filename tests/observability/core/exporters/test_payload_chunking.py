@@ -107,6 +107,18 @@ class TestChunkBySize(unittest.TestCase):
             if len(chunk) > 1:
                 self.assertLessEqual(sum(item["size"] for item in chunk), 500_000)
 
+    def test_rejects_zero_max_chunk_bytes(self) -> None:
+        with self.assertRaises(ValueError):
+            chunk_by_size([{"id": "s", "size": 1}], self._get_size, 0)
+
+    def test_rejects_negative_max_chunk_bytes(self) -> None:
+        with self.assertRaises(ValueError):
+            chunk_by_size([{"id": "s", "size": 1}], self._get_size, -1)
+
+    def test_rejects_negative_item_size(self) -> None:
+        with self.assertRaises(ValueError):
+            chunk_by_size([{"id": "s", "size": -1}], self._get_size, 100)
+
 
 class TestTruncateSpanVerification(unittest.TestCase):
     MAX = 250 * 1024

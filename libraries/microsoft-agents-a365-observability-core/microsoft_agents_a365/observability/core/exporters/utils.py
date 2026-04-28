@@ -354,19 +354,33 @@ def chunk_by_size(
 ) -> list[list[T]]:
     """Split items into sub-batches whose cumulative estimated size stays under ``max_chunk_bytes``.
 
+    Multi-item chunks are guaranteed to stay within the limit. A single item
+    whose estimated size exceeds ``max_chunk_bytes`` forms its own one-item
+    chunk (never silently dropped) even though that chunk exceeds the limit.
+
     Invariants:
     - Input order is preserved across chunks.
     - Empty input produces empty output.
-    - A single item whose size exceeds ``max_chunk_bytes`` forms its own
-      single-item chunk (never silently dropped).
+    - No item is ever dropped.
     - No chunk is ever empty.
+
+    Raises:
+        ValueError: If ``max_chunk_bytes`` is not positive, or if ``get_size``
+            returns a negative value for any item.
     """
+    if max_chunk_bytes <= 0:
+        raise ValueError(f"max_chunk_bytes must be positive, got {max_chunk_bytes}")
+
     chunks: list[list[T]] = []
     current: list[T] = []
     current_bytes = 0
 
     for item in items:
         item_bytes = get_size(item)
+        if item_bytes < 0:
+            raise ValueError(
+                f"get_size returned a negative value ({item_bytes}); sizes must be non-negative"
+            )
         if current and current_bytes + item_bytes > max_chunk_bytes:
             chunks.append(current)
             current = []
