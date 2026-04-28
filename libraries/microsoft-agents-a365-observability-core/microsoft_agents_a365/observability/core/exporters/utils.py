@@ -146,11 +146,11 @@ def truncate_span(span_dict: dict[str, Any]) -> dict[str, Any]:
         return span_dict
 
 
-def partition_by_identity(
+def filter_and_partition_by_identity(
     spans: Sequence[ReadableSpan],
 ) -> dict[tuple[str, str], list[ReadableSpan]]:
     """
-    Partition spans by (tenantId, agentId).
+    Filter export-eligible spans and partition them by (tenantId, agentId).
 
     Only genAI spans (those with a known ``gen_ai.operation.name``) are
     included; non-genAI spans (e.g. HTTP, DB) are filtered out. Spans
@@ -174,17 +174,15 @@ def partition_by_identity(
         groups.setdefault(key, []).append(sp)
 
     if non_gen_ai_count > 0:
-        logger.info(f"[Agent365Exporter] {non_gen_ai_count} non-genAI spans filtered out")
+        logger.debug(
+            f"[Agent365Exporter] {non_gen_ai_count} spans without an eligible "
+            "gen_ai.operation.name filtered out"
+        )
     if missing_identity_count > 0:
-        logger.warning(
+        logger.debug(
             f"[Agent365Exporter] {missing_identity_count} spans skipped due to "
             "missing tenant or agent ID"
         )
-    skipped = non_gen_ai_count + missing_identity_count
-    logger.info(
-        f"[Agent365Exporter] Partitioned into {len(groups)} identity groups "
-        f"({skipped} spans skipped)"
-    )
     return groups
 
 

@@ -84,7 +84,7 @@ class TestAgent365Exporter(unittest.TestCase):
         mock_span.kind = Mock()
         mock_span.kind.name = "INTERNAL"
 
-        # Add identity attributes for partition_by_identity to work
+        # Add identity attributes for filter_and_partition_by_identity to work
         span_attributes = attributes or {}
         if tenant_id and agent_id:
             span_attributes.update({
