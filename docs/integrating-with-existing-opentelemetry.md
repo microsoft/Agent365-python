@@ -127,6 +127,14 @@ Run a single turn. If you see `invoke_agent` / `inference` / `execute_tool` JSON
 
 **Fix:** Use sampling (`OTEL_TRACES_SAMPLER`) or per-exporter configuration instead of the global disable. If you intentionally want to disable tracing in a particular environment, that's fine — just understand it disables Agent 365 too.
 
+### Pitfall 4: `ENABLE_OBSERVABILITY` not set
+
+**Symptom:** Your existing OTel backend works (Azure Monitor / OTLP / etc. show spans), but Agent 365 scope blocks (`InvokeAgentScope`, `InferenceScope`, `ExecuteToolScope`) produce zero spans. No errors, no warnings.
+
+**Cause:** Agent 365's scope classes gate span creation on the `ENABLE_OBSERVABILITY` (or `ENABLE_A365_OBSERVABILITY`) environment variable. If neither is set to `true` / `1` / `yes` / `on`, every scope's `__init__` skips span creation entirely. This is **independent** of OTel's own enable/disable mechanism — your existing OTel telemetry continues to flow normally.
+
+**Fix:** Set `ENABLE_OBSERVABILITY=true` (or `ENABLE_A365_OBSERVABILITY=true`) in your environment before the SDK is imported. Both runnable samples include this in their `.env.template`.
+
 ## Exporter combinations
 
 | Combination                             | What's installed                                                          | What to call                                                              | Gotchas                                                                                       |
