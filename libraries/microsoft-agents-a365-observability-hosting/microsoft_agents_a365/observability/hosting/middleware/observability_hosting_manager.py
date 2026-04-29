@@ -59,7 +59,7 @@ class ObservabilityHostingManager:
             options: Configuration options controlling which middleware to enable.
 
         Returns:
-            The singleton :class:`microsoft_agents_a365.observability.hosting.middleware.observability_hosting_manager.ObservabilityHostingManager` instance.
+            The singleton :class:`~microsoft_agents_a365.observability.hosting.middleware.observability_hosting_manager.ObservabilityHostingManager` instance.
 
         Raises:
             TypeError: If *middleware_set* or *options* is ``None``.
