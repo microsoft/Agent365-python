@@ -175,13 +175,15 @@ def filter_and_partition_by_identity(
 
     if non_gen_ai_count > 0:
         logger.debug(
-            f"[Agent365Exporter] {non_gen_ai_count} spans without an eligible "
-            "gen_ai.operation.name filtered out"
+            "[Agent365Exporter] %d spans without an eligible "
+            "gen_ai.operation.name filtered out",
+            non_gen_ai_count,
         )
     if missing_identity_count > 0:
         logger.debug(
-            f"[Agent365Exporter] {missing_identity_count} spans skipped due to "
-            "missing tenant or agent ID"
+            "[Agent365Exporter] %d spans skipped due to "
+            "missing tenant or agent ID",
+            missing_identity_count,
         )
     return groups
 

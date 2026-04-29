@@ -10,7 +10,9 @@ import unittest
 from unittest.mock import Mock, patch
 
 from microsoft_agents_a365.observability.core.constants import (
+    CHAT_OPERATION_NAME,
     GEN_AI_AGENT_ID_KEY,
+    GEN_AI_OPERATION_NAME_KEY,
     TENANT_ID_KEY,
 )
 from microsoft_agents_a365.observability.core.exporters.agent365_exporter import (
@@ -165,6 +167,7 @@ class TestExporterChunking(unittest.TestCase):
         mock_span.attributes = {
             TENANT_ID_KEY: "tenant-1",
             GEN_AI_AGENT_ID_KEY: "agent-1",
+            GEN_AI_OPERATION_NAME_KEY: CHAT_OPERATION_NAME,
             "payload": "x" * attribute_size,
         }
         mock_span.events = []

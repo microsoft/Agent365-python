@@ -720,7 +720,7 @@ class TestAgent365Exporter(unittest.TestCase):
             spans_out = request_data["resourceSpans"][0]["scopeSpans"][0]["spans"]
             self.assertEqual(len(spans_out), 1)
             # Value is preserved as-is; no normalization
-            self.assertEqual(spans_out[0]["attributes"]["gen_ai.operation.name"], "Chat")
+            self.assertEqual(spans_out[0]["attributes"][GEN_AI_OPERATION_NAME_KEY], "Chat")
 
     def test_export_filters_out_unsupported_inference_operation_types(self):
         """Spans with TextCompletion / GenerateContent are filtered out."""
@@ -754,7 +754,7 @@ class TestAgent365Exporter(unittest.TestCase):
                     _, body, _ = mock_post.call_args[0]
                     request_data = json.loads(body)
                     span_out = request_data["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
-                    self.assertEqual(span_out["attributes"]["gen_ai.operation.name"], op)
+                    self.assertEqual(span_out["attributes"][GEN_AI_OPERATION_NAME_KEY], op)
 
 
 if __name__ == "__main__":

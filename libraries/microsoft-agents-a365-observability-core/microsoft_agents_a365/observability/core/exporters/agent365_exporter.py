@@ -19,7 +19,6 @@ from opentelemetry.trace import StatusCode
 
 from .utils import (
     DEFAULT_MAX_PAYLOAD_BYTES,
-    INFERENCE_OPERATION_TYPE_NAMES,
     build_export_url,
     chunk_by_size,
     estimate_span_bytes,
@@ -83,8 +82,8 @@ class _Agent365Exporter(SpanExporter):
         try:
             groups = filter_and_partition_by_identity(spans)
             if not groups:
-                # No spans with identity; treat as success
-                logger.info("No spans with tenant/agent identity found; nothing exported.")
+                # No eligible genAI spans to export after filtering/partitioning; treat as success
+                logger.info("No eligible genAI spans to export; nothing exported.")
                 return SpanExportResult.SUCCESS
 
             # Log number of groups and total span count
