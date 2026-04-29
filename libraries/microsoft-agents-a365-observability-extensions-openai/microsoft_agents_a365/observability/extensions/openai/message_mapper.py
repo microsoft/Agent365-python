@@ -56,7 +56,7 @@ def map_input_messages(messages_json: str) -> str | None:
         messages_json: The raw JSON string from the span attribute.
 
     Returns:
-        Serialized :class:`InputMessages` JSON string, or ``None`` if the
+        Serialized ``InputMessages`` JSON string, or ``None`` if the
         input is empty or cannot be parsed.
     """
     if not messages_json:
@@ -82,7 +82,7 @@ def map_output_messages(messages_json: str) -> str | None:
         messages_json: The raw JSON string from the span attribute.
 
     Returns:
-        Serialized :class:`OutputMessages` JSON string, or ``None`` if the
+        Serialized ``OutputMessages`` JSON string, or ``None`` if the
         input is empty or cannot be parsed.
     """
     if not messages_json:
