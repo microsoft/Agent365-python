@@ -82,10 +82,10 @@ The SDK produces three core span kinds. Your backend should show them in this ty
 | `gen_ai.operation.name` | Produced by                                       | Typical parent | Span name (default) | Notes |
 |-------------------------|---------------------------------------------------|----------------|---------------------|-------|
 | `invoke_agent`          | `InvokeAgentScope` (one per user turn)            | (root or app)  | `invoke_agent <agent_name>` when set, else `invoke_agent` | |
-| `Chat` / `TextCompletion` / `GenerateContent` | `InferenceScope` (one per LLM call) | `invoke_agent` | `<operation> <model>` (e.g. `Chat gpt-4o-mini`) | Value matches the chosen `InferenceOperationType`. Records model, token counts, finish reasons. |
+| (varies — see notes) | `InferenceScope` (one per LLM call) | `invoke_agent` | `<operation> <model>` | **Manual instrumentation** uses `InferenceOperationType.value` (currently `Chat` / `TextCompletion` / `GenerateContent`, capitalized). **Auto-instrumentation** (e.g. `OpenAIAgentsTraceInstrumentor`) uses lowercase per the [OTel GenAI semconv](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) (e.g. `chat`). The two are inconsistent today. |
 | `execute_tool`          | `ExecuteToolScope` (one per tool invocation)      | `invoke_agent` | `execute_tool <tool_name>` when set, else `execute_tool` | Records tool name, args, and result. |
 
-Filter your backend by the `gen_ai.operation.name` attribute or by span name. Note that `inference` is *not* the literal attribute value — that value comes from `InferenceOperationType` (`Chat`, `TextCompletion`, or `GenerateContent`).
+Filter your backend by the `gen_ai.operation.name` attribute or by span name. Note that `inference` is *not* the literal attribute value — manual instrumentation produces `Chat` / `TextCompletion` / `GenerateContent` (the `InferenceOperationType.value`), while auto-instrumentation extension packages produce the lowercase OTel-spec form (e.g. `chat`). This casing discrepancy is tracked as an SDK issue.
 
 ## Verifying the integration
 
