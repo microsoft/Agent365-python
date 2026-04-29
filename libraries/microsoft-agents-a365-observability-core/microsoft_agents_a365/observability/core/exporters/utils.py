@@ -6,8 +6,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Sequence
-from typing import Any
+from collections.abc import Callable, Sequence
+from typing import Any, TypeVar
 from urllib.parse import urlparse
 
 from opentelemetry.sdk.trace import ReadableSpan
@@ -262,3 +262,133 @@ def is_agent365_exporter_enabled() -> bool:
     # Check environment variable
     enable_exporter = os.getenv(ENABLE_A365_OBSERVABILITY_EXPORTER, "").lower()
     return (enable_exporter) in ("true", "1", "yes", "on")
+
+
+# ---------------------------------------------------------------------------
+# Span size estimation and byte-level chunking
+# ---------------------------------------------------------------------------
+
+# Default upper bound on HTTP request body size in bytes. Provides ~100 KB
+# headroom under the A365 1 MB server limit for estimator error and JSON/
+# envelope overhead (e.g. resource attributes and scope wrappers).
+DEFAULT_MAX_PAYLOAD_BYTES = 900_000
+
+# Overhead constant for OTLP JSON span fixed fields (traceId, spanId,
+# parentSpanId, kind, timestamps, status, scope wrapper, etc.). Intentionally
+# generous to account for serializer variance.
+_SPAN_BASE_OVERHEAD = 2000
+
+# Overhead per attribute in OTLP JSON format. Covers key/value JSON wrapping.
+_ATTR_OVERHEAD = 80
+
+# Overhead per event in OTLP JSON.
+_EVENT_OVERHEAD = 200
+
+
+def _utf8_len(s: str) -> int:
+    return len(s.encode("utf-8"))
+
+
+def estimate_value_bytes(value: Any) -> int:
+    """Estimate the serialized byte size of a single attribute value in OTLP/HTTP JSON."""
+    if isinstance(value, str):
+        return 40 + _utf8_len(value)
+    # bool is a subclass of int; check before sequence/list handling below
+    if isinstance(value, bool):
+        return 40
+    if isinstance(value, (list, tuple)):
+        if len(value) == 0:
+            return 60
+        first = value[0]
+        if isinstance(first, str):
+            total = 60
+            for s in value:
+                total += 40 + _utf8_len(str(s))
+            return total
+        return 60 + 50 * len(value)
+    return 40  # int/float/None/other
+
+
+def estimate_span_bytes(span: dict[str, Any]) -> int:
+    """Heuristic estimator for the serialized size of an OTLP span in HTTP JSON.
+
+    Uses generous constants tuned to over-estimate by ~25-50%, providing
+    headroom for JSON serializer variance (whitespace, enum representation,
+    integer-as-string).
+    """
+    total = _SPAN_BASE_OVERHEAD
+    name = span.get("name")
+    if isinstance(name, str):
+        total += _utf8_len(name)
+
+    attributes = span.get("attributes")
+    if attributes:
+        for key, value in attributes.items():
+            total += _ATTR_OVERHEAD
+            total += _utf8_len(str(key))
+            total += estimate_value_bytes(value)
+
+    events = span.get("events")
+    if events:
+        for ev in events:
+            total += _EVENT_OVERHEAD
+            ev_name = ev.get("name") if isinstance(ev, dict) else None
+            if isinstance(ev_name, str):
+                total += _utf8_len(ev_name)
+            ev_attrs = ev.get("attributes") if isinstance(ev, dict) else None
+            if ev_attrs:
+                for key, value in ev_attrs.items():
+                    total += _ATTR_OVERHEAD
+                    total += _utf8_len(str(key))
+                    total += estimate_value_bytes(value)
+    return total
+
+
+T = TypeVar("T")
+
+
+def chunk_by_size(
+    items: Sequence[T],
+    get_size: Callable[[T], int],
+    max_chunk_bytes: int,
+) -> list[list[T]]:
+    """Split items into sub-batches whose cumulative estimated size stays under ``max_chunk_bytes``.
+
+    Multi-item chunks are guaranteed to stay within the limit. A single item
+    whose estimated size exceeds ``max_chunk_bytes`` forms its own one-item
+    chunk (never silently dropped) even though that chunk exceeds the limit.
+
+    Invariants:
+    - Input order is preserved across chunks.
+    - Empty input produces empty output.
+    - No item is ever dropped.
+    - No chunk is ever empty.
+
+    Raises:
+        ValueError: If ``max_chunk_bytes`` is not positive, or if ``get_size``
+            returns a negative value for any item.
+    """
+    if max_chunk_bytes <= 0:
+        raise ValueError(f"max_chunk_bytes must be positive, got {max_chunk_bytes}")
+
+    chunks: list[list[T]] = []
+    current: list[T] = []
+    current_bytes = 0
+
+    for item in items:
+        item_bytes = get_size(item)
+        if item_bytes < 0:
+            raise ValueError(
+                f"get_size returned a negative value ({item_bytes}); sizes must be non-negative"
+            )
+        if current and current_bytes + item_bytes > max_chunk_bytes:
+            chunks.append(current)
+            current = []
+            current_bytes = 0
+        current.append(item)
+        current_bytes += item_bytes
+
+    if current:
+        chunks.append(current)
+
+    return chunks
