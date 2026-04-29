@@ -41,7 +41,7 @@ class ObservabilityHostingManager:
     _instance: ObservabilityHostingManager | None = None
 
     def __init__(self) -> None:
-        """Private constructor — use :meth:`microsoft_agents_a365.observability.hosting.middleware.observability_hosting_manager.ObservabilityHostingManager.configure` instead."""
+        """Private constructor — use :meth:`~microsoft_agents_a365.observability.hosting.middleware.observability_hosting_manager.ObservabilityHostingManager.configure` instead."""
 
     @classmethod
     def configure(
