@@ -359,9 +359,7 @@ class TestAgent365Exporter(unittest.TestCase):
         self.assertEqual(result, SpanExportResult.SUCCESS)
 
         # Verify info log for no eligible spans
-        mock_logger.info.assert_called_with(
-            "No eligible genAI spans to export; nothing exported."
-        )
+        mock_logger.info.assert_called_with("No eligible genAI spans to export; nothing exported.")
 
     def test_exporter_is_internal(self):
         """Test that _Agent365Exporter is marked as internal/private.
