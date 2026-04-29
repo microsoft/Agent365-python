@@ -358,9 +358,9 @@ class TestAgent365Exporter(unittest.TestCase):
         # Verify export succeeded (no identity spans are treated as success)
         self.assertEqual(result, SpanExportResult.SUCCESS)
 
-        # Verify info log for no identity
+        # Verify info log for no eligible spans
         mock_logger.info.assert_called_with(
-            "No spans with tenant/agent identity found; nothing exported."
+            "No eligible genAI spans to export; nothing exported."
         )
 
     def test_exporter_is_internal(self):

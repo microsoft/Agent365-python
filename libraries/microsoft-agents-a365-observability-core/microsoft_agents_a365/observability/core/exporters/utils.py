@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 # Maximum allowed span size in bytes (250KB)
 MAX_SPAN_SIZE_BYTES = 250 * 1024
 
-# Operation names that identify a span as a genAI span eligible for export to
-# the Agent 365 observability ingest service. Spans without a known
-# gen_ai.operation.name are filtered out of the export batch.
+# Operation names that identify a span as eligible for export to the Agent 365
+# observability ingest service. Only spans whose gen_ai.operation.name matches
+# one of these values are included; all other spans are filtered out.
 GEN_AI_OPERATION_NAMES: frozenset[str] = frozenset(
     {
         INVOKE_AGENT_OPERATION_NAME,
@@ -152,9 +152,10 @@ def filter_and_partition_by_identity(
     """
     Filter export-eligible spans and partition them by (tenantId, agentId).
 
-    Only genAI spans (those with a known ``gen_ai.operation.name``) are
-    included; non-genAI spans (e.g. HTTP, DB) are filtered out. Spans
-    without both tenant and agent identity are also skipped.
+    Only spans whose ``gen_ai.operation.name`` is in
+    ``GEN_AI_OPERATION_NAMES`` are included; non-genAI spans (e.g. HTTP, DB)
+    and spans with other operation names are filtered out. Spans without
+    both tenant and agent identity are also skipped.
     """
     groups: dict[tuple[str, str], list[ReadableSpan]] = {}
     non_gen_ai_count = 0
