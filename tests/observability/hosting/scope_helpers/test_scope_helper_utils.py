@@ -130,6 +130,18 @@ def test_get_caller_pairs_aad_object_id_wins_when_all_set():
     assert (USER_EMAIL_KEY, "agent-upn") in result
 
 
+def test_get_caller_pairs_a2a_guid_agentic_user_id():
+    """Test userId resolves to GUID AgenticUserId in A2A scenario."""
+    from_account = ChannelAccount(
+        id="29:1sH5NArUwkWAX",
+        name="Agent Caller",
+        agentic_user_id="bef730f4-d6f5-4ffb-b759-26ffa449ed7e",
+    )
+    activity = Activity(type="message", from_property=from_account)
+    result = list(get_caller_pairs(activity))
+    assert (USER_ID_KEY, "bef730f4-d6f5-4ffb-b759-26ffa449ed7e") in result
+
+
 def test_get_conversation_pairs():
     """Test get_conversation_pairs extracts conversation information."""
     conversation = ConversationAccount(id="conversation-123")

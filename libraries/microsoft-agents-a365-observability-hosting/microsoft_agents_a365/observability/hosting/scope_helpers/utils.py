@@ -36,10 +36,7 @@ def get_caller_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     frm = activity.from_property
     if not frm:
         return
-    # Fallback chain for user_id: AadObjectId → AgenticUserId → From.Id
-    # AadObjectId is null on non-Teams channels and A2A calls
-    user_id = frm.aad_object_id or frm.agentic_user_id or frm.id
-    yield USER_ID_KEY, user_id
+    yield USER_ID_KEY, frm.aad_object_id or frm.agentic_user_id or frm.id
     yield USER_NAME_KEY, frm.name
     yield USER_EMAIL_KEY, frm.agentic_user_id
 
