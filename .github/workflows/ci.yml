@@ -85,6 +85,8 @@ jobs:
     defaults:
       run:
         working-directory: ./
+    env:
+      PYTHONPATH: ${{ github.workspace }}/versioning/helper
 
     strategy:
       matrix:

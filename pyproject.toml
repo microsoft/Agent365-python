@@ -54,16 +54,18 @@ dev-dependencies = [
     "tox-uv>=1.0",
     "python-dotenv",
     "openai",
-    "agent-framework-azure-ai",
+    "agent-framework",
     "azure-identity",
     "openai-agents",
+    "langchain-openai",
 ]
 
-# Override semantic-kernel's azure-ai-projects constraint to allow 2.x
-# semantic-kernel 1.39.3 constrains azure-ai-projects~=1.0.0b12 but this repo needs >=2.0.0b1
-# The functionality is compatible; only the version constraint was tightened
+# azure-ai-projects is capped at <2.0.0 because:
+# 1. semantic-kernel>=1.39.3 requires azure-ai-projects~=1.0.0b12 (<2.0.0)
+# 2. tooling-extensions-azureaifoundry uses the 1.x Agents API (project_client.agents.update_agent)
+#    which was removed in azure-ai-projects 2.x
 override-dependencies = [
-    "azure-ai-projects >= 2.0.0b1",
+    "azure-ai-projects>=1.0.0b12,<2.0.0",
 ]
 
 # Centralized version constraints for all external dependencies
@@ -79,13 +81,14 @@ constraint-dependencies = [
 
     # --- Azure Services ---
     "azure-ai-agents >= 1.0.0b251001",
-    "azure-ai-projects >= 2.0.0b1",
+    "azure-ai-projects>=1.0.0b12,<2.0.0",
     "azure-identity >= 1.12.0",
     "azure-monitor-ingestion >= 1.0.0",
     "azure-monitor-opentelemetry-exporter >= 1.0.0b39",
 
     # --- AI Frameworks ---
-    "agent-framework-azure-ai >= 1.0.0rc4",
+    "agent-framework >= 1.0.0",
+    "agent-framework-core >= 1.0.0",
     "langchain >= 0.1.0",
     "langchain-core >= 0.1.0",
     "openai-agents >= 0.2.6",
