@@ -27,7 +27,10 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
     McpToolServerConfigurationService,
 )
 from microsoft_agents_a365.tooling.utils.constants import Constants
-from microsoft_agents_a365.tooling.utils.utility import get_mcp_platform_authentication_scope
+from microsoft_agents_a365.tooling.utils.utility import (
+    get_mcp_platform_authentication_scope,
+    is_development_environment,
+)
 
 
 class McpToolRegistrationService:
@@ -99,16 +102,18 @@ class McpToolRegistrationService:
         if project_client is None:
             raise ValueError("project_client cannot be None")
 
-        if not auth_token:
+        is_dev = is_development_environment()
+        if not auth_token and not is_dev:
             scopes = get_mcp_platform_authentication_scope()
             authToken = await auth.exchange_token(context, scopes, auth_handler_name)
             auth_token = authToken.token
 
         try:
-            agentic_app_id = Utility.resolve_agent_identity(context, auth_token)
-            # Get the tool definitions and resources using the async implementation
+            agentic_app_id = "" if is_dev else Utility.resolve_agent_identity(context, auth_token)
+            # Get the tool definitions and resources — pass auth context so each server receives
+            # its own per-audience Authorization token (V1 = shared ATG, V2 = per-GUID).
             tool_definitions, tool_resources = await self._get_mcp_tool_definitions_and_resources(
-                agentic_app_id, auth_token or ""
+                agentic_app_id, auth_token or "", auth, auth_handler_name, context
             )
 
             # Update the agent with the tools
@@ -127,7 +132,12 @@ class McpToolRegistrationService:
             raise
 
     async def _get_mcp_tool_definitions_and_resources(
-        self, agentic_app_id: str, auth_token: str
+        self,
+        agentic_app_id: str,
+        auth_token: str,
+        authorization: Authorization,
+        auth_handler_name: str,
+        turn_context: TurnContext,
     ) -> Tuple[List[McpTool], Optional[ToolResources]]:
         """
         Internal method to get MCP tool definitions and resources.
@@ -136,7 +146,10 @@ class McpToolRegistrationService:
 
         Args:
             agentic_app_id: Agentic App ID for the agent.
-            auth_token: Authentication token to access the MCP servers.
+            auth_token: Authentication token used for gateway discovery.
+            authorization: Authorization context for per-audience token exchange.
+            auth_handler_name: Auth handler name for per-audience token exchange.
+            turn_context: TurnContext for per-audience token exchange.
 
         Returns:
             Tuple containing tool definitions and resources.
@@ -145,11 +158,17 @@ class McpToolRegistrationService:
             self._logger.error("MCP server configuration service is not available")
             return ([], None)
 
-        # Get MCP server configurations
+        # Get MCP server configurations — pass auth context so each server receives
+        # its own per-audience Authorization token (V1 = shared ATG, V2 = per-GUID).
         options = ToolOptions(orchestrator_name=self._orchestrator_name)
         try:
             servers = await self._mcp_server_configuration_service.list_tool_servers(
-                agentic_app_id, auth_token, options
+                agentic_app_id,
+                auth_token,
+                options,
+                authorization=authorization,
+                auth_handler_name=auth_handler_name,
+                turn_context=turn_context,
             )
         except Exception as ex:
             self._logger.error(
@@ -191,14 +210,19 @@ class McpToolRegistrationService:
             # Configure the tool
             mcp_tool.set_approval_mode("never")
 
-            # Set up authorization header
-            if auth_token:
-                header_value = (
+            # Set per-server headers: use per-audience token from list_tool_servers
+            # (V1 servers get the shared ATG token, V2 servers get their own audience token).
+            # Fall back to the shared discovery auth_token only if no per-server header is set.
+            server_headers = dict(server.headers) if server.headers else {}
+            auth_header = server_headers.get(Constants.Headers.AUTHORIZATION)
+            if not auth_header and auth_token:
+                auth_header = (
                     auth_token
                     if auth_token.lower().startswith(f"{Constants.Headers.BEARER_PREFIX.lower()} ")
                     else f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
                 )
-                mcp_tool.update_headers(Constants.Headers.AUTHORIZATION, header_value)
+            if auth_header:
+                mcp_tool.update_headers(Constants.Headers.AUTHORIZATION, auth_header)
 
             mcp_tool.update_headers(
                 Constants.Headers.USER_AGENT, Utility.get_user_agent_header(self._orchestrator_name)

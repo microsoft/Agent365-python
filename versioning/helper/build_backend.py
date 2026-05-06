@@ -5,15 +5,20 @@
 Custom build backend that wraps setuptools.build_meta to inject centralized
 version constraints into published wheel metadata.
 
-Note: backend-path references a directory outside the package. This is intentional
-for monorepo wheel builds. Individual sdist publishing is not supported; packages
-are published as wheels only from CI.
+Note: Individual sdist publishing is not supported; packages are published as
+wheels only from CI.
 
 Usage in package pyproject.toml:
   [build-system]
-  requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit"]
+  requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit", "packaging"]
   build-backend = "build_backend"
-  backend-path = ["../../versioning/helper"]
+
+The build backend module is resolved via PYTHONPATH, which must include the
+path to this directory (versioning/helper) when building. The CI pipeline sets
+this automatically. For local builds, use 'uv build' from the repo root, or
+set PYTHONPATH manually:
+  export PYTHONPATH="$(git rev-parse --show-toplevel)/versioning/helper:$PYTHONPATH"
+  python -m build --no-isolation --wheel
 """
 
 from __future__ import annotations

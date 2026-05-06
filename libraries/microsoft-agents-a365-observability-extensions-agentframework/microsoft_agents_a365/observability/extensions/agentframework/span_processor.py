@@ -7,11 +7,10 @@ from opentelemetry.sdk.trace.export import SpanProcessor
 class AgentFrameworkSpanProcessor(SpanProcessor):
     """SpanProcessor for Agent Framework.
 
-    Note: The span processing logic was removed as GEN_AI_EVENT_CONTENT is no longer used.
-    This processor is kept for interface compatibility.
+    Attribute mutation happens in the enricher (via :class:`EnrichedReadableSpan`)
+    because OTel Python ``ReadableSpan`` is immutable after ``on_end``.
+    The enricher is invoked at export time by the ``EnrichingSpanProcessor``.
     """
-
-    TOOL_CALL_RESULT_TAG = "gen_ai.tool.call.result"
 
     def __init__(self, service_name: str | None = None):
         self.service_name = service_name
@@ -22,5 +21,9 @@ class AgentFrameworkSpanProcessor(SpanProcessor):
         pass
 
     def on_end(self, span):
-        """Called when a span ends. Intentionally a no-op."""
+        """Called when a span ends. Intentionally a no-op.
+
+        Message mapping is handled by the span enricher at export time
+        since ReadableSpan is immutable in the Python OTel SDK.
+        """
         pass
