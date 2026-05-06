@@ -66,7 +66,7 @@ class ToolCallRequestPart:
 
     name: str
     id: str | None = None
-    arguments: dict[str, object] | list[object] | None = None
+    arguments: dict[str, object] | list[object] | str | None = None
     type: str = field(default="tool_call", init=False)
 
 

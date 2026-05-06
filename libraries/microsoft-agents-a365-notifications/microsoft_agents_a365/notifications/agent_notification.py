@@ -29,16 +29,17 @@ TState = TypeVar("TState", bound=TurnState)
 #:     notification: The typed notification activity with parsed entities.
 #:
 #: Example:
-#:     ```python
-#:     async def handle_email(
-#:         context: TurnContext,
-#:         state: TurnState,
-#:         notification: AgentNotificationActivity
-#:     ) -> None:
-#:         email = notification.email
-#:         if email:
-#:             print(f"Processing email: {email.id}")
-#:     ```
+#:
+#:     .. code-block:: python
+#:
+#:         async def handle_email(
+#:             context: TurnContext,
+#:             state: TurnState,
+#:             notification: AgentNotificationActivity,
+#:         ) -> None:
+#:             email = notification.email
+#:             if email:
+#:                 print(f"Processing email: {email.id}")
 AgentHandler = Callable[[TContext, TState, AgentNotificationActivity], Awaitable[None]]
 
 
@@ -57,19 +58,19 @@ class AgentNotification:
             defaults to all values in the AgentLifecycleEvent enum.
 
     Example:
-        ```python
-        from microsoft_agents.hosting import Application
-        from microsoft_agents_a365.notifications import AgentNotification
+        .. code-block:: python
 
-        app = Application()
-        notifications = AgentNotification(app)
+            from microsoft_agents.hosting import Application
+            from microsoft_agents_a365.notifications import AgentNotification
 
-        @notifications.on_email()
-        async def handle_email(context, state, notification):
-            email = notification.email
-            if email:
-                await context.send_activity(f"Received email: {email.id}")
-        ```
+            app = Application()
+            notifications = AgentNotification(app)
+
+            @notifications.on_email()
+            async def handle_email(context, state, notification):
+                email = notification.email
+                if email:
+                    await context.send_activity(f"Received email: {email.id}")
     """
 
     def __init__(
@@ -126,15 +127,15 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            from microsoft_agents.activity import ChannelId
+            .. code-block:: python
 
-            @notifications.on_agent_notification(
-                ChannelId(channel="agents", sub_channel="email")
-            )
-            async def handle_custom_channel(context, state, notification):
-                print(f"Received notification on {notification.channel}/{notification.sub_channel}")
-            ```
+                from microsoft_agents.activity import ChannelId
+
+                @notifications.on_agent_notification(
+                    ChannelId(channel="agents", sub_channel="email")
+                )
+                async def handle_custom_channel(context, state, notification):
+                    print(f"Received notification on {notification.channel}/{notification.sub_channel}")
         """
         registered_channel = channel_id.channel.lower()
         registered_subchannel = (channel_id.sub_channel or "*").lower()
@@ -184,11 +185,11 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            @notifications.on_agent_lifecycle_notification("agenticuseridentitycreated")
-            async def handle_user_created(context, state, notification):
-                print("New user created")
-            ```
+            .. code-block:: python
+
+                @notifications.on_agent_lifecycle_notification("agenticuseridentitycreated")
+                async def handle_user_created(context, state, notification):
+                    print("New user created")
         """
 
         def route_selector(context: TurnContext) -> bool:
@@ -234,18 +235,17 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            @notifications.on_email()
-            async def handle_email(context, state, notification):
-                email = notification.email
-                if email:
-                    print(f"Received email: {email.id}")
-                    # Send a response
-                    response = EmailResponse.create_email_response_activity(
-                        "<p>Thank you for your email.</p>"
-                    )
-                    await context.send_activity(response)
-            ```
+            .. code-block:: python
+
+                @notifications.on_email()
+                async def handle_email(context, state, notification):
+                    email = notification.email
+                    if email:
+                        print(f"Received email: {email.id}")
+                        response = EmailResponse.create_email_response_activity(
+                            "<p>Thank you for your email.</p>"
+                        )
+                        await context.send_activity(response)
         """
         return self.on_agent_notification(
             ChannelId(channel="agents", sub_channel=AgentSubChannel.EMAIL), **kwargs
@@ -266,13 +266,13 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            @notifications.on_word()
-            async def handle_word_comment(context, state, notification):
-                comment = notification.wpx_comment
-                if comment:
-                    print(f"Received Word comment: {comment.comment_id}")
-            ```
+            .. code-block:: python
+
+                @notifications.on_word()
+                async def handle_word_comment(context, state, notification):
+                    comment = notification.wpx_comment
+                    if comment:
+                        print(f"Received Word comment: {comment.comment_id}")
         """
         return self.on_agent_notification(
             ChannelId(channel="agents", sub_channel=AgentSubChannel.WORD), **kwargs
@@ -293,13 +293,13 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            @notifications.on_excel()
-            async def handle_excel_comment(context, state, notification):
-                comment = notification.wpx_comment
-                if comment:
-                    print(f"Received Excel comment: {comment.comment_id}")
-            ```
+            .. code-block:: python
+
+                @notifications.on_excel()
+                async def handle_excel_comment(context, state, notification):
+                    comment = notification.wpx_comment
+                    if comment:
+                        print(f"Received Excel comment: {comment.comment_id}")
         """
         return self.on_agent_notification(
             ChannelId(channel="agents", sub_channel=AgentSubChannel.EXCEL), **kwargs
@@ -320,13 +320,13 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            @notifications.on_powerpoint()
-            async def handle_powerpoint_comment(context, state, notification):
-                comment = notification.wpx_comment
-                if comment:
-                    print(f"Received PowerPoint comment: {comment.comment_id}")
-            ```
+            .. code-block:: python
+
+                @notifications.on_powerpoint()
+                async def handle_powerpoint_comment(context, state, notification):
+                    comment = notification.wpx_comment
+                    if comment:
+                        print(f"Received PowerPoint comment: {comment.comment_id}")
         """
         return self.on_agent_notification(
             ChannelId(channel="agents", sub_channel=AgentSubChannel.POWERPOINT), **kwargs
@@ -347,11 +347,11 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            @notifications.on_lifecycle()
-            async def handle_any_lifecycle_event(context, state, notification):
-                print(f"Lifecycle event type: {notification.notification_type}")
-            ```
+            .. code-block:: python
+
+                @notifications.on_lifecycle()
+                async def handle_any_lifecycle_event(context, state, notification):
+                    print(f"Lifecycle event type: {notification.notification_type}")
         """
         return self.on_lifecycle_notification("*", **kwargs)
 
@@ -370,11 +370,11 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            @notifications.on_user_created()
-            async def handle_user_created(context, state, notification):
-                print("New agentic user identity created")
-            ```
+            .. code-block:: python
+
+                @notifications.on_user_created()
+                async def handle_user_created(context, state, notification):
+                    print("New agentic user identity created")
         """
         return self.on_lifecycle_notification(AgentLifecycleEvent.USERCREATED, **kwargs)
 
@@ -393,11 +393,11 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            @notifications.on_user_workload_onboarding()
-            async def handle_onboarding_update(context, state, notification):
-                print("User workload onboarding status updated")
-            ```
+            .. code-block:: python
+
+                @notifications.on_user_workload_onboarding()
+                async def handle_onboarding_update(context, state, notification):
+                    print("User workload onboarding status updated")
         """
         return self.on_lifecycle_notification(
             AgentLifecycleEvent.USERWORKLOADONBOARDINGUPDATED, **kwargs
@@ -418,11 +418,11 @@ class AgentNotification:
             A decorator function that registers the handler with the application.
 
         Example:
-            ```python
-            @notifications.on_user_deleted()
-            async def handle_user_deleted(context, state, notification):
-                print("Agentic user identity deleted")
-            ```
+            .. code-block:: python
+
+                @notifications.on_user_deleted()
+                async def handle_user_deleted(context, state, notification):
+                    print("Agentic user identity deleted")
         """
         return self.on_lifecycle_notification(AgentLifecycleEvent.USERDELETED, **kwargs)
 

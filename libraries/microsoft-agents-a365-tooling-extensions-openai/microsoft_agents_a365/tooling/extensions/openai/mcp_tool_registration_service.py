@@ -32,6 +32,7 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
+    is_development_environment,
 )
 
 
@@ -88,22 +89,24 @@ class McpToolRegistrationService:
             New Agent instance with all MCP servers, or original agent if no new servers
         """
 
-        if auth_token is None or auth_token.strip() == "":
+        is_dev = is_development_environment()
+        if (auth_token is None or auth_token.strip() == "") and not is_dev:
+            # Only exchange a token in production; dev mode uses BEARER_TOKEN* env vars instead.
             scopes = get_mcp_platform_authentication_scope()
             authToken = await auth.exchange_token(context, scopes, auth_handler_name)
             auth_token = authToken.token
 
-        # Get MCP server configurations from the configuration service
-        # mcp_server_configs = []
-        # TODO: radevika: Update once the common project is merged.
-
         options = ToolOptions(orchestrator_name=self._orchestrator_name)
-        agentic_app_id = Utility.resolve_agent_identity(context, auth_token)
+        # In dev mode, agentic_app_id is not needed for manifest-based discovery.
+        agentic_app_id = "" if is_dev else Utility.resolve_agent_identity(context, auth_token)
         self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
         mcp_server_configs = await self.config_service.list_tool_servers(
             agentic_app_id=agentic_app_id,
             auth_token=auth_token,
             options=options,
+            authorization=auth,
+            auth_handler_name=auth_handler_name,
+            turn_context=context,
         )
 
         self._logger.info(f"Loaded {len(mcp_server_configs)} MCP server configurations")
@@ -118,6 +121,7 @@ class McpToolRegistrationService:
             server_info = MCPServerInfo(
                 name=server_name,
                 url=server_url,
+                headers=dict(server_config.headers) if server_config.headers else None,
             )
             mcp_servers_info.append(server_info)
 
@@ -149,16 +153,29 @@ class McpToolRegistrationService:
 
             if si.url not in existing_server_urls:
                 try:
-                    # Prepare headers with authorization
-                    headers = si.headers or {}
-                    if auth_token:
-                        headers[Constants.Headers.AUTHORIZATION] = (
-                            f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                    # Merge base headers with per-server headers from list_tool_servers.
+                    # si.headers already contains the correct per-audience Authorization token.
+                    base_headers = {
+                        Constants.Headers.USER_AGENT: Utility.get_user_agent_header(
+                            self._orchestrator_name
                         )
-
-                    headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
-                        self._orchestrator_name
-                    )
+                    }
+                    server_headers = dict(si.headers) if si.headers else {}
+                    # Fall back to the shared discovery token when no per-server
+                    # Authorization header was attached (e.g. dev mode without
+                    # BEARER_TOKEN* env vars, or legacy V1 callers).
+                    if Constants.Headers.AUTHORIZATION not in server_headers and auth_token:
+                        server_headers[Constants.Headers.AUTHORIZATION] = (
+                            auth_token
+                            if auth_token.lower().startswith(
+                                f"{Constants.Headers.BEARER_PREFIX.lower()} "
+                            )
+                            else f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                        )
+                    headers = {
+                        **base_headers,
+                        **server_headers,
+                    }  # per-audience token takes precedence
 
                     # Create MCPServerStreamableHttpParams with proper configuration
                     params = MCPServerStreamableHttpParams(url=si.url, headers=headers)
