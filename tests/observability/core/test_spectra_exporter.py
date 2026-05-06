@@ -188,6 +188,7 @@ class TestConfigureWithSpectraOptions(unittest.TestCase):
             token_resolver=mock_token_resolver,
             cluster_category="staging",
             use_s2s_endpoint=True,
+            max_payload_bytes=900_000,
         )
 
     @patch("microsoft_agents_a365.observability.core.config.OTLPSpanExporter")
