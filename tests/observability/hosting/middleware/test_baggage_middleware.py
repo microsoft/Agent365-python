@@ -95,3 +95,84 @@ async def test_baggage_middleware_skips_async_reply():
     assert logic_called is True
     # Baggage should NOT be set because the middleware skipped it
     assert captured_caller_id is None
+
+
+@pytest.mark.asyncio
+async def test_baggage_middleware_extracts_product_context_from_channel_data():
+    """BaggageMiddleware should extract productContext from channel_data when sub_channel is not set."""
+    from microsoft_agents.activity import ChannelId
+    from microsoft_agents_a365.observability.core.constants import CHANNEL_LINK_KEY
+
+    middleware = BaggageMiddleware()
+    
+    # Create activity with ChannelId (no sub_channel) and channel_data with productContext
+    activity = Activity(
+        type="message",
+        text="Hello",
+        from_property=ChannelAccount(
+            aad_object_id="caller-id",
+            name="Caller",
+        ),
+        recipient=ChannelAccount(
+            tenant_id="tenant-123",
+            name="Agent",
+        ),
+        conversation=ConversationAccount(id="conv-id"),
+        service_url="https://example.com",
+        channel_id=ChannelId(channel="msteams"),  # No sub_channel
+        channel_data={"productContext": "COPILOT"},
+    )
+    
+    adapter = MagicMock()
+    ctx = TurnContext(adapter, activity)
+
+    captured_channel_link = None
+
+    async def logic():
+        nonlocal captured_channel_link
+        captured_channel_link = baggage.get_baggage(CHANNEL_LINK_KEY)
+
+    await middleware.on_turn(ctx, logic)
+
+    assert captured_channel_link == "COPILOT"
+
+
+@pytest.mark.asyncio
+async def test_baggage_middleware_sub_channel_takes_precedence_over_product_context():
+    """BaggageMiddleware should use sub_channel when both sub_channel and productContext are present."""
+    from microsoft_agents.activity import ChannelId
+    from microsoft_agents_a365.observability.core.constants import CHANNEL_LINK_KEY
+
+    middleware = BaggageMiddleware()
+    
+    # Create activity with BOTH sub_channel and productContext in channel_data
+    activity = Activity(
+        type="message",
+        text="Hello",
+        from_property=ChannelAccount(
+            aad_object_id="caller-id",
+            name="Caller",
+        ),
+        recipient=ChannelAccount(
+            tenant_id="tenant-123",
+            name="Agent",
+        ),
+        conversation=ConversationAccount(id="conv-id"),
+        service_url="https://example.com",
+        channel_id=ChannelId(channel="msteams", sub_channel="teams-subchannel"),
+        channel_data={"productContext": "COPILOT"},  # Should be ignored
+    )
+    
+    adapter = MagicMock()
+    ctx = TurnContext(adapter, activity)
+
+    captured_channel_link = None
+
+    async def logic():
+        nonlocal captured_channel_link
+        captured_channel_link = baggage.get_baggage(CHANNEL_LINK_KEY)
+
+    await middleware.on_turn(ctx, logic)
+
+    # sub_channel should take precedence, productContext should be ignored
+    assert captured_channel_link == "teams-subchannel"
