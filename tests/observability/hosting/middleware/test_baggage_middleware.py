@@ -9,6 +9,7 @@ from microsoft_agents.activity import (
     ActivityEventNames,
     ActivityTypes,
     ChannelAccount,
+    ChannelId,
     ConversationAccount,
 )
 from microsoft_agents.hosting.core import TurnContext
@@ -49,6 +50,31 @@ def _make_turn_context(
     if activity_name is not None:
         kwargs["name"] = activity_name
     activity = Activity(**kwargs)
+    adapter = MagicMock()
+    return TurnContext(adapter, activity)
+
+
+def _make_channel_data_turn_context(
+    channel_id: ChannelId | str = "msteams",
+    channel_data: any = None,
+) -> TurnContext:
+    """Create a TurnContext with channel_data for testing."""
+    activity = Activity(
+        type="message",
+        text="Hello",
+        from_property=ChannelAccount(
+            aad_object_id="caller-id",
+            name="Caller",
+        ),
+        recipient=ChannelAccount(
+            tenant_id="tenant-123",
+            name="Agent",
+        ),
+        conversation=ConversationAccount(id="conv-id"),
+        service_url="https://example.com",
+        channel_id=channel_id,
+        channel_data=channel_data,
+    )
     adapter = MagicMock()
     return TurnContext(adapter, activity)
 
@@ -100,31 +126,13 @@ async def test_baggage_middleware_skips_async_reply():
 @pytest.mark.asyncio
 async def test_baggage_middleware_extracts_product_context_from_channel_data():
     """BaggageMiddleware should extract productContext from channel_data when sub_channel is not set."""
-    from microsoft_agents.activity import ChannelId
     from microsoft_agents_a365.observability.core.constants import CHANNEL_LINK_KEY
 
     middleware = BaggageMiddleware()
-    
-    # Create activity with ChannelId (no sub_channel) and channel_data with productContext
-    activity = Activity(
-        type="message",
-        text="Hello",
-        from_property=ChannelAccount(
-            aad_object_id="caller-id",
-            name="Caller",
-        ),
-        recipient=ChannelAccount(
-            tenant_id="tenant-123",
-            name="Agent",
-        ),
-        conversation=ConversationAccount(id="conv-id"),
-        service_url="https://example.com",
+    ctx = _make_channel_data_turn_context(
         channel_id=ChannelId(channel="msteams"),  # No sub_channel
         channel_data={"productContext": "COPILOT"},
     )
-    
-    adapter = MagicMock()
-    ctx = TurnContext(adapter, activity)
 
     captured_channel_link = None
 
@@ -140,31 +148,13 @@ async def test_baggage_middleware_extracts_product_context_from_channel_data():
 @pytest.mark.asyncio
 async def test_baggage_middleware_sub_channel_takes_precedence_over_product_context():
     """BaggageMiddleware should use sub_channel when both sub_channel and productContext are present."""
-    from microsoft_agents.activity import ChannelId
     from microsoft_agents_a365.observability.core.constants import CHANNEL_LINK_KEY
 
     middleware = BaggageMiddleware()
-    
-    # Create activity with BOTH sub_channel and productContext in channel_data
-    activity = Activity(
-        type="message",
-        text="Hello",
-        from_property=ChannelAccount(
-            aad_object_id="caller-id",
-            name="Caller",
-        ),
-        recipient=ChannelAccount(
-            tenant_id="tenant-123",
-            name="Agent",
-        ),
-        conversation=ConversationAccount(id="conv-id"),
-        service_url="https://example.com",
+    ctx = _make_channel_data_turn_context(
         channel_id=ChannelId(channel="msteams", sub_channel="teams-subchannel"),
         channel_data={"productContext": "COPILOT"},  # Should be ignored
     )
-    
-    adapter = MagicMock()
-    ctx = TurnContext(adapter, activity)
 
     captured_channel_link = None
 
@@ -181,32 +171,14 @@ async def test_baggage_middleware_sub_channel_takes_precedence_over_product_cont
 @pytest.mark.asyncio
 async def test_baggage_middleware_extracts_product_context_from_json_string_channel_data():
     """BaggageMiddleware should extract productContext from channel_data when it's a JSON string."""
-    from microsoft_agents.activity import ChannelId
     from microsoft_agents_a365.observability.core.constants import CHANNEL_LINK_KEY
     import json
 
     middleware = BaggageMiddleware()
-    
-    # Create activity with channel_data as a JSON string (simulating wire format)
-    activity = Activity(
-        type="message",
-        text="Hello",
-        from_property=ChannelAccount(
-            aad_object_id="caller-id",
-            name="Caller",
-        ),
-        recipient=ChannelAccount(
-            tenant_id="tenant-123",
-            name="Agent",
-        ),
-        conversation=ConversationAccount(id="conv-id"),
-        service_url="https://example.com",
+    ctx = _make_channel_data_turn_context(
         channel_id=ChannelId(channel="msteams"),  # No sub_channel
         channel_data=json.dumps({"productContext": "COPILOT"}),  # JSON string
     )
-    
-    adapter = MagicMock()
-    ctx = TurnContext(adapter, activity)
 
     captured_channel_link = None
 
@@ -222,31 +194,13 @@ async def test_baggage_middleware_extracts_product_context_from_json_string_chan
 @pytest.mark.asyncio
 async def test_baggage_middleware_handles_invalid_json_channel_data_gracefully():
     """BaggageMiddleware should handle invalid JSON in channel_data gracefully without setting baggage."""
-    from microsoft_agents.activity import ChannelId
     from microsoft_agents_a365.observability.core.constants import CHANNEL_LINK_KEY
 
     middleware = BaggageMiddleware()
-    
-    # Create activity with channel_data as an invalid JSON string
-    activity = Activity(
-        type="message",
-        text="Hello",
-        from_property=ChannelAccount(
-            aad_object_id="caller-id",
-            name="Caller",
-        ),
-        recipient=ChannelAccount(
-            tenant_id="tenant-123",
-            name="Agent",
-        ),
-        conversation=ConversationAccount(id="conv-id"),
-        service_url="https://example.com",
+    ctx = _make_channel_data_turn_context(
         channel_id=ChannelId(channel="msteams"),  # No sub_channel
         channel_data="not valid json",  # Non-JSON string
     )
-    
-    adapter = MagicMock()
-    ctx = TurnContext(adapter, activity)
 
     captured_channel_link = None
 
