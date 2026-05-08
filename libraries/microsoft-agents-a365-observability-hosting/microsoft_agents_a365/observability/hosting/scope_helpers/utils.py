@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -86,8 +87,6 @@ def get_channel_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     # Try to get sub_channel from productContext in channel_data if sub_channel is not set
     if not sub_channel and activity.channel_data:
         try:
-            import json
-
             # Convert channel_data to dict if it's a string
             if isinstance(activity.channel_data, str):
                 channel_data_dict = json.loads(activity.channel_data)
