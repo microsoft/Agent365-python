@@ -87,6 +87,7 @@ def get_channel_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     if not sub_channel and activity.channel_data:
         try:
             import json
+
             # Convert channel_data to dict if it's a string
             if isinstance(activity.channel_data, str):
                 channel_data_dict = json.loads(activity.channel_data)
@@ -94,11 +95,11 @@ def get_channel_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
                 channel_data_dict = activity.channel_data
             else:
                 # Try to convert to dict if it has __dict__
-                channel_data_dict = getattr(activity.channel_data, '__dict__', {})
-            
+                channel_data_dict = getattr(activity.channel_data, "__dict__", {})
+
             # Extract productContext if available
-            if isinstance(channel_data_dict, dict) and 'productContext' in channel_data_dict:
-                product_context = channel_data_dict['productContext']
+            if isinstance(channel_data_dict, dict) and "productContext" in channel_data_dict:
+                product_context = channel_data_dict["productContext"]
                 if isinstance(product_context, str):
                     sub_channel = product_context
         except (json.JSONDecodeError, AttributeError, TypeError):
