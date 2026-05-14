@@ -85,9 +85,9 @@ def _derive_channel(
 
 
 class OutputLoggingMiddleware:
-    """Middleware that creates :class:`OutputScope` spans for outgoing messages.
+    """Middleware that creates :class:`microsoft_agents_a365.observability.core.spans_scopes.output_scope.OutputScope` spans for outgoing messages.
 
-    Links to a parent span when :data:`A365_PARENT_TRACEPARENT_KEY` is set in
+    Links to a parent span when :data:`~microsoft_agents_a365.observability.hosting.middleware.output_logging_middleware.A365_PARENT_TRACEPARENT_KEY` is set in
     ``turn_state``.
 
     **Privacy note:** Outgoing message content is captured verbatim as span
