@@ -6,7 +6,12 @@ import os
 import unittest
 from unittest.mock import Mock, patch
 
-from microsoft_agents_a365.observability.core.constants import GEN_AI_AGENT_ID_KEY, TENANT_ID_KEY
+from microsoft_agents_a365.observability.core.constants import (
+    GEN_AI_AGENT_ID_KEY,
+    GEN_AI_OPERATION_NAME_KEY,
+    INVOKE_AGENT_OPERATION_NAME,
+    TENANT_ID_KEY,
+)
 from microsoft_agents_a365.observability.core.exporters.agent365_exporter import (
     DEFAULT_ENDPOINT_URL,
     _Agent365Exporter,
@@ -54,6 +59,7 @@ class TestAgent365Exporter(unittest.TestCase):
         scope_version: str = "1.0.0",
         tenant_id: str = "test-tenant-123",
         agent_id: str = "test-agent-456",
+        operation_name: str | None = INVOKE_AGENT_OPERATION_NAME,
     ) -> ReadableSpan:
         """Create a mock ReadableSpan for testing."""
         mock_span = Mock(spec=ReadableSpan)
@@ -78,13 +84,15 @@ class TestAgent365Exporter(unittest.TestCase):
         mock_span.kind = Mock()
         mock_span.kind.name = "INTERNAL"
 
-        # Add identity attributes for partition_by_identity to work
+        # Add identity attributes for filter_and_partition_by_identity to work
         span_attributes = attributes or {}
         if tenant_id and agent_id:
             span_attributes.update({
                 TENANT_ID_KEY: tenant_id,
                 GEN_AI_AGENT_ID_KEY: agent_id,
             })
+        if operation_name is not None and GEN_AI_OPERATION_NAME_KEY not in span_attributes:
+            span_attributes[GEN_AI_OPERATION_NAME_KEY] = operation_name
 
         mock_span.attributes = span_attributes
         mock_span.events = []
@@ -350,10 +358,8 @@ class TestAgent365Exporter(unittest.TestCase):
         # Verify export succeeded (no identity spans are treated as success)
         self.assertEqual(result, SpanExportResult.SUCCESS)
 
-        # Verify info log for no identity
-        mock_logger.info.assert_called_with(
-            "No spans with tenant/agent identity found; nothing exported."
-        )
+        # Verify info log for no eligible spans
+        mock_logger.info.assert_called_with("No eligible genAI spans to export; nothing exported.")
 
     def test_exporter_is_internal(self):
         """Test that _Agent365Exporter is marked as internal/private.
@@ -656,6 +662,97 @@ class TestAgent365Exporter(unittest.TestCase):
             # Assert
             self.assertEqual(result, SpanExportResult.SUCCESS)
             mock_post.assert_called_once()
+
+    def test_export_filters_out_non_genai_spans(self):
+        """Spans without a known gen_ai.operation.name are filtered out."""
+        # Arrange: one genAI span and two non-genAI spans (no/unknown operation name)
+        genai_span = self._create_mock_span("genai_span", trace_id=1, span_id=2)
+        no_op_span = self._create_mock_span("http_span", trace_id=3, span_id=4, operation_name=None)
+        unknown_op_span = self._create_mock_span(
+            "db_span", trace_id=5, span_id=6, operation_name="some_random_op"
+        )
+
+        with patch.object(self.exporter, "_post_with_retries", return_value=True) as mock_post:
+            # Act
+            result = self.exporter.export([genai_span, no_op_span, unknown_op_span])
+
+            # Assert: only the genAI span is exported
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_called_once()
+            _, body, _ = mock_post.call_args[0]
+            request_data = json.loads(body)
+            spans_out = request_data["resourceSpans"][0]["scopeSpans"][0]["spans"]
+            self.assertEqual(len(spans_out), 1)
+            self.assertEqual(spans_out[0]["name"], "genai_span")
+
+    def test_export_filters_out_only_non_genai_spans_returns_success(self):
+        """When all spans are filtered out, export returns SUCCESS without HTTP call."""
+        # Arrange
+        spans = [
+            self._create_mock_span("http_span", operation_name=None),
+            self._create_mock_span("db_span", operation_name="other"),
+        ]
+
+        with patch.object(self.exporter, "_post_with_retries", return_value=True) as mock_post:
+            # Act
+            result = self.exporter.export(spans)
+
+            # Assert
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_not_called()
+
+    def test_export_includes_inference_operation_type_chat_spans(self):
+        """Spans with InferenceOperationType.CHAT value ('Chat') are kept without normalization."""
+        # Arrange — server accepts 'Chat' via case-insensitive matching
+        chat_span = self._create_mock_span(
+            "chat_span", trace_id=1, span_id=2, operation_name="Chat"
+        )
+
+        with patch.object(self.exporter, "_post_with_retries", return_value=True) as mock_post:
+            result = self.exporter.export([chat_span])
+
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_called_once()
+            _, body, _ = mock_post.call_args[0]
+            request_data = json.loads(body)
+            spans_out = request_data["resourceSpans"][0]["scopeSpans"][0]["spans"]
+            self.assertEqual(len(spans_out), 1)
+            # Value is preserved as-is; no normalization
+            self.assertEqual(spans_out[0]["attributes"][GEN_AI_OPERATION_NAME_KEY], "Chat")
+
+    def test_export_filters_out_unsupported_inference_operation_types(self):
+        """Spans with TextCompletion / GenerateContent are filtered out."""
+        text_completion_span = self._create_mock_span(
+            "text_completion_span", trace_id=3, span_id=4, operation_name="TextCompletion"
+        )
+        generate_content_span = self._create_mock_span(
+            "generate_content_span", trace_id=5, span_id=6, operation_name="GenerateContent"
+        )
+
+        with patch.object(self.exporter, "_post_with_retries", return_value=True) as mock_post:
+            result = self.exporter.export([text_completion_span, generate_content_span])
+
+            # Both are filtered out — nothing to export
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_not_called()
+
+    def test_export_does_not_normalize_canonical_operation_names(self):
+        """invoke_agent / execute_tool / output_messages / chat are not rewritten."""
+        cases = ["invoke_agent", "execute_tool", "output_messages", "chat"]
+        for op in cases:
+            with self.subTest(operation_name=op):
+                span = self._create_mock_span(
+                    f"{op}_span", trace_id=1, span_id=2, operation_name=op
+                )
+                with patch.object(
+                    self.exporter, "_post_with_retries", return_value=True
+                ) as mock_post:
+                    result = self.exporter.export([span])
+                    self.assertEqual(result, SpanExportResult.SUCCESS)
+                    _, body, _ = mock_post.call_args[0]
+                    request_data = json.loads(body)
+                    span_out = request_data["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+                    self.assertEqual(span_out["attributes"][GEN_AI_OPERATION_NAME_KEY], op)
 
 
 if __name__ == "__main__":

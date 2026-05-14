@@ -219,6 +219,18 @@ Place it before imports with one blank line after.
 - **Never** use the keyword "Kairo" in code - it's a legacy reference that must be removed/replaced
 - If found during code review, flag for removal
 
+### Observability Export Configuration — Coordinated Review Required
+
+The following three constants must stay in sync. If a PR changes **any one** of them, the reviewer (human or Copilot) **must** ask the author to confirm the other two are still correct:
+
+| Constant | Location |
+|---|---|
+| `PROD_OBSERVABILITY_SCOPE` | `libraries/microsoft-agents-a365-runtime/microsoft_agents_a365/runtime/environment_utils.py` |
+| `DEFAULT_ENDPOINT_URL` | `libraries/microsoft-agents-a365-observability-core/microsoft_agents_a365/observability/core/exporters/agent365_exporter.py` |
+| Export URL path pattern | `build_export_url()` in `libraries/microsoft-agents-a365-observability-core/microsoft_agents_a365/observability/core/exporters/utils.py` |
+
+Snapshot tests in `tests/observability/core/test_export_config_consistency.py` will fail if any value drifts, but the developer must also verify the values are correct for the target environment — the tests only catch accidental drift, not intentional-but-incomplete updates.
+
 ### Python Conventions
 
 - Type hints required on all function parameters and return types

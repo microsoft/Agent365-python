@@ -66,7 +66,7 @@ def get_traceparent(headers: dict[str, str]) -> str | None:
 
     Args:
         headers: Dictionary of HTTP headers, typically obtained from
-            :meth:`OpenTelemetryScope.inject_context_to_headers`.
+            :meth:`microsoft_agents_a365.observability.core.opentelemetry_scope.OpenTelemetryScope.inject_context_to_headers`.
 
     Returns:
         The traceparent string (e.g.
