@@ -7,7 +7,8 @@ from opentelemetry.sdk.trace.export import SpanProcessor
 class AgentFrameworkSpanProcessor(SpanProcessor):
     """SpanProcessor for Agent Framework.
 
-    Attribute mutation happens in the enricher (via :class:`EnrichedReadableSpan`)
+    Attribute mutation happens in the enricher (via
+    :class:`microsoft_agents_a365.observability.core.exporters.enriched_span.EnrichedReadableSpan`)
     because OTel Python ``ReadableSpan`` is immutable after ``on_end``.
     The enricher is invoked at export time by the ``EnrichingSpanProcessor``.
     """

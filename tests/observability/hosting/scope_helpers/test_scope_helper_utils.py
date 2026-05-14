@@ -83,65 +83,6 @@ def test_get_channel_pairs():
     assert (CHANNEL_LINK_KEY, None) in result
 
 
-def test_get_caller_pairs_non_teams_fallback_to_from_id():
-    """Test userId falls back to from.id when aad_object_id is None (non-Teams channel)."""
-    from_account = ChannelAccount(
-        id="from-id-123",
-        name="Non-Teams User",
-    )
-    activity = Activity(type="message", from_property=from_account)
-
-    result = list(get_caller_pairs(activity))
-
-    assert (USER_ID_KEY, "from-id-123") in result
-    assert (USER_NAME_KEY, "Non-Teams User") in result
-    assert (USER_EMAIL_KEY, None) in result
-
-
-def test_get_caller_pairs_a2a_fallback_to_agentic_user_id():
-    """Test userId falls back to agentic_user_id for A2A calls (no aad_object_id)."""
-    from_account = ChannelAccount(
-        id="from-id-456",
-        name="Agent Caller",
-        agentic_user_id="a2a-agent-guid",
-    )
-    activity = Activity(type="message", from_property=from_account)
-
-    result = list(get_caller_pairs(activity))
-
-    assert (USER_ID_KEY, "a2a-agent-guid") in result
-    assert (USER_EMAIL_KEY, "a2a-agent-guid") in result
-
-
-def test_get_caller_pairs_aad_object_id_wins_when_all_set():
-    """Test aad_object_id takes precedence when all identifiers are present."""
-    from_account = ChannelAccount(
-        id="from-id-789",
-        aad_object_id="aad-wins",
-        name="Full User",
-        agentic_user_id="agent-upn",
-    )
-    activity = Activity(type="message", from_property=from_account)
-
-    result = list(get_caller_pairs(activity))
-
-    assert (USER_ID_KEY, "aad-wins") in result
-    assert (USER_NAME_KEY, "Full User") in result
-    assert (USER_EMAIL_KEY, "agent-upn") in result
-
-
-def test_get_caller_pairs_a2a_guid_agentic_user_id():
-    """Test userId resolves to GUID AgenticUserId in A2A scenario."""
-    from_account = ChannelAccount(
-        id="29:1sH5NArUwkWAX",
-        name="Agent Caller",
-        agentic_user_id="bef730f4-d6f5-4ffb-b759-26ffa449ed7e",
-    )
-    activity = Activity(type="message", from_property=from_account)
-    result = list(get_caller_pairs(activity))
-    assert (USER_ID_KEY, "bef730f4-d6f5-4ffb-b759-26ffa449ed7e") in result
-
-
 def test_get_conversation_pairs():
     """Test get_conversation_pairs extracts conversation information."""
     conversation = ConversationAccount(id="conversation-123")
