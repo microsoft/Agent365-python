@@ -4,15 +4,17 @@ This guide is for developers whose application **already** initializes OpenTelem
 
 ## The integration rule
 
-> **Initialize your existing OpenTelemetry stack first, then call Agent 365's `configure()`.** The SDK detects the existing `TracerProvider` and adds its processors to it, so both your existing backend and the Agent 365 backend receive every span.
+> **Initialize your existing OpenTelemetry stack first, then call Agent 365's `configure()`.** The SDK detects the existing `TracerProvider` and adds its processors to it. Your existing backend receives every span; the Agent 365 backend also receives spans when `ENABLE_A365_OBSERVABILITY_EXPORTER=true` and a `token_resolver` is provided (otherwise `configure()` falls back to `ConsoleSpanExporter`).
 
-The detection happens in [`config.py`](../libraries/microsoft-agents-a365-observability-core/microsoft_agents_a365/observability/core/config.py): if a real (non-no-op) `TracerProvider` is already set, `configure()` adds its `BatchSpanProcessor` and baggage `SpanProcessor` to that provider rather than creating a new one.
+The detection happens in [`config.py`](../libraries/microsoft-agents-a365-observability-core/microsoft_agents_a365/observability/core/config.py): if a real (non-no-op) `TracerProvider` is already set (detected via a non-None `resource` attribute), `configure()` adds an `_EnrichingBatchSpanProcessor` (wrapping the configured exporter) and a custom `SpanProcessor` to that provider rather than creating a new one.
 
 ## Two minimal patterns
 
 ### Pattern A — `azure-monitor-opentelemetry`
 
 ```python
+import os
+
 from azure.monitor.opentelemetry import configure_azure_monitor
 from microsoft_agents_a365.observability.core import configure
 
@@ -32,6 +34,8 @@ configure(
 ### Pattern B — manual OTel SDK + OTLP exporter
 
 ```python
+import os
+
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
@@ -83,7 +87,7 @@ The SDK produces three core span kinds. Your backend should show them in this ty
 |-------------------------|---------------------------------------------------|----------------|---------------------|-------|
 | `invoke_agent`          | `InvokeAgentScope` (one per user turn)            | (root or app)  | `invoke_agent <agent_name>` when set, else `invoke_agent` | |
 | (varies — see notes) | `InferenceScope` (one per LLM call) | `invoke_agent` | `<operation> <model>` | **Manual instrumentation** uses `InferenceOperationType.value` (currently `Chat` / `TextCompletion` / `GenerateContent`, capitalized). **Auto-instrumentation** (e.g. `OpenAIAgentsTraceInstrumentor`) uses lowercase per the [OTel GenAI semconv](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) (e.g. `chat`). The two are inconsistent today. |
-| `execute_tool`          | `ExecuteToolScope` (one per tool invocation)      | `invoke_agent` | `execute_tool <tool_name>` when set, else `execute_tool` | Records tool name, args, and result. |
+| `execute_tool`          | `ExecuteToolScope` (one per tool invocation)      | `invoke_agent` | `execute_tool <tool_name>` (always includes the tool name) | Records tool name, args, and result. |
 
 Filter your backend by the `gen_ai.operation.name` attribute or by span name. Note that `inference` is *not* the literal attribute value — manual instrumentation produces `Chat` / `TextCompletion` / `GenerateContent` (the `InferenceOperationType.value`), while auto-instrumentation extension packages produce the lowercase OTel-spec form (e.g. `chat`). This casing discrepancy is tracked as an SDK issue.
 
@@ -99,7 +103,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
 ```
 
-Run a single turn. If you see `invoke_agent` / `inference` / `execute_tool` JSON dumps on stdout, the SDK is producing spans correctly — the issue is in your backend exporter (network, auth, sampling). If you don't see them, the integration itself is wrong; check the pitfalls below.
+Run a single turn. If you see `invoke_agent` / `Chat` (or `chat`) / `execute_tool` JSON dumps on stdout, the SDK is producing spans correctly — the issue is in your backend exporter (network, auth, sampling). If you don't see them, the integration itself is wrong; check the pitfalls below.
 
 ## Common pitfalls
 
@@ -133,7 +137,7 @@ Run a single turn. If you see `invoke_agent` / `inference` / `execute_tool` JSON
 
 **Cause:** Agent 365's scope classes gate span creation on the `ENABLE_OBSERVABILITY` (or `ENABLE_A365_OBSERVABILITY`) environment variable. If neither is set to `true` / `1` / `yes` / `on`, every scope's `__init__` skips span creation entirely. This is **independent** of OTel's own enable/disable mechanism — your existing OTel telemetry continues to flow normally.
 
-**Fix:** Set `ENABLE_OBSERVABILITY=true` (or `ENABLE_A365_OBSERVABILITY=true`) in your environment before the SDK is imported. Both runnable samples include this in their `.env.template`.
+**Fix:** Set `ENABLE_OBSERVABILITY=true` (or `ENABLE_A365_OBSERVABILITY=true`) in your environment before creating any scopes / emitting spans (the check happens at scope construction time, not import time). Both runnable samples include this in their `.env.template`.
 
 ## Exporter combinations
 
