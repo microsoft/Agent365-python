@@ -5,7 +5,7 @@
 
 Agent Framework sets ``gen_ai.input.messages`` / ``gen_ai.output.messages`` as span
 tags containing JSON arrays of ``{role, parts[{type, content}], finish_reason?}``.
-This mapper converts them to :class:`InputMessages` / :class:`OutputMessages`.
+This mapper converts them to ``InputMessages`` / ``OutputMessages``.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def map_input_messages(messages_json: str) -> str | None:
         messages_json: The raw JSON string from the span attribute.
 
     Returns:
-        Serialized :class:`InputMessages` JSON string, or ``None`` if the
+        Serialized ``InputMessages`` JSON string, or ``None`` if the
         input is empty or cannot be parsed.
     """
     try:
@@ -83,7 +83,7 @@ def map_output_messages(messages_json: str) -> str | None:
         messages_json: The raw JSON string from the span attribute.
 
     Returns:
-        Serialized :class:`OutputMessages` JSON string, or ``None`` if the
+        Serialized ``OutputMessages`` JSON string, or ``None`` if the
         input is empty or cannot be parsed.
     """
     try:
@@ -119,7 +119,7 @@ def map_output_messages(messages_json: str) -> str | None:
 
 
 def _map_role(role: str | None, default: MessageRole) -> MessageRole:
-    """Map a raw role string to a :class:`MessageRole` enum."""
+    """Map a raw role string to a ``MessageRole`` enum."""
     if not role:
         return default
     return _ROLE_MAP.get(role.lower(), default)

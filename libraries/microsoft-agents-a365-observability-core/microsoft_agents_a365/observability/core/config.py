@@ -180,6 +180,7 @@ class TelemetryManager:
                 token_resolver=exporter_options.token_resolver,
                 cluster_category=exporter_options.cluster_category,
                 use_s2s_endpoint=exporter_options.use_s2s_endpoint,
+                max_payload_bytes=exporter_options.max_payload_bytes,
             )
 
         else:

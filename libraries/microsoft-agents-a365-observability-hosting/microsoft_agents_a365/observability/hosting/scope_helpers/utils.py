@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -74,13 +75,35 @@ def get_channel_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     sub_channel = None
 
     if channel_id is not None:
-        if isinstance(channel_id, str):
-            # Direct string value
-            channel_name = channel_id
-        elif hasattr(channel_id, "channel"):
+        # Check for ChannelId object first
+        if hasattr(channel_id, "channel"):
             # ChannelId object
             channel_name = channel_id.channel
             sub_channel = channel_id.sub_channel
+        elif isinstance(channel_id, str):
+            # Direct string value
+            channel_name = channel_id
+
+    # Try to get sub_channel from productContext in channel_data if sub_channel is not set
+    if not sub_channel and activity.channel_data:
+        try:
+            # Convert channel_data to dict if it's a string
+            if isinstance(activity.channel_data, str):
+                channel_data_dict = json.loads(activity.channel_data)
+            elif isinstance(activity.channel_data, dict):
+                channel_data_dict = activity.channel_data
+            else:
+                # Try to convert to dict if it has __dict__
+                channel_data_dict = getattr(activity.channel_data, "__dict__", {})
+
+            # Extract productContext if available
+            if isinstance(channel_data_dict, dict) and "productContext" in channel_data_dict:
+                product_context = channel_data_dict["productContext"]
+                if isinstance(product_context, str):
+                    sub_channel = product_context
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            # Silently ignore any parsing errors
+            pass
 
     # Yield channel name as source name
     yield CHANNEL_NAME_KEY, channel_name
