@@ -405,3 +405,212 @@ The body is JSON with this structure:
 ### Grouping requirement
 
 All spans in a single POST must share the same `microsoft.tenant.id` and `gen_ai.agent.id`. If your batch contains spans for multiple tenants or agents, partition them into separate requests.
+
+### Example 3: Custom exporter for the Agent 365 backend
+
+A minimal `SpanExporter` that builds the JSON envelope and POSTs to the A365 endpoint. This replaces the SDK's internal exporter without any A365 dependency.
+
+```python
+import json
+import logging
+import time
+from collections.abc import Sequence
+
+import requests
+from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
+from opentelemetry.trace import StatusCode
+
+logger = logging.getLogger(__name__)
+
+# Accepted operation names — spans with other values are filtered out
+ACCEPTED_OPERATIONS = frozenset({
+    "invoke_agent", "execute_tool", "chat", "Chat", "TextCompletion", "GenerateContent",
+})
+
+A365_ENDPOINT = "https://agent365.svc.cloud.microsoft"
+MAX_RETRIES = 3
+HTTP_TIMEOUT = 30.0
+
+
+class Agent365ManualExporter(SpanExporter):
+    """Minimal exporter that POSTs spans to the Agent 365 backend."""
+
+    def __init__(self, token_resolver):
+        """
+        Args:
+            token_resolver: Callable(agent_id, tenant_id) -> bearer_token string.
+        """
+        self._token_resolver = token_resolver
+        self._session = requests.Session()
+
+    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
+        # Partition by (tenant_id, agent_id)
+        groups = self._partition(spans)
+        if not groups:
+            return SpanExportResult.SUCCESS
+
+        any_failure = False
+        for (tenant_id, agent_id), group_spans in groups.items():
+            url = (
+                f"{A365_ENDPOINT}/observability/tenants/{tenant_id}"
+                f"/otlp/agents/{agent_id}/traces?api-version=1"
+            )
+            payload = self._build_payload(group_spans)
+            body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+
+            # Resolve auth token
+            try:
+                token = self._token_resolver(agent_id, tenant_id)
+            except Exception as e:
+                logger.error(f"Token resolution failed: {e}")
+                any_failure = True
+                continue
+
+            headers = {
+                "content-type": "application/json",
+                "authorization": f"Bearer {token}",
+            }
+
+            if not self._post_with_retries(url, body, headers):
+                any_failure = True
+
+        return SpanExportResult.FAILURE if any_failure else SpanExportResult.SUCCESS
+
+    def shutdown(self):
+        self._session.close()
+
+    def _partition(
+        self, spans: Sequence[ReadableSpan]
+    ) -> dict[tuple[str, str], list[ReadableSpan]]:
+        """Filter eligible spans and group by (tenant_id, agent_id)."""
+        groups: dict[tuple[str, str], list[ReadableSpan]] = {}
+        for sp in spans:
+            attrs = sp.attributes or {}
+            op_name = str(attrs.get("gen_ai.operation.name", ""))
+            if op_name not in ACCEPTED_OPERATIONS:
+                continue
+            tenant = str(attrs.get("microsoft.tenant.id", ""))
+            agent = str(attrs.get("gen_ai.agent.id", ""))
+            if not tenant or not agent:
+                continue
+            groups.setdefault((tenant, agent), []).append(sp)
+        return groups
+
+    def _build_payload(self, spans: Sequence[ReadableSpan]) -> dict:
+        """Build the OTLP-like JSON envelope."""
+        # Get resource attributes from the first span
+        resource_attrs = {}
+        if spans and spans[0].resource:
+            resource_attrs = dict(spans[0].resource.attributes)
+
+        # Group spans by instrumentation scope
+        scope_map: dict[tuple[str, str | None], list[dict]] = {}
+        for sp in spans:
+            scope = sp.instrumentation_scope
+            scope_name = scope.name if scope else "unknown"
+            scope_version = scope.version if scope else None
+            scope_map.setdefault((scope_name, scope_version), []).append(
+                self._map_span(sp)
+            )
+
+        scope_spans = [
+            {"scope": {"name": name, "version": version}, "spans": mapped}
+            for (name, version), mapped in scope_map.items()
+        ]
+
+        return {
+            "resourceSpans": [
+                {
+                    "resource": {"attributes": resource_attrs or None},
+                    "scopeSpans": scope_spans,
+                }
+            ]
+        }
+
+    @staticmethod
+    def _map_span(sp: ReadableSpan) -> dict:
+        """Convert a ReadableSpan to the A365 JSON format."""
+        ctx = sp.context
+        trace_id = f"{ctx.trace_id:032x}"
+        span_id = f"{ctx.span_id:016x}"
+        parent_span_id = None
+        if sp.parent and sp.parent.span_id:
+            parent_span_id = f"{sp.parent.span_id:016x}"
+
+        attrs = dict(sp.attributes or {})
+
+        # Map events
+        events = None
+        if sp.events:
+            events = [
+                {
+                    "timeUnixNano": ev.timestamp,
+                    "name": ev.name,
+                    "attributes": dict(ev.attributes) if ev.attributes else None,
+                }
+                for ev in sp.events
+            ]
+
+        # Map status
+        status_code = sp.status.status_code if sp.status else StatusCode.UNSET
+        status = {
+            "code": status_code.name,
+            "message": getattr(sp.status, "description", "") or "",
+        }
+
+        return {
+            "traceId": trace_id,
+            "spanId": span_id,
+            "parentSpanId": parent_span_id,
+            "name": sp.name,
+            "kind": sp.kind.name,
+            "startTimeUnixNano": sp.start_time,
+            "endTimeUnixNano": sp.end_time,
+            "attributes": attrs or None,
+            "events": events,
+            "links": None,
+            "status": status,
+        }
+
+    def _post_with_retries(self, url: str, body: str, headers: dict) -> bool:
+        """POST with exponential backoff on transient errors."""
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                resp = self._session.post(
+                    url, data=body, headers=headers, timeout=HTTP_TIMEOUT
+                )
+                if 200 <= resp.status_code < 300:
+                    return True
+                if resp.status_code in (408, 429) or resp.status_code >= 500:
+                    if attempt < MAX_RETRIES:
+                        # Respect Retry-After for 429
+                        retry_after = resp.headers.get("Retry-After")
+                        if retry_after and retry_after.isdigit():
+                            time.sleep(min(float(retry_after), 60.0))
+                        else:
+                            time.sleep(0.5 * (2 ** attempt))
+                        continue
+                logger.error(f"HTTP {resp.status_code}: {resp.text[:200]}")
+                return False
+            except requests.RequestException as e:
+                if attempt < MAX_RETRIES:
+                    time.sleep(0.5 * (2 ** attempt))
+                    continue
+                logger.error(f"Request failed after {MAX_RETRIES + 1} attempts: {e}")
+                return False
+        return False
+```
+
+**Usage:**
+
+```python
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+def my_token_resolver(agent_id: str, tenant_id: str) -> str:
+    # Your token acquisition logic here (MSAL, managed identity, etc.)
+    return "your-bearer-token"
+
+exporter = Agent365ManualExporter(token_resolver=my_token_resolver)
+provider.add_span_processor(BatchSpanProcessor(exporter))
+```
