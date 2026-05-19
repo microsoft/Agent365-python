@@ -286,3 +286,122 @@ provider.force_flush()
 ```
 
 You should see three spans in the console output: `invoke_agent my-weather-agent` (root), `Chat gpt-4o` (child), and `execute_tool get_weather` (child). Verify that `parentSpanId` on the children matches the root's `spanId`.
+
+## Exporting to the Agent 365 backend
+
+The Agent 365 backend does **not** accept standard OTLP protobuf or OTLP/HTTP JSON. It uses a custom OTLP-like JSON format. This section documents the HTTP contract.
+
+### Endpoint
+
+```
+POST https://agent365.svc.cloud.microsoft/observability/tenants/{tenantId}/otlp/agents/{agentId}/traces?api-version=1
+```
+
+Replace `{tenantId}` and `{agentId}` with the values from your span attributes (`microsoft.tenant.id` and `gen_ai.agent.id`).
+
+### Authentication
+
+Every request requires a Bearer token:
+
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+The token is obtained from a **token resolver** — a function with signature:
+
+```python
+def resolve_token(agent_id: str, tenant_id: str) -> str:
+    """Return a valid Bearer token for the given agent and tenant."""
+    ...
+```
+
+How you implement this depends on your environment (MSAL client credentials, managed identity, etc.). The A365 SDK uses this same interface internally.
+
+### Payload format
+
+The body is JSON with this structure:
+
+```json
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": {
+          "service.name": "my-agent",
+          "service.namespace": "my-namespace"
+        }
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "my-agent-instrumentation",
+            "version": "1.0.0"
+          },
+          "spans": [
+            {
+              "traceId": "0af7651916cd43dd8448eb211c80319c",
+              "spanId": "b7ad6b7169203331",
+              "parentSpanId": null,
+              "name": "invoke_agent my-agent",
+              "kind": "INTERNAL",
+              "startTimeUnixNano": 1716000000000000000,
+              "endTimeUnixNano": 1716000001000000000,
+              "attributes": {
+                "gen_ai.operation.name": "invoke_agent",
+                "microsoft.tenant.id": "tenant-guid",
+                "gen_ai.agent.id": "agent-guid"
+              },
+              "events": null,
+              "links": null,
+              "status": {
+                "code": "OK",
+                "message": ""
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Field reference
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `traceId` | string | 32 hex chars (128-bit trace ID) |
+| `spanId` | string | 16 hex chars (64-bit span ID) |
+| `parentSpanId` | string \| null | Parent's spanId, or null for root |
+| `name` | string | Span name (see naming conventions below) |
+| `kind` | string | Span kind name: `"INTERNAL"`, `"CLIENT"`, `"SERVER"`, etc. |
+| `startTimeUnixNano` | integer | Start time in nanoseconds since Unix epoch |
+| `endTimeUnixNano` | integer | End time in nanoseconds since Unix epoch |
+| `attributes` | object \| null | Key-value map of span attributes |
+| `events` | array \| null | Span events (exceptions, logs) |
+| `links` | array \| null | Span links |
+| `status.code` | string | `"UNSET"`, `"OK"`, or `"ERROR"` |
+| `status.message` | string | Error description (empty for non-error) |
+
+### Span name conventions
+
+| Span type | Name format | Example |
+|-----------|-------------|---------|
+| invoke_agent | `"invoke_agent"` or `"invoke_agent <agent_name>"` | `"invoke_agent my-weather-agent"` |
+| inference | `"<operation> <model>"` | `"Chat gpt-4o"` |
+| execute_tool | `"execute_tool <tool_name>"` | `"execute_tool get_weather"` |
+
+### Constraints
+
+| Constraint | Value | Behavior |
+|------------|-------|----------|
+| Max payload size | ~900,000 bytes | Split spans across multiple POST requests |
+| Max individual span | 250,000 bytes | Largest attributes are replaced with `"TRUNCATED"` |
+| Retry on | 408, 429, 5xx | Exponential backoff; respect `Retry-After` header for 429 |
+| Fail on | Other 4xx | Non-retryable; check auth and payload format |
+| Timeout | 30 seconds | Per-request HTTP timeout |
+
+### Grouping requirement
+
+All spans in a single POST must share the same `microsoft.tenant.id` and `gen_ai.agent.id`. If your batch contains spans for multiple tenants or agents, partition them into separate requests.
