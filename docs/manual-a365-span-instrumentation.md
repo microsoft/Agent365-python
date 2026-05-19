@@ -130,3 +130,159 @@ Set these on every span to identify your telemetry source:
 | `telemetry.sdk.name` | `"A365ObservabilitySDK"` (or your own identifier) |
 | `telemetry.sdk.language` | `"python"` |
 | `telemetry.sdk.version` | Your version string |
+
+## Examples
+
+### Example 1: Minimal `invoke_agent` span
+
+Creates a single root span with only the required attributes and exports to console for verification.
+
+```python
+import json
+import uuid
+
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+
+# --- Configuration (replace with your values) ---
+TENANT_ID = "your-tenant-guid"
+AGENT_ID = "your-agent-guid"
+AGENT_NAME = "my-weather-agent"
+
+# --- Set up OpenTelemetry with console export ---
+resource = Resource.create({"service.name": AGENT_NAME})
+provider = TracerProvider(resource=resource)
+provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+trace.set_tracer_provider(provider)
+
+tracer = trace.get_tracer("my-agent-instrumentation", "1.0.0")
+
+# --- Create an invoke_agent span ---
+with tracer.start_as_current_span(
+    name=f"invoke_agent {AGENT_NAME}",
+    kind=trace.SpanKind.INTERNAL,
+) as span:
+    # Required attributes
+    span.set_attribute("gen_ai.operation.name", "invoke_agent")
+    span.set_attribute("microsoft.tenant.id", TENANT_ID)
+    span.set_attribute("gen_ai.agent.id", AGENT_ID)
+
+    # Recommended attributes
+    span.set_attribute("gen_ai.agent.name", AGENT_NAME)
+    span.set_attribute("microsoft.session.id", str(uuid.uuid4()))
+    span.set_attribute("gen_ai.conversation.id", str(uuid.uuid4()))
+
+    # ... your agent logic here ...
+    print("Agent invoked successfully")
+
+# Flush to ensure spans are exported
+provider.force_flush()
+```
+
+Run this and you should see a JSON span dump on stdout with `gen_ai.operation.name: invoke_agent`.
+
+### Example 2: Full agent turn with span hierarchy
+
+Creates the proper parent-child relationship: `invoke_agent` → `inference` + `execute_tool`.
+
+```python
+import json
+import uuid
+
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+
+# --- Configuration ---
+TENANT_ID = "your-tenant-guid"
+AGENT_ID = "your-agent-guid"
+AGENT_NAME = "my-weather-agent"
+MODEL_NAME = "gpt-4o"
+PROVIDER_NAME = "azure"
+
+# --- OpenTelemetry setup ---
+resource = Resource.create({
+    "service.name": AGENT_NAME,
+    "service.namespace": "my-namespace",
+})
+provider = TracerProvider(resource=resource)
+provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+trace.set_tracer_provider(provider)
+
+tracer = trace.get_tracer("my-agent-instrumentation", "1.0.0")
+
+# --- Simulate an agent turn ---
+session_id = str(uuid.uuid4())
+conversation_id = str(uuid.uuid4())
+user_message = "What's the weather in Seattle?"
+
+
+def get_weather(city: str) -> str:
+    """Simulated tool."""
+    return json.dumps({"city": city, "temp_f": 62, "condition": "cloudy"})
+
+
+# Top-level: invoke_agent
+with tracer.start_as_current_span(
+    name=f"invoke_agent {AGENT_NAME}",
+    kind=trace.SpanKind.INTERNAL,
+) as agent_span:
+    agent_span.set_attribute("gen_ai.operation.name", "invoke_agent")
+    agent_span.set_attribute("microsoft.tenant.id", TENANT_ID)
+    agent_span.set_attribute("gen_ai.agent.id", AGENT_ID)
+    agent_span.set_attribute("gen_ai.agent.name", AGENT_NAME)
+    agent_span.set_attribute("microsoft.session.id", session_id)
+    agent_span.set_attribute("gen_ai.conversation.id", conversation_id)
+    agent_span.set_attribute("user.id", "user-123")
+    agent_span.set_attribute("gen_ai.input.messages", json.dumps([
+        {"role": "user", "content": user_message}
+    ]))
+
+    # Child: inference (LLM call)
+    with tracer.start_as_current_span(
+        name=f"Chat {MODEL_NAME}",
+        kind=trace.SpanKind.INTERNAL,
+    ) as inference_span:
+        inference_span.set_attribute("gen_ai.operation.name", "Chat")
+        inference_span.set_attribute("microsoft.tenant.id", TENANT_ID)
+        inference_span.set_attribute("gen_ai.agent.id", AGENT_ID)
+        inference_span.set_attribute("gen_ai.request.model", MODEL_NAME)
+        inference_span.set_attribute("gen_ai.provider.name", PROVIDER_NAME)
+        inference_span.set_attribute("gen_ai.conversation.id", conversation_id)
+        inference_span.set_attribute("server.address", "my-resource.openai.azure.com")
+
+        # ... call your LLM here ...
+        # After response:
+        inference_span.set_attribute("gen_ai.usage.input_tokens", 42)
+        inference_span.set_attribute("gen_ai.usage.output_tokens", 15)
+        inference_span.set_attribute("gen_ai.response.finish_reasons", json.dumps(["tool_calls"]))
+
+    # Child: execute_tool
+    tool_call_id = "call_abc123"
+    tool_name = "get_weather"
+    tool_args = json.dumps({"city": "Seattle"})
+
+    with tracer.start_as_current_span(
+        name=f"execute_tool {tool_name}",
+        kind=trace.SpanKind.INTERNAL,
+    ) as tool_span:
+        tool_span.set_attribute("gen_ai.operation.name", "execute_tool")
+        tool_span.set_attribute("microsoft.tenant.id", TENANT_ID)
+        tool_span.set_attribute("gen_ai.agent.id", AGENT_ID)
+        tool_span.set_attribute("gen_ai.tool.name", tool_name)
+        tool_span.set_attribute("gen_ai.tool.call.id", tool_call_id)
+        tool_span.set_attribute("gen_ai.tool.call.arguments", tool_args)
+        tool_span.set_attribute("gen_ai.conversation.id", conversation_id)
+        tool_span.set_attribute("gen_ai.tool.type", "function")
+
+        # Execute the tool
+        result = get_weather("Seattle")
+        tool_span.set_attribute("gen_ai.tool.call.result", result)
+
+provider.force_flush()
+```
+
+You should see three spans in the console output: `invoke_agent my-weather-agent` (root), `Chat gpt-4o` (child), and `execute_tool get_weather` (child). Verify that `parentSpanId` on the children matches the root's `spanId`.
