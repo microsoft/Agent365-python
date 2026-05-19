@@ -614,3 +614,197 @@ def my_token_resolver(agent_id: str, tenant_id: str) -> str:
 exporter = Agent365ManualExporter(token_resolver=my_token_resolver)
 provider.add_span_processor(BatchSpanProcessor(exporter))
 ```
+
+### Example 4: End-to-end agent loop with A365 export
+
+Combines everything: proper span hierarchy, all recommended attributes, and export to the Agent 365 backend.
+
+```python
+"""
+Complete example: manually instrumented agent with A365 export.
+
+Requirements:
+    pip install opentelemetry-sdk opentelemetry-api requests
+
+Replace the placeholder values with your actual tenant ID, agent ID,
+and token resolver implementation.
+"""
+
+import json
+import uuid
+
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+
+# --- Configuration ---
+TENANT_ID = "your-tenant-guid"
+AGENT_ID = "your-agent-guid"
+AGENT_NAME = "my-weather-agent"
+SERVICE_NAMESPACE = "my-namespace"
+MODEL_NAME = "gpt-4o"
+PROVIDER_NAME = "azure"
+SERVER_ADDRESS = "my-resource.openai.azure.com"
+
+
+def my_token_resolver(agent_id: str, tenant_id: str) -> str:
+    """Replace with your actual token acquisition logic."""
+    raise NotImplementedError("Implement your token resolver")
+
+
+# --- OpenTelemetry setup ---
+resource = Resource.create({
+    "service.name": AGENT_NAME,
+    "service.namespace": SERVICE_NAMESPACE,
+})
+provider = TracerProvider(resource=resource)
+
+# For development: console export to verify spans locally
+provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+
+# For production: uncomment to export to Agent 365 backend
+# from agent365_exporter import Agent365ManualExporter  # Example 3 above
+# provider.add_span_processor(BatchSpanProcessor(
+#     Agent365ManualExporter(token_resolver=my_token_resolver)
+# ))
+
+trace.set_tracer_provider(provider)
+tracer = trace.get_tracer("my-agent-instrumentation", "1.0.0")
+
+# --- Common attributes helper ---
+COMMON_ATTRS = {
+    "microsoft.tenant.id": TENANT_ID,
+    "gen_ai.agent.id": AGENT_ID,
+    "gen_ai.agent.name": AGENT_NAME,
+    "telemetry.sdk.name": "A365ObservabilitySDK",
+    "telemetry.sdk.language": "python",
+    "telemetry.sdk.version": "1.0.0",
+}
+
+
+def set_common_attrs(span):
+    for key, value in COMMON_ATTRS.items():
+        span.set_attribute(key, value)
+
+
+# --- Simulated tools ---
+def get_weather(city: str) -> str:
+    return json.dumps({"city": city, "temp_f": 62, "condition": "cloudy"})
+
+
+# --- Agent turn ---
+def handle_user_turn(user_message: str, user_id: str):
+    session_id = str(uuid.uuid4())
+    conversation_id = str(uuid.uuid4())
+
+    with tracer.start_as_current_span(
+        name=f"invoke_agent {AGENT_NAME}",
+        kind=trace.SpanKind.INTERNAL,
+    ) as agent_span:
+        set_common_attrs(agent_span)
+        agent_span.set_attribute("gen_ai.operation.name", "invoke_agent")
+        agent_span.set_attribute("microsoft.session.id", session_id)
+        agent_span.set_attribute("gen_ai.conversation.id", conversation_id)
+        agent_span.set_attribute("user.id", user_id)
+        agent_span.set_attribute("gen_ai.input.messages", json.dumps([
+            {"role": "user", "content": user_message}
+        ]))
+
+        # Step 1: Call the LLM
+        with tracer.start_as_current_span(
+            name=f"Chat {MODEL_NAME}",
+            kind=trace.SpanKind.INTERNAL,
+        ) as inference_span:
+            set_common_attrs(inference_span)
+            inference_span.set_attribute("gen_ai.operation.name", "Chat")
+            inference_span.set_attribute("gen_ai.request.model", MODEL_NAME)
+            inference_span.set_attribute("gen_ai.provider.name", PROVIDER_NAME)
+            inference_span.set_attribute("gen_ai.conversation.id", conversation_id)
+            inference_span.set_attribute("server.address", SERVER_ADDRESS)
+
+            # ... your LLM call here ...
+            # Simulate response with tool call
+            inference_span.set_attribute("gen_ai.usage.input_tokens", 55)
+            inference_span.set_attribute("gen_ai.usage.output_tokens", 22)
+            inference_span.set_attribute("gen_ai.response.finish_reasons", json.dumps(["tool_calls"]))
+
+        # Step 2: Execute the tool
+        tool_call_id = f"call_{uuid.uuid4().hex[:8]}"
+        tool_name = "get_weather"
+        tool_args = json.dumps({"city": "Seattle"})
+
+        with tracer.start_as_current_span(
+            name=f"execute_tool {tool_name}",
+            kind=trace.SpanKind.INTERNAL,
+        ) as tool_span:
+            set_common_attrs(tool_span)
+            tool_span.set_attribute("gen_ai.operation.name", "execute_tool")
+            tool_span.set_attribute("gen_ai.tool.name", tool_name)
+            tool_span.set_attribute("gen_ai.tool.call.id", tool_call_id)
+            tool_span.set_attribute("gen_ai.tool.call.arguments", tool_args)
+            tool_span.set_attribute("gen_ai.conversation.id", conversation_id)
+            tool_span.set_attribute("gen_ai.tool.type", "function")
+
+            result = get_weather("Seattle")
+            tool_span.set_attribute("gen_ai.tool.call.result", result)
+
+        # Step 3: Final LLM call with tool result
+        with tracer.start_as_current_span(
+            name=f"Chat {MODEL_NAME}",
+            kind=trace.SpanKind.INTERNAL,
+        ) as final_inference_span:
+            set_common_attrs(final_inference_span)
+            final_inference_span.set_attribute("gen_ai.operation.name", "Chat")
+            final_inference_span.set_attribute("gen_ai.request.model", MODEL_NAME)
+            final_inference_span.set_attribute("gen_ai.provider.name", PROVIDER_NAME)
+            final_inference_span.set_attribute("gen_ai.conversation.id", conversation_id)
+            final_inference_span.set_attribute("server.address", SERVER_ADDRESS)
+
+            # ... your LLM call with tool result here ...
+            final_inference_span.set_attribute("gen_ai.usage.input_tokens", 85)
+            final_inference_span.set_attribute("gen_ai.usage.output_tokens", 45)
+            final_inference_span.set_attribute("gen_ai.response.finish_reasons", json.dumps(["stop"]))
+
+
+# --- Run ---
+if __name__ == "__main__":
+    handle_user_turn("What's the weather in Seattle?", user_id="user-456")
+    provider.force_flush()
+    print("Done — check console output for spans")
+```
+
+## Validation and troubleshooting
+
+### Verifying locally
+
+1. Use `ConsoleSpanExporter` (shown in the examples above) to dump spans to stdout
+2. Check that each span has:
+   - A `gen_ai.operation.name` from the [accepted values list](#accepted-gen_aioperationname-values)
+   - Both `microsoft.tenant.id` and `gen_ai.agent.id` set to non-empty strings
+   - Correct parent-child relationships (`parentSpanId` on children matches root's `spanId`)
+
+### Verifying against the backend
+
+After switching to the `Agent365ManualExporter`:
+
+1. **HTTP 200–299** → spans accepted. They should appear in the Agent 365 portal within a few minutes.
+2. **HTTP 401/403** → token resolver returned an invalid or expired token. Check your auth implementation.
+3. **HTTP 400** → payload format is wrong. Validate your JSON against the [payload format](#payload-format) section.
+4. **HTTP 429** → rate limited. The exporter should respect `Retry-After` and retry automatically.
+5. **No response / timeout** → check network connectivity to `agent365.svc.cloud.microsoft`.
+
+### Common issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Spans don't appear in portal | `gen_ai.operation.name` not in accepted list | Use exactly `"invoke_agent"`, `"Chat"`, or `"execute_tool"` |
+| Spans silently dropped | Missing `microsoft.tenant.id` or `gen_ai.agent.id` | Ensure both are set on every span |
+| HTTP 400 from backend | Payload structure doesn't match expected format | Verify JSON envelope matches the documented structure |
+| HTTP 401 from backend | Token resolver returns wrong/expired token | Debug your token acquisition; ensure scope matches |
+| Only `invoke_agent` spans visible | Child spans missing required identity attrs | Set `microsoft.tenant.id` and `gen_ai.agent.id` on ALL spans, not just the root |
+| Large spans truncated | Span exceeds 250KB | Reduce `gen_ai.input.messages` / `gen_ai.output.messages` content |
+
+### Versioning note
+
+This document describes the Agent 365 backend contract as of May 2026. The payload format may evolve over time. The A365 SDK (`microsoft-agents-a365-observability-core`) handles format changes automatically and is the recommended path for production workloads that can accept the dependency.
