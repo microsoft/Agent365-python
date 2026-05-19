@@ -42,6 +42,7 @@ Only spans with one of these values pass the backend's ingest filter:
 | `TextCompletion` | Inference (text completion) |
 | `GenerateContent` | Inference (content generation) |
 | `execute_tool` | Tool execution |
+| `output_messages` | Output message recording (agent response to user) |
 
 ### `invoke_agent` span
 
@@ -69,6 +70,8 @@ The top-level span representing one user turn / agent invocation.
 | Optional | `microsoft.channel.name` | Channel (e.g. `"Teams"`, `"Webchat"`) | |
 | Optional | `microsoft.channel.link` | Channel URL | |
 | Optional | `gen_ai.input.messages` | JSON-serialized input messages | Can be large; may be truncated |
+| Optional | `gen_ai.output.messages` | JSON-serialized output messages | Agent's response; may be truncated |
+| Optional | `server.port` | Server port number | Omit if 443 |
 | Optional | `microsoft.a365.caller.agent.name` | Calling agent name | For agent-to-agent calls |
 | Optional | `microsoft.a365.caller.agent.id` | Calling agent GUID | For agent-to-agent calls |
 | Optional | `microsoft.a365.caller.agent.blueprint.id` | Calling agent blueprint | For agent-to-agent calls |
@@ -111,6 +114,20 @@ Child of `invoke_agent`. One per tool invocation.
 | Optional | `gen_ai.tool.type` | `"function"` | |
 | Optional | `gen_ai.tool.description` | Tool description | |
 | Optional | `server.address` | Server hostname | |
+| Optional | `server.port` | Server port number | Omit if 443 |
+
+### `output_messages` span
+
+Child of `invoke_agent`. Records the agent's final response to the user.
+
+| Tier | Attribute | Expected value | Notes |
+|------|-----------|----------------|-------|
+| **Required** | `gen_ai.operation.name` | `"output_messages"` | Must match exactly |
+| **Required** | `microsoft.tenant.id` | Tenant GUID | Same as parent |
+| **Required** | `gen_ai.agent.id` | Agent GUID | Same as parent |
+| Recommended | `gen_ai.output.messages` | JSON-serialized output messages | The agent's response |
+| Recommended | `gen_ai.conversation.id` | Conversation identifier | |
+| Optional | `gen_ai.agent.name` | Agent name | Same as parent |
 
 ### Resource attributes
 
@@ -308,15 +325,19 @@ Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
+The token must be issued for an app registration that has the **`Agent365.Observability.OtelWrite`** application role (scope). Without this role, the backend returns `403 Forbidden`.
+
+> **Important:** The `gen_ai.agent.id` value in your span attributes **must match** the application identity in the Bearer token. The backend validates that the agent ID in the payload corresponds to the authenticated app. Mismatches result in `403 Forbidden`.
+
 The token is obtained from a **token resolver** — a function with signature:
 
 ```python
-def resolve_token(agent_id: str, tenant_id: str) -> str:
-    """Return a valid Bearer token for the given agent and tenant."""
+def resolve_token(agent_id: str, tenant_id: str) -> str | None:
+    """Return a valid Bearer token for the given agent and tenant, or None if unavailable."""
     ...
 ```
 
-How you implement this depends on your environment (MSAL client credentials, managed identity, etc.). The A365 SDK uses this same interface internally.
+If the token resolver returns `None`, the exporter should skip that batch and log a warning. How you implement this depends on your environment (MSAL client credentials, managed identity, etc.). The A365 SDK uses this same interface internally.
 
 ### Payload format
 
@@ -396,11 +417,42 @@ The body is JSON with this structure:
 
 | Constraint | Value | Behavior |
 |------------|-------|----------|
-| Max payload size | ~900,000 bytes | Split spans across multiple POST requests |
-| Max individual span | 250,000 bytes | Largest attributes are replaced with `"TRUNCATED"` |
+| Max payload size (server limit) | 1,000,000 bytes | Requests exceeding 1 MB are rejected |
+| Recommended max payload | ~900,000 bytes | Use as conservative buffer below the 1 MB limit |
+| Max individual span | 250,000 bytes | Truncate largest attributes (see below) |
 | Retry on | 408, 429, 5xx | Exponential backoff; respect `Retry-After` header for 429 |
 | Fail on | Other 4xx | Non-retryable; check auth and payload format |
 | Timeout | 30 seconds | Per-request HTTP timeout |
+
+#### Payload chunking
+
+If a serialized batch exceeds ~900,000 bytes, split it into multiple POST requests. Each request must still respect the grouping requirement (same tenant + agent). A simple approach:
+
+```python
+def chunk_spans(spans: list[dict], max_bytes: int = 900_000) -> list[list[dict]]:
+    """Split serialized spans into chunks that fit within the payload limit."""
+    chunks = []
+    current_chunk = []
+    current_size = 0
+    overhead = 200  # approximate envelope overhead
+
+    for span in spans:
+        span_size = len(json.dumps(span, separators=(",", ":"), ensure_ascii=False).encode())
+        if current_chunk and current_size + span_size + overhead > max_bytes:
+            chunks.append(current_chunk)
+            current_chunk = []
+            current_size = 0
+        current_chunk.append(span)
+        current_size += span_size
+
+    if current_chunk:
+        chunks.append(current_chunk)
+    return chunks
+```
+
+#### Span truncation
+
+If a single span exceeds 250,000 bytes (typically due to large `gen_ai.input.messages` or `gen_ai.output.messages`), truncate the largest attribute values by replacing them with `"TRUNCATED"`. Prioritize keeping structural attributes intact and truncating message content first.
 
 ### Grouping requirement
 
@@ -425,10 +477,12 @@ logger = logging.getLogger(__name__)
 
 # Accepted operation names — spans with other values are filtered out
 ACCEPTED_OPERATIONS = frozenset({
-    "invoke_agent", "execute_tool", "chat", "Chat", "TextCompletion", "GenerateContent",
+    "invoke_agent", "execute_tool", "output_messages",
+    "chat", "Chat", "TextCompletion", "GenerateContent",
 })
 
 A365_ENDPOINT = "https://agent365.svc.cloud.microsoft"
+MAX_PAYLOAD_BYTES = 900_000
 MAX_RETRIES = 3
 HTTP_TIMEOUT = 30.0
 
@@ -439,7 +493,7 @@ class Agent365ManualExporter(SpanExporter):
     def __init__(self, token_resolver):
         """
         Args:
-            token_resolver: Callable(agent_id, tenant_id) -> bearer_token string.
+            token_resolver: Callable(agent_id, tenant_id) -> bearer_token string or None.
         """
         self._token_resolver = token_resolver
         self._session = requests.Session()
@@ -456,8 +510,6 @@ class Agent365ManualExporter(SpanExporter):
                 f"{A365_ENDPOINT}/observability/tenants/{tenant_id}"
                 f"/otlp/agents/{agent_id}/traces?api-version=1"
             )
-            payload = self._build_payload(group_spans)
-            body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
             # Resolve auth token
             try:
@@ -467,13 +519,28 @@ class Agent365ManualExporter(SpanExporter):
                 any_failure = True
                 continue
 
+            if token is None:
+                logger.warning(
+                    f"Token resolver returned None for agent={agent_id}, "
+                    f"tenant={tenant_id}; skipping batch"
+                )
+                any_failure = True
+                continue
+
             headers = {
                 "content-type": "application/json",
                 "authorization": f"Bearer {token}",
             }
 
-            if not self._post_with_retries(url, body, headers):
-                any_failure = True
+            # Build payload and chunk if necessary
+            mapped_spans = [self._map_span(sp) for sp in group_spans]
+            chunks = self._chunk_by_size(mapped_spans)
+
+            for chunk in chunks:
+                payload = self._build_payload_from_mapped(group_spans[0], chunk)
+                body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+                if not self._post_with_retries(url, body, headers):
+                    any_failure = True
 
         return SpanExportResult.FAILURE if any_failure else SpanExportResult.SUCCESS
 
@@ -499,20 +566,22 @@ class Agent365ManualExporter(SpanExporter):
 
     def _build_payload(self, spans: Sequence[ReadableSpan]) -> dict:
         """Build the OTLP-like JSON envelope."""
-        # Get resource attributes from the first span
+        mapped = [self._map_span(sp) for sp in spans]
+        return self._build_payload_from_mapped(spans[0], mapped)
+
+    def _build_payload_from_mapped(
+        self, reference_span: ReadableSpan, mapped_spans: list[dict]
+    ) -> dict:
+        """Build the OTLP-like JSON envelope from pre-mapped span dicts."""
         resource_attrs = {}
-        if spans and spans[0].resource:
-            resource_attrs = dict(spans[0].resource.attributes)
+        if reference_span.resource:
+            resource_attrs = dict(reference_span.resource.attributes)
 
         # Group spans by instrumentation scope
         scope_map: dict[tuple[str, str | None], list[dict]] = {}
-        for sp in spans:
-            scope = sp.instrumentation_scope
-            scope_name = scope.name if scope else "unknown"
-            scope_version = scope.version if scope else None
-            scope_map.setdefault((scope_name, scope_version), []).append(
-                self._map_span(sp)
-            )
+        for sp_dict in mapped_spans:
+            # Use a default scope since mapped dicts don't carry scope info
+            scope_map.setdefault(("manual", None), []).append(sp_dict)
 
         scope_spans = [
             {"scope": {"name": name, "version": version}, "spans": mapped}
@@ -527,6 +596,31 @@ class Agent365ManualExporter(SpanExporter):
                 }
             ]
         }
+
+    @staticmethod
+    def _chunk_by_size(
+        mapped_spans: list[dict], max_bytes: int = MAX_PAYLOAD_BYTES
+    ) -> list[list[dict]]:
+        """Split mapped spans into chunks that fit within the payload limit."""
+        chunks: list[list[dict]] = []
+        current_chunk: list[dict] = []
+        current_size = 0
+        overhead = 200  # approximate envelope overhead
+
+        for span in mapped_spans:
+            span_size = len(
+                json.dumps(span, separators=(",", ":"), ensure_ascii=False).encode()
+            )
+            if current_chunk and current_size + span_size + overhead > max_bytes:
+                chunks.append(current_chunk)
+                current_chunk = []
+                current_size = 0
+            current_chunk.append(span)
+            current_size += span_size
+
+        if current_chunk:
+            chunks.append(current_chunk)
+        return chunks if chunks else [[]]
 
     @staticmethod
     def _map_span(sp: ReadableSpan) -> dict:
@@ -552,6 +646,18 @@ class Agent365ManualExporter(SpanExporter):
                 for ev in sp.events
             ]
 
+        # Map links
+        links = None
+        if sp.links:
+            links = [
+                {
+                    "traceId": f"{link.context.trace_id:032x}",
+                    "spanId": f"{link.context.span_id:016x}",
+                    "attributes": dict(link.attributes) if link.attributes else None,
+                }
+                for link in sp.links
+            ]
+
         # Map status
         status_code = sp.status.status_code if sp.status else StatusCode.UNSET
         status = {
@@ -569,7 +675,7 @@ class Agent365ManualExporter(SpanExporter):
             "endTimeUnixNano": sp.end_time,
             "attributes": attrs or None,
             "events": events,
-            "links": None,
+            "links": links,
             "status": status,
         }
 
@@ -607,8 +713,9 @@ class Agent365ManualExporter(SpanExporter):
 ```python
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-def my_token_resolver(agent_id: str, tenant_id: str) -> str:
+def my_token_resolver(agent_id: str, tenant_id: str) -> str | None:
     # Your token acquisition logic here (MSAL, managed identity, etc.)
+    # Return None if token cannot be acquired
     return "your-bearer-token"
 
 exporter = Agent365ManualExporter(token_resolver=my_token_resolver)
@@ -648,7 +755,7 @@ PROVIDER_NAME = "azure"
 SERVER_ADDRESS = "my-resource.openai.azure.com"
 
 
-def my_token_resolver(agent_id: str, tenant_id: str) -> str:
+def my_token_resolver(agent_id: str, tenant_id: str) -> str | None:
     """Replace with your actual token acquisition logic."""
     raise NotImplementedError("Implement your token resolver")
 
