@@ -300,9 +300,7 @@ class TestOutputMessageDefaults(unittest.TestCase):
     def test_serialized_output_includes_finish_reason(self):
         """finish_reason is always present in serialized output (required per OTel spec)."""
         wrapper = OutputMessages(
-            messages=[
-                OutputMessage(role=MessageRole.ASSISTANT, parts=[TextPart(content="Hi")])
-            ]
+            messages=[OutputMessage(role=MessageRole.ASSISTANT, parts=[TextPart(content="Hi")])]
         )
         result = serialize_messages(wrapper)
         parsed = json.loads(result)
@@ -434,9 +432,7 @@ class TestSerializationFormat(unittest.TestCase):
             messages=[
                 OutputMessage(
                     role=MessageRole.ASSISTANT,
-                    parts=[
-                        ToolCallRequestPart(name="search", id="c1", arguments={"q": "test"})
-                    ],
+                    parts=[ToolCallRequestPart(name="search", id="c1", arguments={"q": "test"})],
                     finish_reason=FinishReason.TOOL_CALL.value,
                 )
             ]
