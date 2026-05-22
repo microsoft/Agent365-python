@@ -24,7 +24,7 @@ class TestMapInputMessages:
         result = map_input_messages("Hello world")
         assert result is not None
         data = json.loads(result)
-        
+
         assert len(data) == 1
         assert data[0]["role"] == "user"
         assert data[0]["parts"][0]["type"] == "text"
@@ -39,7 +39,7 @@ class TestMapInputMessages:
         result = map_input_messages(raw)
         assert result is not None
         data = json.loads(result)
-        
+
         assert len(data) == 2
         assert data[0]["role"] == "system"
         assert data[0]["parts"][0]["content"] == "You are helpful."
@@ -65,7 +65,7 @@ class TestMapInputMessages:
         result = map_input_messages(raw)
         assert result is not None
         data = json.loads(result)
-        
+
         assert len(data) == 3
 
         # User message
@@ -103,7 +103,7 @@ class TestMapInputMessages:
         result = map_input_messages(raw)
         assert result is not None
         data = json.loads(result)
-        
+
         assert len(data) == 3
 
         # Message
@@ -134,7 +134,7 @@ class TestMapInputMessages:
         result = map_input_messages("not json {")
         assert result is not None
         data = json.loads(result)
-        
+
         assert data[0]["parts"][0]["content"] == "not json {"
 
     def test_empty_list_returns_none(self) -> None:
@@ -151,7 +151,7 @@ class TestMapOutputMessages:
         result = map_output_messages("The answer is 42.")
         assert result is not None
         data = json.loads(result)
-        
+
         assert data[0]["role"] == "assistant"
         assert data[0]["parts"][0]["content"] == "The answer is 42."
 
@@ -167,7 +167,7 @@ class TestMapOutputMessages:
         result = map_output_messages(raw)
         assert result is not None
         data = json.loads(result)
-        
+
         assert len(data) == 1
         msg = data[0]
         assert msg["role"] == "assistant"
@@ -216,7 +216,7 @@ class TestMapOutputMessages:
         result = map_output_messages(raw)
         assert result is not None
         data = json.loads(result)
-        
+
         msg = data[0]
         assert msg["role"] == "assistant"
         assert msg["parts"][0]["type"] == "text"
@@ -257,5 +257,5 @@ class TestMapOutputMessages:
         result = map_output_messages("bad json")
         assert result is not None
         data = json.loads(result)
-        
+
         assert data[0]["role"] == "assistant"
