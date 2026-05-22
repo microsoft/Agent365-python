@@ -28,7 +28,6 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_OUTPUT_MESSAGES_KEY,
 )
 from microsoft_agents_a365.observability.core.models.messages import (
-    A365_MESSAGE_SCHEMA_VERSION,
     ChatMessage,
     FinishReason,
     InputMessages,
@@ -86,9 +85,9 @@ class ScopeMessageTestBase(unittest.TestCase):
         self.assertTrue(spans, "Expected at least one span")
         return dict(getattr(spans[-1], "attributes", {}) or {})
 
-    def _parse_messages(self, attr_value: str) -> dict:
+    def _parse_messages(self, attr_value: str) -> list:
         parsed = json.loads(attr_value)
-        self.assertEqual(parsed["version"], A365_MESSAGE_SCHEMA_VERSION)
+        self.assertIsInstance(parsed, list)
         return parsed
 
 
@@ -96,16 +95,16 @@ class TestInvokeAgentScopeMessages(ScopeMessageTestBase):
     """Tests for InvokeAgentScope message recording."""
 
     def test_record_input_messages_with_strings(self):
-        """Plain string list should be auto-wrapped into versioned format."""
+        """Plain string list should be auto-wrapped into structured format."""
         scope = InvokeAgentScope.start(Request(), self.invoke_scope_details, self.agent_details)
         scope.record_input_messages(["What is GDPR?"])
         scope.dispose()
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 1)
-        self.assertEqual(parsed["messages"][0]["role"], "user")
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "What is GDPR?")
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["role"], "user")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "What is GDPR?")
 
     def test_record_input_messages_with_structured(self):
         """Versioned InputMessages wrapper should be serialized as-is."""
@@ -127,9 +126,9 @@ class TestInvokeAgentScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 2)
-        self.assertEqual(parsed["messages"][0]["role"], "system")
-        self.assertEqual(parsed["messages"][1]["role"], "user")
+        self.assertEqual(len(parsed), 2)
+        self.assertEqual(parsed[0]["role"], "system")
+        self.assertEqual(parsed[1]["role"], "user")
 
     def test_record_output_messages_with_strings(self):
         scope = InvokeAgentScope.start(Request(), self.invoke_scope_details, self.agent_details)
@@ -138,9 +137,9 @@ class TestInvokeAgentScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["role"], "assistant")
+        self.assertEqual(parsed[0]["role"], "assistant")
         self.assertEqual(
-            parsed["messages"][0]["parts"][0]["content"],
+            parsed[0]["parts"][0]["content"],
             "GDPR requires data minimization.",
         )
 
@@ -163,21 +162,21 @@ class TestInvokeAgentScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        msg = parsed["messages"][0]
+        msg = parsed[0]
         self.assertEqual(msg["finish_reason"], "stop")
         self.assertEqual(len(msg["parts"]), 2)
         self.assertEqual(msg["parts"][0]["type"], "reasoning")
         self.assertEqual(msg["parts"][1]["type"], "text")
 
     def test_record_response_wraps_string(self):
-        """record_response(str) should produce versioned output messages."""
+        """record_response(str) should produce structured output messages."""
         scope = InvokeAgentScope.start(Request(), self.invoke_scope_details, self.agent_details)
         scope.record_response("Simple response")
         scope.dispose()
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Simple response")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Simple response")
 
     def test_request_content_string_auto_wrapped(self):
         """Request.content as plain string should be wrapped into versioned format."""
@@ -187,8 +186,8 @@ class TestInvokeAgentScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["role"], "user")
-        self.assertIn("What is GDPR?", parsed["messages"][0]["parts"][0]["content"])
+        self.assertEqual(parsed[0]["role"], "user")
+        self.assertIn("What is GDPR?", parsed[0]["parts"][0]["content"])
 
     def test_request_content_structured_input(self):
         """Request.content as InputMessages should be serialized directly."""
@@ -201,7 +200,7 @@ class TestInvokeAgentScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Hello")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Hello")
 
 
 class TestInferenceScopeMessages(ScopeMessageTestBase):
@@ -214,8 +213,8 @@ class TestInferenceScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["role"], "user")
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Explain quantum computing")
+        self.assertEqual(parsed[0]["role"], "user")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Explain quantum computing")
 
     def test_record_input_messages_with_structured(self):
         wrapper = InputMessages(
@@ -236,7 +235,7 @@ class TestInferenceScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 2)
+        self.assertEqual(len(parsed), 2)
 
     def test_record_output_messages_with_strings(self):
         scope = InferenceScope.start(Request(), self.inference_details, self.agent_details)
@@ -245,7 +244,7 @@ class TestInferenceScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["role"], "assistant")
+        self.assertEqual(parsed[0]["role"], "assistant")
 
     def test_record_output_messages_with_structured(self):
         wrapper = OutputMessages(
@@ -263,7 +262,7 @@ class TestInferenceScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["finish_reason"], "stop")
+        self.assertEqual(parsed[0]["finish_reason"], "stop")
 
     def test_request_content_string_auto_wrapped(self):
         request = Request(content="Test content")
@@ -272,24 +271,24 @@ class TestInferenceScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Test content")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Test content")
 
 
 class TestOutputScopeMessages(ScopeMessageTestBase):
     """Tests for OutputScope structured message support."""
 
     def test_initial_string_messages_wrapped(self):
-        """Response with plain strings should produce versioned output."""
+        """Response with plain strings should produce structured output."""
         response = Response(messages=["First", "Second"])
         with OutputScope.start(Request(), response, self.agent_details):
             pass
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 2)
-        self.assertEqual(parsed["messages"][0]["role"], "assistant")
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "First")
-        self.assertEqual(parsed["messages"][1]["parts"][0]["content"], "Second")
+        self.assertEqual(len(parsed), 2)
+        self.assertEqual(parsed[0]["role"], "assistant")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "First")
+        self.assertEqual(parsed[1]["parts"][0]["content"], "Second")
 
     def test_initial_structured_messages(self):
         """Response with OutputMessages should be serialized directly."""
@@ -308,7 +307,7 @@ class TestOutputScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["finish_reason"], "stop")
+        self.assertEqual(parsed[0]["finish_reason"], "stop")
 
     def test_record_overwrites_string_messages(self):
         """record_output_messages with strings overwrites previous messages."""
@@ -318,9 +317,9 @@ class TestOutputScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 1)
+        self.assertEqual(len(parsed), 1)
         self.assertNotIn("Initial", attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Replacement")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Replacement")
 
     def test_record_overwrites_with_structured(self):
         """record_output_messages with OutputMessages overwrites previous messages."""
@@ -339,8 +338,8 @@ class TestOutputScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 1)
-        self.assertEqual(parsed["messages"][0]["finish_reason"], "stop")
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["finish_reason"], "stop")
 
     def test_record_overwrites_with_dict(self):
         """record_output_messages with dict sets tool result directly."""
@@ -360,8 +359,8 @@ class TestOutputScopeMessages(ScopeMessageTestBase):
 
         attrs = self._get_last_span_attrs()
         parsed = self._parse_messages(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(len(parsed["messages"]), 1)
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Only initial")
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Only initial")
 
 
 if __name__ == "__main__":

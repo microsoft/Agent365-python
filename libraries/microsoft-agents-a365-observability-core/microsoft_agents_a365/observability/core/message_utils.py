@@ -4,7 +4,7 @@
 """Conversion and serialization helpers for OTEL gen-ai message format.
 
 Provides normalization from plain ``list[str]`` (backward compat) to the
-versioned wrapper format, and a non-throwing ``serialize_messages`` function.
+structured array format, and a non-throwing ``serialize_messages`` function.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from enum import Enum
 from typing import Union
 
 from .models.messages import (
-    A365_MESSAGE_SCHEMA_VERSION,
     ChatMessage,
     InputMessages,
     InputMessagesParam,
@@ -40,7 +39,7 @@ def is_string_list(
 def is_wrapped_messages(
     param: Union[InputMessagesParam, OutputMessagesParam],
 ) -> bool:
-    """Return ``True`` when *param* is a versioned wrapper."""
+    """Return ``True`` when *param* is a structured message container."""
     return isinstance(param, (InputMessages, OutputMessages))
 
 
@@ -71,7 +70,7 @@ def to_output_messages(messages: list[str]) -> list[OutputMessage]:
 
 
 def normalize_input_messages(param: InputMessagesParam) -> InputMessages:
-    """Normalize an ``InputMessagesParam`` to a versioned ``InputMessages`` wrapper.
+    """Normalize an ``InputMessagesParam`` to an ``InputMessages`` instance.
 
     - ``str`` → wrapped in a single-element list, then converted.
     - ``list[str]`` → converted to ``ChatMessage`` list and wrapped.
@@ -85,7 +84,7 @@ def normalize_input_messages(param: InputMessagesParam) -> InputMessages:
 
 
 def normalize_output_messages(param: OutputMessagesParam) -> OutputMessages:
-    """Normalize an ``OutputMessagesParam`` to a versioned ``OutputMessages`` wrapper.
+    """Normalize an ``OutputMessagesParam`` to an ``OutputMessages`` instance.
 
     - ``str`` → wrapped in a single-element list, then converted.
     - ``list[str]`` → converted to ``OutputMessage`` list and wrapped.
@@ -114,37 +113,34 @@ def _message_dict_factory(items: list[tuple[str, object]]) -> dict[str, object]:
 def serialize_messages(
     wrapper: Union[InputMessages, OutputMessages],
 ) -> str:
-    """Serialize a versioned message wrapper to JSON.
+    """Serialize a message container to a JSON array.
 
-    The output is the full wrapper object:
-    ``{"version":"0.1.0","messages":[...]}``.
+    The output is a plain JSON array of message objects per OTel gen-ai
+    semantic conventions: ``[{"role":"user","parts":[...]}]``.
 
     The try/except ensures telemetry recording is non-throwing even when
     message parts contain non-JSON-serializable values.
     """
     try:
-        return json.dumps(
-            asdict(wrapper, dict_factory=_message_dict_factory),
-            default=str,
-            ensure_ascii=False,
-        )
+        messages_dicts = [
+            asdict(msg, dict_factory=_message_dict_factory) for msg in wrapper.messages
+        ]
+        return json.dumps(messages_dicts, default=str, ensure_ascii=False)
     except Exception:
         logger.warning("Failed to serialize messages; using fallback.", exc_info=True)
         messages = getattr(wrapper, "messages", [])
         count = len(messages) if isinstance(messages, list) else 0
         noun = "message" if count == 1 else "messages"
-        fallback = {
-            "version": A365_MESSAGE_SCHEMA_VERSION,
-            "messages": [
-                {
-                    "role": MessageRole.SYSTEM.value,
-                    "parts": [
-                        {
-                            "type": "text",
-                            "content": f"[serialization failed: {count} {noun}]",
-                        }
-                    ],
-                }
-            ],
-        }
+        fallback = [
+            {
+                "role": MessageRole.SYSTEM.value,
+                "parts": [
+                    {
+                        "type": "text",
+                        "content": f"[serialization failed: {count} {noun}]",
+                    }
+                ],
+                "finish_reason": "error",
+            }
+        ]
         return json.dumps(fallback, ensure_ascii=False)

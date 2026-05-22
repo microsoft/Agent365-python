@@ -19,7 +19,6 @@ from microsoft_agents_a365.observability.core.message_utils import (
     to_output_messages,
 )
 from microsoft_agents_a365.observability.core.models.messages import (
-    A365_MESSAGE_SCHEMA_VERSION,
     BlobPart,
     ChatMessage,
     FinishReason,
@@ -110,7 +109,6 @@ class TestNormalization(unittest.TestCase):
     def test_normalize_input_from_strings(self):
         result = normalize_input_messages(["Hello"])
         self.assertIsInstance(result, InputMessages)
-        self.assertEqual(result.version, A365_MESSAGE_SCHEMA_VERSION)
         self.assertEqual(len(result.messages), 1)
         self.assertEqual(result.messages[0].role, MessageRole.USER)
 
@@ -126,7 +124,6 @@ class TestNormalization(unittest.TestCase):
     def test_normalize_output_from_strings(self):
         result = normalize_output_messages(["Response"])
         self.assertIsInstance(result, OutputMessages)
-        self.assertEqual(result.version, A365_MESSAGE_SCHEMA_VERSION)
         self.assertEqual(len(result.messages), 1)
         self.assertEqual(result.messages[0].role, MessageRole.ASSISTANT)
 
@@ -164,11 +161,11 @@ class TestSerialization(unittest.TestCase):
         result = serialize_messages(wrapper)
         parsed = json.loads(result)
 
-        self.assertEqual(parsed["version"], A365_MESSAGE_SCHEMA_VERSION)
-        self.assertEqual(len(parsed["messages"]), 1)
-        self.assertEqual(parsed["messages"][0]["role"], "user")
-        self.assertEqual(parsed["messages"][0]["parts"][0]["type"], "text")
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Hello")
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["role"], "user")
+        self.assertEqual(parsed[0]["parts"][0]["type"], "text")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Hello")
 
     def test_serialize_output_messages(self):
         wrapper = OutputMessages(
@@ -183,9 +180,9 @@ class TestSerialization(unittest.TestCase):
         result = serialize_messages(wrapper)
         parsed = json.loads(result)
 
-        self.assertEqual(parsed["version"], A365_MESSAGE_SCHEMA_VERSION)
-        self.assertEqual(parsed["messages"][0]["role"], "assistant")
-        self.assertEqual(parsed["messages"][0]["finish_reason"], "stop")
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(parsed[0]["role"], "assistant")
+        self.assertEqual(parsed[0]["finish_reason"], "stop")
 
     def test_serialize_omits_none_values(self):
         wrapper = InputMessages(
@@ -195,7 +192,7 @@ class TestSerialization(unittest.TestCase):
         parsed = json.loads(result)
 
         # name is None so should not appear
-        self.assertNotIn("name", parsed["messages"][0])
+        self.assertNotIn("name", parsed[0])
 
     def test_serialize_complex_parts(self):
         wrapper = InputMessages(
@@ -212,7 +209,7 @@ class TestSerialization(unittest.TestCase):
         result = serialize_messages(wrapper)
         parsed = json.loads(result)
 
-        parts = parsed["messages"][0]["parts"]
+        parts = parsed[0]["parts"]
         self.assertEqual(len(parts), 2)
         self.assertEqual(parts[0]["type"], "text")
         self.assertEqual(parts[1]["type"], "blob")
@@ -237,7 +234,7 @@ class TestSerialization(unittest.TestCase):
         result = serialize_messages(wrapper)
         parsed = json.loads(result)
 
-        part = parsed["messages"][0]["parts"][0]
+        part = parsed[0]["parts"][0]
         self.assertEqual(part["type"], "tool_call")
         self.assertEqual(part["name"], "search")
         self.assertEqual(part["id"], "call_123")
@@ -259,7 +256,7 @@ class TestSerialization(unittest.TestCase):
         result = serialize_messages(wrapper)
         parsed = json.loads(result)
 
-        parts = parsed["messages"][0]["parts"]
+        parts = parsed[0]["parts"]
         self.assertEqual(parts[0]["type"], "reasoning")
         self.assertEqual(parts[0]["content"], "Checking GDPR Article 5")
         self.assertEqual(parts[1]["type"], "text")
@@ -281,30 +278,173 @@ class TestSerialization(unittest.TestCase):
         wrapper = InputMessages(messages=[])
         result = serialize_messages(wrapper)
         parsed = json.loads(result)
-        self.assertEqual(parsed["version"], A365_MESSAGE_SCHEMA_VERSION)
-        self.assertEqual(parsed["messages"], [])
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(parsed, [])
 
 
-class TestVersionField(unittest.TestCase):
-    """Tests for the version field on wrappers."""
+class TestOutputMessageDefaults(unittest.TestCase):
+    """Tests for OutputMessage default finish_reason."""
 
-    def test_input_messages_version_is_constant(self):
-        wrapper = InputMessages(messages=[])
-        self.assertEqual(wrapper.version, A365_MESSAGE_SCHEMA_VERSION)
+    def test_output_message_defaults_to_stop(self):
+        msg = OutputMessage(role=MessageRole.ASSISTANT, parts=[TextPart(content="Hi")])
+        self.assertEqual(msg.finish_reason, "stop")
 
-    def test_output_messages_version_is_constant(self):
-        wrapper = OutputMessages(messages=[])
-        self.assertEqual(wrapper.version, A365_MESSAGE_SCHEMA_VERSION)
+    def test_output_message_custom_finish_reason(self):
+        msg = OutputMessage(
+            role=MessageRole.ASSISTANT,
+            parts=[TextPart(content="Hi")],
+            finish_reason=FinishReason.TOOL_CALL.value,
+        )
+        self.assertEqual(msg.finish_reason, "tool_call")
 
-    def test_version_not_settable_via_constructor(self):
-        """Version field uses init=False so it cannot be passed as a constructor arg."""
-        with self.assertRaises(TypeError):
-            InputMessages(messages=[], version="99.99.99")  # type: ignore[call-arg]
+    def test_serialized_output_includes_finish_reason(self):
+        """finish_reason is always present in serialized output (required per OTel spec)."""
+        wrapper = OutputMessages(
+            messages=[
+                OutputMessage(role=MessageRole.ASSISTANT, parts=[TextPart(content="Hi")])
+            ]
+        )
+        result = serialize_messages(wrapper)
+        parsed = json.loads(result)
+        self.assertEqual(parsed[0]["finish_reason"], "stop")
 
-    def test_version_embedded_in_serialized_output(self):
-        wrapper = InputMessages(messages=[])
-        result = json.loads(serialize_messages(wrapper))
-        self.assertEqual(result["version"], A365_MESSAGE_SCHEMA_VERSION)
+
+class TestSerializationFormat(unittest.TestCase):
+    """Ensure ALL serialization paths produce a plain JSON array (no wrapper object).
+
+    Per OTel gen-ai semantic conventions, the serialized form must always be:
+        [{"role": "...", "parts": [...]}]
+    Never the old {"version": "...", "messages": [...]} format.
+    """
+
+    def _assert_plain_array(self, result: str) -> list:
+        """Assert result is a JSON array of message dicts with role+parts."""
+        parsed = json.loads(result)
+        self.assertIsInstance(parsed, list, "Serialized output must be a JSON array")
+        self.assertNotIsInstance(parsed, dict, "Must not be a wrapper object")
+        for msg in parsed:
+            self.assertIsInstance(msg, dict)
+            self.assertIn("role", msg, "Each message must have 'role'")
+            self.assertIn("parts", msg, "Each message must have 'parts'")
+            self.assertIsInstance(msg["parts"], list)
+            self.assertNotIn("version", msg, "No 'version' field in messages")
+        # Top-level must never contain 'version' or 'messages' keys (old wrapper)
+        raw_text = result.strip()
+        self.assertTrue(raw_text.startswith("["), "Must start with '['")
+        return parsed
+
+    def test_input_from_string(self):
+        """Single string normalized and serialized."""
+        wrapper = normalize_input_messages("Hello")
+        result = serialize_messages(wrapper)
+        msgs = self._assert_plain_array(result)
+        self.assertEqual(msgs[0]["role"], "user")
+        self.assertEqual(msgs[0]["parts"][0]["content"], "Hello")
+
+    def test_input_from_string_list(self):
+        """String list normalized and serialized."""
+        wrapper = normalize_input_messages(["First", "Second"])
+        result = serialize_messages(wrapper)
+        msgs = self._assert_plain_array(result)
+        self.assertEqual(len(msgs), 2)
+        self.assertEqual(msgs[0]["parts"][0]["content"], "First")
+        self.assertEqual(msgs[1]["parts"][0]["content"], "Second")
+
+    def test_input_from_structured(self):
+        """Pre-built InputMessages serialized."""
+        wrapper = InputMessages(
+            messages=[
+                ChatMessage(role=MessageRole.SYSTEM, parts=[TextPart(content="System")]),
+                ChatMessage(role=MessageRole.USER, parts=[TextPart(content="User")]),
+            ]
+        )
+        result = serialize_messages(wrapper)
+        msgs = self._assert_plain_array(result)
+        self.assertEqual(msgs[0]["role"], "system")
+        self.assertEqual(msgs[1]["role"], "user")
+
+    def test_output_from_string(self):
+        """Single string normalized to output and serialized."""
+        wrapper = normalize_output_messages("Response")
+        result = serialize_messages(wrapper)
+        msgs = self._assert_plain_array(result)
+        self.assertEqual(msgs[0]["role"], "assistant")
+        self.assertEqual(msgs[0]["parts"][0]["content"], "Response")
+        self.assertIn("finish_reason", msgs[0])
+
+    def test_output_from_string_list(self):
+        """String list normalized to output and serialized."""
+        wrapper = normalize_output_messages(["A", "B"])
+        result = serialize_messages(wrapper)
+        msgs = self._assert_plain_array(result)
+        self.assertEqual(len(msgs), 2)
+        for msg in msgs:
+            self.assertEqual(msg["role"], "assistant")
+            self.assertIn("finish_reason", msg)
+
+    def test_output_from_structured(self):
+        """Pre-built OutputMessages serialized."""
+        wrapper = OutputMessages(
+            messages=[
+                OutputMessage(
+                    role=MessageRole.ASSISTANT,
+                    parts=[TextPart(content="Done")],
+                    finish_reason=FinishReason.STOP.value,
+                )
+            ]
+        )
+        result = serialize_messages(wrapper)
+        msgs = self._assert_plain_array(result)
+        self.assertEqual(msgs[0]["finish_reason"], "stop")
+
+    def test_empty_input_messages(self):
+        """Empty InputMessages serializes to empty array."""
+        result = serialize_messages(InputMessages(messages=[]))
+        parsed = json.loads(result)
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(parsed, [])
+
+    def test_empty_output_messages(self):
+        """Empty OutputMessages serializes to empty array."""
+        result = serialize_messages(OutputMessages(messages=[]))
+        parsed = json.loads(result)
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(parsed, [])
+
+    def test_multi_part_message(self):
+        """Message with multiple parts serializes as plain array."""
+        wrapper = InputMessages(
+            messages=[
+                ChatMessage(
+                    role=MessageRole.USER,
+                    parts=[
+                        TextPart(content="Look at this"),
+                        BlobPart(modality="image", content="base64==", mime_type="image/png"),
+                    ],
+                )
+            ]
+        )
+        result = serialize_messages(wrapper)
+        msgs = self._assert_plain_array(result)
+        self.assertEqual(len(msgs[0]["parts"]), 2)
+
+    def test_tool_call_message(self):
+        """Tool call parts serialize as plain array."""
+        wrapper = OutputMessages(
+            messages=[
+                OutputMessage(
+                    role=MessageRole.ASSISTANT,
+                    parts=[
+                        ToolCallRequestPart(name="search", id="c1", arguments={"q": "test"})
+                    ],
+                    finish_reason=FinishReason.TOOL_CALL.value,
+                )
+            ]
+        )
+        result = serialize_messages(wrapper)
+        msgs = self._assert_plain_array(result)
+        self.assertEqual(msgs[0]["parts"][0]["type"], "tool_call")
+        self.assertEqual(msgs[0]["finish_reason"], "tool_call")
 
 
 if __name__ == "__main__":

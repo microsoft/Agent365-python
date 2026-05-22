@@ -24,11 +24,11 @@ class TestMapInputMessages:
         result = map_input_messages("Hello world")
         assert result is not None
         data = json.loads(result)
-        assert data["version"] == "0.1.0"
-        assert len(data["messages"]) == 1
-        assert data["messages"][0]["role"] == "user"
-        assert data["messages"][0]["parts"][0]["type"] == "text"
-        assert data["messages"][0]["parts"][0]["content"] == "Hello world"
+        
+        assert len(data) == 1
+        assert data[0]["role"] == "user"
+        assert data[0]["parts"][0]["type"] == "text"
+        assert data[0]["parts"][0]["content"] == "Hello world"
 
     def test_chat_completions_format(self) -> None:
         """Standard chat completions format with system + user messages."""
@@ -39,12 +39,12 @@ class TestMapInputMessages:
         result = map_input_messages(raw)
         assert result is not None
         data = json.loads(result)
-        assert data["version"] == "0.1.0"
-        assert len(data["messages"]) == 2
-        assert data["messages"][0]["role"] == "system"
-        assert data["messages"][0]["parts"][0]["content"] == "You are helpful."
-        assert data["messages"][1]["role"] == "user"
-        assert data["messages"][1]["parts"][0]["content"] == "Hi there"
+        
+        assert len(data) == 2
+        assert data[0]["role"] == "system"
+        assert data[0]["parts"][0]["content"] == "You are helpful."
+        assert data[1]["role"] == "user"
+        assert data[1]["parts"][0]["content"] == "Hi there"
 
     def test_chat_completions_with_tool_calls(self) -> None:
         """Messages with assistant tool_calls and tool response."""
@@ -65,24 +65,24 @@ class TestMapInputMessages:
         result = map_input_messages(raw)
         assert result is not None
         data = json.loads(result)
-        assert data["version"] == "0.1.0"
-        assert len(data["messages"]) == 3
+        
+        assert len(data) == 3
 
         # User message
-        assert data["messages"][0]["role"] == "user"
-        assert data["messages"][0]["parts"][0]["type"] == "text"
+        assert data[0]["role"] == "user"
+        assert data[0]["parts"][0]["type"] == "text"
 
         # Assistant with tool call
-        assert data["messages"][1]["role"] == "assistant"
-        assert data["messages"][1]["parts"][0]["type"] == "tool_call"
-        assert data["messages"][1]["parts"][0]["name"] == "add"
-        assert data["messages"][1]["parts"][0]["id"] == "call_123"
+        assert data[1]["role"] == "assistant"
+        assert data[1]["parts"][0]["type"] == "tool_call"
+        assert data[1]["parts"][0]["name"] == "add"
+        assert data[1]["parts"][0]["id"] == "call_123"
 
         # Tool response
-        assert data["messages"][2]["role"] == "tool"
-        assert data["messages"][2]["parts"][0]["type"] == "tool_call_response"
-        assert data["messages"][2]["parts"][0]["id"] == "call_123"
-        assert data["messages"][2]["parts"][0]["response"] == "4"
+        assert data[2]["role"] == "tool"
+        assert data[2]["parts"][0]["type"] == "tool_call_response"
+        assert data[2]["parts"][0]["id"] == "call_123"
+        assert data[2]["parts"][0]["response"] == "4"
 
     def test_response_input_item_param_format(self) -> None:
         """ResponseInputItemParam format with typed items."""
@@ -103,22 +103,22 @@ class TestMapInputMessages:
         result = map_input_messages(raw)
         assert result is not None
         data = json.loads(result)
-        assert data["version"] == "0.1.0"
-        assert len(data["messages"]) == 3
+        
+        assert len(data) == 3
 
         # Message
-        assert data["messages"][0]["role"] == "user"
-        assert data["messages"][0]["parts"][0]["type"] == "text"
+        assert data[0]["role"] == "user"
+        assert data[0]["parts"][0]["type"] == "text"
 
         # Function call
-        assert data["messages"][1]["role"] == "assistant"
-        assert data["messages"][1]["parts"][0]["type"] == "tool_call"
-        assert data["messages"][1]["parts"][0]["name"] == "get_weather"
+        assert data[1]["role"] == "assistant"
+        assert data[1]["parts"][0]["type"] == "tool_call"
+        assert data[1]["parts"][0]["name"] == "get_weather"
 
         # Function call output
-        assert data["messages"][2]["role"] == "tool"
-        assert data["messages"][2]["parts"][0]["type"] == "tool_call_response"
-        assert data["messages"][2]["parts"][0]["response"] == "Sunny, 22C"
+        assert data[2]["role"] == "tool"
+        assert data[2]["parts"][0]["type"] == "tool_call_response"
+        assert data[2]["parts"][0]["response"] == "Sunny, 22C"
 
     def test_message_without_type_field(self) -> None:
         """Messages without explicit 'type' field (EasyInputMessageParam)."""
@@ -128,14 +128,14 @@ class TestMapInputMessages:
         result = map_input_messages(raw)
         assert result is not None
         data = json.loads(result)
-        assert data["messages"][0]["role"] == "user"
+        assert data[0]["role"] == "user"
 
     def test_invalid_json_wraps_as_plain_text(self) -> None:
         result = map_input_messages("not json {")
         assert result is not None
         data = json.loads(result)
-        assert data["version"] == "0.1.0"
-        assert data["messages"][0]["parts"][0]["content"] == "not json {"
+        
+        assert data[0]["parts"][0]["content"] == "not json {"
 
     def test_empty_list_returns_none(self) -> None:
         assert map_input_messages("[]") is None
@@ -151,9 +151,9 @@ class TestMapOutputMessages:
         result = map_output_messages("The answer is 42.")
         assert result is not None
         data = json.loads(result)
-        assert data["version"] == "0.1.0"
-        assert data["messages"][0]["role"] == "assistant"
-        assert data["messages"][0]["parts"][0]["content"] == "The answer is 42."
+        
+        assert data[0]["role"] == "assistant"
+        assert data[0]["parts"][0]["content"] == "The answer is 42."
 
     def test_chat_completions_output(self) -> None:
         """Standard chat completions output with finish_reason."""
@@ -167,9 +167,9 @@ class TestMapOutputMessages:
         result = map_output_messages(raw)
         assert result is not None
         data = json.loads(result)
-        assert data["version"] == "0.1.0"
-        assert len(data["messages"]) == 1
-        msg = data["messages"][0]
+        
+        assert len(data) == 1
+        msg = data[0]
         assert msg["role"] == "assistant"
         assert msg["parts"][0]["type"] == "text"
         assert msg["parts"][0]["content"] == "Paris is the capital."
@@ -193,7 +193,7 @@ class TestMapOutputMessages:
         result = map_output_messages(raw)
         assert result is not None
         data = json.loads(result)
-        msg = data["messages"][0]
+        msg = data[0]
         assert msg["role"] == "assistant"
         assert msg["parts"][0]["type"] == "tool_call"
         assert msg["parts"][0]["name"] == "search"
@@ -216,8 +216,8 @@ class TestMapOutputMessages:
         result = map_output_messages(raw)
         assert result is not None
         data = json.loads(result)
-        assert data["version"] == "0.1.0"
-        msg = data["messages"][0]
+        
+        msg = data[0]
         assert msg["role"] == "assistant"
         assert msg["parts"][0]["type"] == "text"
         assert msg["parts"][0]["content"] == "Hello!"
@@ -239,7 +239,7 @@ class TestMapOutputMessages:
         result = map_output_messages(raw)
         assert result is not None
         data = json.loads(result)
-        msg = data["messages"][0]
+        msg = data[0]
         assert msg["role"] == "assistant"
         assert msg["parts"][0]["type"] == "tool_call"
         assert msg["parts"][0]["name"] == "get_weather"
@@ -257,5 +257,5 @@ class TestMapOutputMessages:
         result = map_output_messages("bad json")
         assert result is not None
         data = json.loads(result)
-        assert data["version"] == "0.1.0"
-        assert data["messages"][0]["role"] == "assistant"
+        
+        assert data[0]["role"] == "assistant"

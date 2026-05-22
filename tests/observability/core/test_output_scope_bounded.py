@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 
 from microsoft_agents_a365.observability.core.constants import GEN_AI_OUTPUT_MESSAGES_KEY
 from microsoft_agents_a365.observability.core.models.messages import (
-    A365_MESSAGE_SCHEMA_VERSION,
     MessageRole,
     OutputMessage,
     OutputMessages,
@@ -38,8 +37,8 @@ class TestOutputScopeOverwrite(unittest.TestCase):
         call_args = scope.set_tag_maybe.call_args
         self.assertEqual(call_args[0][0], GEN_AI_OUTPUT_MESSAGES_KEY)
         parsed = json.loads(call_args[0][1])
-        self.assertEqual(parsed["version"], A365_MESSAGE_SCHEMA_VERSION)
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Final response")
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Final response")
 
     def test_record_overwrites_with_structured(self):
         """Calling record_output_messages with OutputMessages sets the attribute."""
@@ -56,7 +55,7 @@ class TestOutputScopeOverwrite(unittest.TestCase):
 
         call_args = scope.set_tag_maybe.call_args
         parsed = json.loads(call_args[0][1])
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Structured")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Structured")
 
     def test_record_overwrites_with_dict(self):
         """Calling record_output_messages with dict sets JSON directly."""
@@ -77,7 +76,7 @@ class TestOutputScopeOverwrite(unittest.TestCase):
         call_args = scope.set_tag_maybe.call_args
         parsed = json.loads(call_args[0][1])
         self.assertNotIn("First", call_args[0][1])
-        self.assertEqual(parsed["messages"][0]["parts"][0]["content"], "Second")
+        self.assertEqual(parsed[0]["parts"][0]["content"], "Second")
 
 
 if __name__ == "__main__":

@@ -8,9 +8,8 @@ These tests use the real A365 observability pipeline:
 with a SpanCapturingExporter inside _EnrichingBatchSpanProcessor, then make
 real Azure OpenAI calls via LangChain and capture the span attributes.
 
-Currently LangChain emits gen_ai.input.messages / gen_ai.output.messages
-as plain JSON string arrays (e.g. '["Hello"]'). These tests document that
-raw format and will verify the A365 versioned format once the mapper is added.
+These tests verify the serialized gen_ai.input.messages / gen_ai.output.messages
+structured array format emitted by the observability pipeline.
 """
 
 import json
@@ -145,20 +144,13 @@ class TestLangChainMessageFormat:
         print(f"\n=== gen_ai.input.messages ===\n{raw_input}")
         input_data = json.loads(raw_input)
 
-        # Verify structure (currently plain string list or versioned format)
-        if isinstance(input_data, dict) and "version" in input_data:
-            # Versioned A365 format (after mapper is added)
-            assert input_data["version"] == "0.1.0"
-            messages_list = input_data["messages"]
-            for msg in messages_list:
-                assert "role" in msg
-                assert "parts" in msg
-            print("\n  ✓ Versioned A365 format detected")
-        elif isinstance(input_data, list):
-            # Current raw format: list of content strings
-            assert len(input_data) > 0
-            assert any("capital" in s.lower() for s in input_data if isinstance(s, str))
-            print("\n  → Raw string list format (pre-mapper)")
+        # Verify structured array format
+        assert isinstance(input_data, list)
+        messages_list = input_data
+        for msg in messages_list:
+            assert "role" in msg
+            assert "parts" in msg
+        print("\n  ✓ Structured array format detected")
 
         # --- Output messages ---
         raw_output = attrs.get(GEN_AI_OUTPUT_MESSAGES_KEY)
@@ -166,15 +158,11 @@ class TestLangChainMessageFormat:
         print(f"\n=== gen_ai.output.messages ===\n{raw_output}")
         output_data = json.loads(raw_output)
 
-        if isinstance(output_data, dict) and "version" in output_data:
-            assert output_data["version"] == "0.1.0"
-            for msg in output_data["messages"]:
-                assert msg["role"] == "assistant"
-                assert any(p["type"] == "text" for p in msg["parts"])
-            print("\n  ✓ Versioned A365 format detected")
-        elif isinstance(output_data, list):
-            assert len(output_data) > 0
-            print("\n  → Raw string list format (pre-mapper)")
+        assert isinstance(output_data, list)
+        for msg in output_data:
+            assert msg["role"] == "assistant"
+            assert any(p["type"] == "text" for p in msg["parts"])
+        print("\n  ✓ Structured array format detected")
 
     @pytest.mark.asyncio
     async def test_tool_call_message_mapping(self, llm: AzureChatOpenAI) -> None:

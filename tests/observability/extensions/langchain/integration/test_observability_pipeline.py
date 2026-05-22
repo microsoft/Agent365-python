@@ -7,20 +7,14 @@ These tests verify the full A365 observability pipeline:
   InvokeAgentScope → Inference (auto-instrumented) → ToolExecution (auto-instrumented)
 
 The CustomLangChainInstrumentor automatically creates inference spans for LLM
-calls and execute_tool spans for tool runs.  Its built-in message mapper
-converts LangChain messages into the versioned A365 message format
-(``{"version": "0.1.0", "messages": [...]}``) on ``gen_ai.input.messages``
-and ``gen_ai.output.messages`` span attributes.
+calls and execute_tool spans for tool runs. Its built-in message mapper
+converts LangChain messages into the structured array A365 message format
+(``[...]``) on ``gen_ai.input.messages`` and ``gen_ai.output.messages``
+span attributes.
 
 Wrapping the entire call in InvokeAgentScope makes all auto-instrumented spans
 children of the invoke_agent span (since ``separate_trace_from_runtime_context``
 defaults to ``False``).
-
-Note: the message-format assertions accept both the versioned dict structure
-*and* a raw JSON list.  The raw-list branch exists for backward compatibility
-with older instrumentation versions or third-party LangChain instrumentors that
-emit ``gen_ai.*.messages`` as plain JSON arrays before the A365 mapper was
-integrated.
 """
 
 import json
@@ -112,7 +106,7 @@ class TestLangChainObservabilityPipeline:
 
     Verifies that wrapping LangChain calls inside InvokeAgentScope
     produces a single trace with correct parent-child span hierarchy,
-    operation names, and A365 versioned message format attributes.
+    operation names, and A365 structured array message format attributes.
     """
 
     @pytest.fixture(autouse=True)
@@ -313,23 +307,22 @@ class TestLangChainObservabilityPipeline:
             print(f"\n✓ Found {len(tool_spans)} tool execution spans")
 
         # --- 8. A365 message format on inference spans ---
-        # The A365 mapper emits the versioned format {"version": "0.1.0", "messages": [...]}.
-        # Older or third-party instrumentors may emit a raw JSON list instead;
-        # the raw-list branch is kept for backward compatibility.
+        # The A365 mapper emits the structured array format [...].
         for inf_span in inference_spans:
             attrs = dict(inf_span.attributes or {})
             if GEN_AI_INPUT_MESSAGES_KEY in attrs:
                 input_data = json.loads(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-                if isinstance(input_data, dict) and "version" in input_data:
-                    assert input_data["version"] == "0.1.0"
-                    for msg in input_data["messages"]:
+                if isinstance(input_data, list):
+                    for msg in input_data:
                         assert "role" in msg
                         assert "parts" in msg
 
             if GEN_AI_OUTPUT_MESSAGES_KEY in attrs:
                 output_data = json.loads(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-                if isinstance(output_data, dict) and "version" in output_data:
-                    assert output_data["version"] == "0.1.0"
+                if isinstance(output_data, list):
+                    for msg in output_data:
+                        assert "role" in msg
+                        assert "parts" in msg
 
         print(
             f"\n✓ All pipeline assertions passed: "

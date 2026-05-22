@@ -188,7 +188,7 @@ class TestAgentFrameworkObservabilityPipeline:
         2. invoke_agent span is the root (no parent)
         3. Inference (chat) spans are descendants of invoke_agent
         4. Tool execution spans are descendants of invoke_agent
-        5. A365 message format on chat spans (versioned JSON)
+        5. A365 message format on chat spans (structured array format)
         6. Correct operation names and key attributes
         """
         request = Request(content="What is 15 + 27?", session_id="test-session-pipeline")
@@ -300,17 +300,15 @@ class TestAgentFrameworkObservabilityPipeline:
             attrs = dict(chat_span.attributes or {})
             if GEN_AI_INPUT_MESSAGES_KEY in attrs:
                 input_data = json.loads(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-                if isinstance(input_data, dict) and "version" in input_data:
-                    assert input_data["version"] == "0.1.0"
-                    for msg in input_data["messages"]:
+                if isinstance(input_data, list):
+                    for msg in input_data:
                         assert "role" in msg
                         assert "parts" in msg
 
             if GEN_AI_OUTPUT_MESSAGES_KEY in attrs:
                 output_data = json.loads(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-                if isinstance(output_data, dict) and "version" in output_data:
-                    assert output_data["version"] == "0.1.0"
-                    for msg in output_data["messages"]:
+                if isinstance(output_data, list):
+                    for msg in output_data:
                         assert "role" in msg
                         assert "parts" in msg
 

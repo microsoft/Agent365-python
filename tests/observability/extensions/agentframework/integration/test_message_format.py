@@ -81,7 +81,7 @@ class SpanCapturingExporter(SpanExporter):
 @pytest.mark.integration
 class TestAgentFrameworkMessageFormat:
     """Capture real AgentFramework span attributes after enrichment
-    and verify the A365 versioned message format."""
+    and verify the A365 structured array message format."""
 
     @pytest.fixture(autouse=True)
     def setup_observability(self) -> None:
@@ -144,7 +144,7 @@ class TestAgentFrameworkMessageFormat:
 
     @pytest.mark.asyncio
     async def test_simple_chat_message_mapping(self, chat_client: AzureOpenAIChatClient) -> None:
-        """Simple chat: verify exported spans contain versioned A365 messages
+        """Simple chat: verify exported spans contain structured A365 messages
         after enrichment (no manual mapper call)."""
         agent = RawAgent(
             client=chat_client,
@@ -163,14 +163,10 @@ class TestAgentFrameworkMessageFormat:
 
         attrs = dict(chat_spans[-1].attributes or {})
 
-        # --- Input messages: enriched to versioned format ---
+        # --- Input messages: enriched to structured array format ---
         input_data = json.loads(attrs[GEN_AI_INPUT_MESSAGES_KEY])
-        # Enricher should have produced versioned wrapper for chat spans
-        if isinstance(input_data, dict):
-            assert input_data["version"] == "0.1.0"
-            messages = input_data["messages"]
-        else:
-            messages = input_data
+        assert isinstance(input_data, list)
+        messages = input_data
 
         roles = [m["role"] for m in messages]
         assert "system" in roles
@@ -179,13 +175,10 @@ class TestAgentFrameworkMessageFormat:
             for part in msg["parts"]:
                 assert "type" in part
 
-        # --- Output messages: enriched to versioned format ---
+        # --- Output messages: enriched to structured array format ---
         output_data = json.loads(attrs[GEN_AI_OUTPUT_MESSAGES_KEY])
-        if isinstance(output_data, dict):
-            assert output_data["version"] == "0.1.0"
-            out_messages = output_data["messages"]
-        else:
-            out_messages = output_data
+        assert isinstance(output_data, list)
+        out_messages = output_data
 
         assert out_messages[0]["role"] == "assistant"
         assert any(p["type"] == "text" for p in out_messages[0]["parts"])
@@ -224,10 +217,11 @@ class TestAgentFrameworkMessageFormat:
                 if not raw:
                     continue
                 data = json.loads(raw)
-                messages = data["messages"] if isinstance(data, dict) else data
-                for msg in messages:
-                    for part in msg.get("parts", []):
-                        part_types.add(part.get("type", ""))
+                if isinstance(data, list):
+                    messages = data
+                    for msg in messages:
+                        for part in msg.get("parts", []):
+                            part_types.add(part.get("type", ""))
 
         assert "tool_call" in part_types, f"Expected tool_call in exported parts: {part_types}"
         assert "tool_call_response" in part_types, (

@@ -35,19 +35,19 @@ class TestAgentFrameworkSpanEnricher(unittest.TestCase):
         span.name = "invoke_agent Agent365Assistant"
         result = enrich_agent_framework_span(span)
 
-        # Input should be versioned format with user message
+        # Input should be structured array format with user message
         input_json = json.loads(result.attributes[GEN_AI_INPUT_MESSAGES_KEY])
-        self.assertEqual(input_json["version"], "0.1.0")
-        self.assertEqual(len(input_json["messages"]), 1)
-        self.assertEqual(input_json["messages"][0]["role"], "user")
-        self.assertEqual(input_json["messages"][0]["parts"][0]["content"], "Compute 15 % 4")
+        self.assertIsInstance(input_json, list)
+        self.assertEqual(len(input_json), 1)
+        self.assertEqual(input_json[0]["role"], "user")
+        self.assertEqual(input_json[0]["parts"][0]["content"], "Compute 15 % 4")
 
-        # Output should be versioned format: tool_call (no name -> filtered) + tool response + text
+        # Output should be structured array format: tool_call (no name -> filtered) + tool response + text
         output_json = json.loads(result.attributes[GEN_AI_OUTPUT_MESSAGES_KEY])
-        self.assertEqual(output_json["version"], "0.1.0")
+        self.assertIsInstance(output_json, list)
         # tool_call with no name is filtered, tool_call_response with no id/response passes,
         # assistant text passes
-        assistant_msgs = [m for m in output_json["messages"] if m["role"] == "assistant"]
+        assistant_msgs = [m for m in output_json if m["role"] == "assistant"]
         self.assertTrue(len(assistant_msgs) >= 1)
         # At least one assistant message should have a text part
         text_parts = [p for m in assistant_msgs for p in m["parts"] if p.get("type") == "text"]
