@@ -131,16 +131,16 @@ def serialize_messages(
         messages = getattr(wrapper, "messages", [])
         count = len(messages) if isinstance(messages, list) else 0
         noun = "message" if count == 1 else "messages"
-        fallback = [
-            {
-                "role": MessageRole.SYSTEM.value,
-                "parts": [
-                    {
-                        "type": "text",
-                        "content": f"[serialization failed: {count} {noun}]",
-                    }
-                ],
-                "finish_reason": "error",
-            }
-        ]
+        fallback_message = {
+            "role": MessageRole.SYSTEM.value,
+            "parts": [
+                {
+                    "type": "text",
+                    "content": f"[serialization failed: {count} {noun}]",
+                }
+            ],
+        }
+        if isinstance(wrapper, OutputMessages):
+            fallback_message["finish_reason"] = "error"
+        fallback = [fallback_message]
         return json.dumps(fallback, ensure_ascii=False)
