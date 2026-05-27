@@ -99,6 +99,7 @@ class TestEnrichingBatchSpanProcessor(unittest.TestCase):
         original_span.context = Mock()
         original_span.context.trace_id = 123
         original_span.context.span_id = 456
+        original_span.get_span_context.return_value = original_span.context
 
         # Call on_end
         processor.on_end(original_span)
@@ -125,6 +126,7 @@ class TestEnrichingBatchSpanProcessor(unittest.TestCase):
         original_span.context = Mock()
         original_span.context.trace_id = 123
         original_span.context.span_id = 456
+        original_span.get_span_context.return_value = original_span.context
 
         # Should not raise despite failing enricher
         processor.on_end(original_span)
@@ -142,6 +144,7 @@ class TestEnrichingBatchSpanProcessor(unittest.TestCase):
         original_span.context = Mock()
         original_span.context.trace_id = 123
         original_span.context.span_id = 456
+        original_span.get_span_context.return_value = original_span.context
 
         # Should not raise
         processor.on_end(original_span)

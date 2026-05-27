@@ -151,6 +151,7 @@ class TestExporterChunking(unittest.TestCase):
         ctx.trace_id = 0x1
         ctx.span_id = span_id
         mock_span.context = ctx
+        mock_span.get_span_context.return_value = ctx
         mock_span.parent = None
         mock_span.start_time = 1640995200000000000
         mock_span.end_time = 1640995260000000000
