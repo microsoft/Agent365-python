@@ -339,6 +339,27 @@ class TestApplyGuardrailScope(unittest.TestCase):
             attrs = self._get_attributes(spans[0])
             self.assertEqual(attrs[SECURITY_DECISION_TYPE_KEY], decision_type.value)
 
+    def test_request_content_serializes_structured_input(self):
+        """Test that non-string request content is JSON-serialized."""
+        details = GuardrailDetails(
+            target_type=GuardrailTargetType.LLM_INPUT,
+            decision_type=GuardrailDecisionType.ALLOW,
+        )
+
+        # Use a list of strings (InputMessagesParam allows list[str])
+        request = Request(
+            content=["hello", "world"],
+            conversation_id="conv-456",
+        )
+
+        with ApplyGuardrailScope.start(details, self.agent_details, request=request):
+            pass
+
+        spans = self.span_exporter.get_finished_spans()
+        attrs = self._get_attributes(spans[0])
+        # Should be JSON-serialized since it's not a plain string
+        self.assertEqual(attrs[SECURITY_CONTENT_INPUT_VALUE_KEY], '["hello", "world"]')
+
 
 if __name__ == "__main__":
     unittest.main()

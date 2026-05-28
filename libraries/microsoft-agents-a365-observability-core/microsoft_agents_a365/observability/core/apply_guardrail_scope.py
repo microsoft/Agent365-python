@@ -40,6 +40,7 @@ from .models.user_details import UserDetails
 from .opentelemetry_scope import OpenTelemetryScope
 from .request import Request
 from .span_details import SpanDetails
+from .utils import safe_json_dumps
 
 
 class ApplyGuardrailScope(OpenTelemetryScope):
@@ -146,7 +147,8 @@ class ApplyGuardrailScope(OpenTelemetryScope):
 
         # Request context
         if request is not None:
-            self.set_tag_maybe(SECURITY_CONTENT_INPUT_VALUE_KEY, request.content)
+            content_value = self._serialize_content(request.content)
+            self.set_tag_maybe(SECURITY_CONTENT_INPUT_VALUE_KEY, content_value)
             self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
             if request.channel is not None:
                 self.set_tag_maybe(CHANNEL_NAME_KEY, request.channel.name)
@@ -222,3 +224,17 @@ class ApplyGuardrailScope(OpenTelemetryScope):
         if details.guardian_name:
             return f"{APPLY_GUARDRAIL_OPERATION_NAME} {details.guardian_name} {details.target_type}"
         return f"{APPLY_GUARDRAIL_OPERATION_NAME} {details.target_type}"
+
+    @staticmethod
+    def _serialize_content(content: object) -> str | None:
+        """Serialize request content to a string suitable for an OTel attribute.
+
+        OTel attributes only accept primitive values or sequences of primitives.
+        If content is already a string it is returned as-is; otherwise it is
+        JSON-serialized so that structured InputMessages objects are captured.
+        """
+        if content is None:
+            return None
+        if isinstance(content, str):
+            return content
+        return safe_json_dumps(content)
