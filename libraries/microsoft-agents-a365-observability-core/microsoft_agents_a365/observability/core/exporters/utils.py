@@ -14,6 +14,7 @@ from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.trace import SpanKind, StatusCode
 
 from ..constants import (
+    APPLY_GUARDRAIL_OPERATION_NAME,
     CHAT_OPERATION_NAME,
     ENABLE_A365_OBSERVABILITY_EXPORTER,
     EXECUTE_TOOL_OPERATION_NAME,
@@ -38,6 +39,7 @@ GEN_AI_OPERATION_NAMES: frozenset[str] = frozenset(
         INVOKE_AGENT_OPERATION_NAME,
         EXECUTE_TOOL_OPERATION_NAME,
         OUTPUT_MESSAGES_OPERATION_NAME,
+        APPLY_GUARDRAIL_OPERATION_NAME,
         CHAT_OPERATION_NAME,
         InferenceOperationType.CHAT.value,
     }

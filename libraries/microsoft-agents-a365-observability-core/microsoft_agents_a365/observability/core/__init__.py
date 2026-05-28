@@ -4,6 +4,7 @@
 # Microsoft Agent 365 Python SDK for OpenTelemetry tracing.
 
 from .agent_details import AgentDetails
+from .apply_guardrail_scope import ApplyGuardrailScope
 from .config import (
     configure,
     get_tracer,
@@ -19,6 +20,11 @@ from .exporters.enriching_span_processor import (
     unregister_span_enricher,
 )
 from .exporters.spectra_exporter_options import SpectraExporterOptions
+from .guardrail_decision_type import GuardrailDecisionType
+from .guardrail_details import GuardrailDetails
+from .guardrail_finding import GuardrailFinding
+from .guardrail_risk_severity import GuardrailRiskSeverity
+from .guardrail_target_type import GuardrailTargetType
 from .inference_call_details import InferenceCallDetails
 from .models.service_endpoint import ServiceEndpoint
 from .inference_operation_type import InferenceOperationType
@@ -80,6 +86,7 @@ __all__ = [
     # Base scope class
     "OpenTelemetryScope",
     # Specific scope classes
+    "ApplyGuardrailScope",
     "ExecuteToolScope",
     "InvokeAgentScope",
     "InferenceScope",
@@ -98,7 +105,12 @@ __all__ = [
     "SpanDetails",
     "InferenceCallDetails",
     "ServiceEndpoint",
+    "GuardrailDetails",
+    "GuardrailFinding",
     # Enums
+    "GuardrailDecisionType",
+    "GuardrailRiskSeverity",
+    "GuardrailTargetType",
     "InferenceOperationType",
     "ToolType",
     # OTEL gen-ai message format types

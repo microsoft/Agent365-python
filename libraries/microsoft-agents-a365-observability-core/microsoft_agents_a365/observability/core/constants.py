@@ -7,6 +7,7 @@
 INVOKE_AGENT_OPERATION_NAME = "invoke_agent"
 EXECUTE_TOOL_OPERATION_NAME = "execute_tool"
 OUTPUT_MESSAGES_OPERATION_NAME = "output_messages"
+APPLY_GUARDRAIL_OPERATION_NAME = "apply_guardrail"
 CHAT_OPERATION_NAME = "chat"
 
 # OpenTelemetry semantic conventions
@@ -112,3 +113,32 @@ TELEMETRY_SDK_LANGUAGE_KEY = "telemetry.sdk.language"
 TELEMETRY_SDK_VERSION_KEY = "telemetry.sdk.version"
 TELEMETRY_SDK_NAME_VALUE = "A365ObservabilitySDK"
 TELEMETRY_SDK_LANGUAGE_VALUE = "python"
+
+# Guardian attributes
+GUARDIAN_ID_KEY = "microsoft.guardian.id"
+GUARDIAN_NAME_KEY = "microsoft.guardian.name"
+GUARDIAN_PROVIDER_NAME_KEY = "microsoft.guardian.provider.name"
+GUARDIAN_VERSION_KEY = "microsoft.guardian.version"
+
+# Security attributes
+SECURITY_DECISION_TYPE_KEY = "microsoft.security.decision.type"
+SECURITY_DECISION_REASON_KEY = "microsoft.security.decision.reason"
+SECURITY_DECISION_CODE_KEY = "microsoft.security.decision.code"
+SECURITY_TARGET_TYPE_KEY = "microsoft.security.target.type"
+SECURITY_TARGET_ID_KEY = "microsoft.security.target.id"
+SECURITY_POLICY_ID_KEY = "microsoft.security.policy.id"
+SECURITY_POLICY_NAME_KEY = "microsoft.security.policy.name"
+SECURITY_POLICY_VERSION_KEY = "microsoft.security.policy.version"
+SECURITY_CONTENT_INPUT_HASH_KEY = "microsoft.security.content.input.hash"
+SECURITY_CONTENT_MODIFIED_KEY = "microsoft.security.content.modified"
+SECURITY_EXTERNAL_EVENT_ID_KEY = "microsoft.security.external_event_id"
+SECURITY_CONTENT_INPUT_VALUE_KEY = "microsoft.security.content.input.value"
+SECURITY_CONTENT_OUTPUT_VALUE_KEY = "microsoft.security.content.output.value"
+
+# Security finding event
+SECURITY_FINDING_EVENT_NAME = "microsoft.security.finding"
+SECURITY_RISK_CATEGORY_KEY = "microsoft.security.risk.category"
+SECURITY_RISK_SEVERITY_KEY = "microsoft.security.risk.severity"
+SECURITY_RISK_SCORE_KEY = "microsoft.security.risk.score"
+SECURITY_RISK_METADATA_KEY = "microsoft.security.risk.metadata"
+SECURITY_POLICY_DECISION_TYPE_KEY = "microsoft.security.policy.decision.type"
