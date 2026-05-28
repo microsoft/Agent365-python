@@ -70,6 +70,7 @@ class TestAgent365Exporter(unittest.TestCase):
         mock_context.trace_id = trace_id
         mock_context.span_id = span_id
         mock_span.context = mock_context
+        mock_span.get_span_context.return_value = mock_context
 
         mock_span.parent = Mock() if parent_id else None
         if parent_id:

@@ -330,7 +330,7 @@ class _Agent365Exporter(SpanExporter):
         }
 
     def _map_span(self, sp: ReadableSpan) -> dict[str, Any]:
-        ctx = sp.context
+        ctx = sp.get_span_context()
 
         parent_span_id = None
         if sp.parent is not None and sp.parent.span_id != 0:
