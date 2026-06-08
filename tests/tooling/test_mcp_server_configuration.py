@@ -384,6 +384,53 @@ class TestMcpToolServerConfigurationService:
         assert len(servers) == 1
         assert servers[0].mcp_server_name == "V1Server"
 
+    @pytest.mark.asyncio
+    async def test_parse_gateway_response_captures_aggregate(self, service):
+        """Response-level connection metadata is captured into McpDiscoveryResult."""
+        payload = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "mcp_Salesforce",
+                    "mcpServerUniqueName": "mcp_Salesforce",
+                    "url": "https://gw.example/agents/v2/servers/mcp_Salesforce",
+                    "connectivityStatus": "Pending",
+                }
+            ],
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Pending",
+        }
+        mock_response = MagicMock()
+        mock_response.json = AsyncMock(return_value=payload)
+
+        result = await service._parse_gateway_response(mock_response)
+
+        assert len(result.servers) == 1
+        assert result.servers[0].mcp_server_name == "mcp_Salesforce"
+        assert result.all_connections_url == "https://make.example/all"
+        assert result.missing_connections_url == "https://make.example/missing"
+        assert result.connectivity_status == "Pending"
+
+    @pytest.mark.asyncio
+    async def test_parse_gateway_response_raw_array_has_no_aggregate(self, service):
+        """Legacy raw-array responses produce a result with aggregate fields None."""
+        payload = [
+            {
+                "mcpServerName": "V1Server",
+                "mcpServerUniqueName": "v1_server",
+                "url": "https://v1.example.com/mcp",
+            }
+        ]
+        mock_response = MagicMock()
+        mock_response.json = AsyncMock(return_value=payload)
+
+        result = await service._parse_gateway_response(mock_response)
+
+        assert len(result.servers) == 1
+        assert result.all_connections_url is None
+        assert result.missing_connections_url is None
+        assert result.connectivity_status is None
+
 
 class TestResolveTokenScopeForServer:
     """Tests for resolve_token_scope_for_server() utility function."""
