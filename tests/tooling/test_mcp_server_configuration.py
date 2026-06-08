@@ -48,6 +48,32 @@ class TestMCPServerConfig:
         with pytest.raises(ValueError, match="mcp_server_unique_name cannot be empty"):
             MCPServerConfig(mcp_server_name="test", mcp_server_unique_name="")
 
+    def test_mcp_server_config_connection_fields_default_none(self):
+        """Connection fields default to None for backward compatibility."""
+        config = MCPServerConfig(
+            mcp_server_name="TestServer",
+            mcp_server_unique_name="test_server",
+        )
+        assert config.id is None
+        assert config.all_connections_url is None
+        assert config.missing_connections_url is None
+        assert config.connectivity_status is None
+
+    def test_mcp_server_config_connection_fields_set(self):
+        """Connection fields are stored when provided."""
+        config = MCPServerConfig(
+            mcp_server_name="TestServer",
+            mcp_server_unique_name="test_server",
+            id="3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            all_connections_url="https://make.example/all",
+            missing_connections_url="https://make.example/missing",
+            connectivity_status="Pending",
+        )
+        assert config.id == "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        assert config.all_connections_url == "https://make.example/all"
+        assert config.missing_connections_url == "https://make.example/missing"
+        assert config.connectivity_status == "Pending"
+
 
 class TestMcpToolServerConfigurationService:
     """Tests for McpToolServerConfigurationService."""
