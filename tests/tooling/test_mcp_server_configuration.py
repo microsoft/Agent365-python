@@ -1080,6 +1080,35 @@ class TestConnectionGating:
         assert len(servers) == 1
         assert servers[0].mcp_server_name == "V1Server"
 
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_gate_raises_when_aggregate_pending_but_no_server_flagged(self, service):
+        from microsoft_agents_a365.tooling import McpConnectionsRequiredError
+
+        payload = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "mcp_Salesforce",
+                    "mcpServerUniqueName": "mcp_Salesforce",
+                    "url": "https://gw.example/mcp_Salesforce",
+                    "connectivityStatus": "Ready",
+                }
+            ],
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Pending",
+        }
+        with self._gateway_response(payload):
+            with pytest.raises(McpConnectionsRequiredError) as exc_info:
+                await service.list_tool_servers(
+                    agentic_app_id="test-app-id", auth_token="test-token"
+                )
+        err = exc_info.value
+        assert err.connectivity_status == "Pending"
+        assert err.missing_connections_url == "https://make.example/missing"
+        assert err.server_names == []
+        assert "(unknown)" in str(err)
+
     @patch.object(McpToolServerConfigurationService, "_load_servers_from_manifest")
     @patch.dict(os.environ, {"ENVIRONMENT": "Development"})
     @pytest.mark.asyncio
