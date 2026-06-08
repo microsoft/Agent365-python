@@ -8,6 +8,7 @@ Core tooling functionality shared across different AI frameworks.
 Provides base utilities and common helper functions.
 """
 
+from .exceptions import McpConnectionsRequiredError
 from .models import MCPServerConfig
 from .services import McpToolServerConfigurationService
 from .utils import Constants
@@ -22,6 +23,7 @@ __version__ = "1.0.0"
 __all__ = [
     "MCPServerConfig",
     "McpToolServerConfigurationService",
+    "McpConnectionsRequiredError",
     "Constants",
     "get_tooling_gateway_for_digital_worker",
     "get_mcp_base_url",
