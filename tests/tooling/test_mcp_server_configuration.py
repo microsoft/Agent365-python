@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from microsoft_agents_a365.tooling import McpConnectionsRequiredError
 from microsoft_agents_a365.tooling.models import MCPServerConfig
 from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_service import (
     McpToolServerConfigurationService,
@@ -987,3 +988,111 @@ class TestResolveAgentIdForHeader:
 
         result = service._resolve_agent_id_for_header(token, mock_context)
         assert result == "token-appid"
+
+
+class TestConnectionGating:
+    """Tests for the connectivityStatus connection-readiness gate."""
+
+    @pytest.fixture
+    def service(self):
+        return McpToolServerConfigurationService()
+
+    @staticmethod
+    def _gateway_response(payload):
+        """Build a patched aiohttp.ClientSession context manager returning payload."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value=payload)
+        mock_response_cm = MagicMock()
+        mock_response_cm.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response_cm.__aexit__ = AsyncMock(return_value=None)
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response_cm)
+        mock_session_cm = MagicMock()
+        mock_session_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_cm.__aexit__ = AsyncMock(return_value=None)
+        return patch("aiohttp.ClientSession", return_value=mock_session_cm)
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_gate_raises_when_pending(self, service):
+        payload = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "mcp_Salesforce",
+                    "mcpServerUniqueName": "mcp_Salesforce",
+                    "url": "https://gw.example/mcp_Salesforce",
+                    "connectivityStatus": "Pending",
+                }
+            ],
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Pending",
+        }
+        with self._gateway_response(payload):
+            with pytest.raises(McpConnectionsRequiredError) as exc_info:
+                await service.list_tool_servers(
+                    agentic_app_id="test-app-id", auth_token="test-token"
+                )
+        err = exc_info.value
+        assert err.connectivity_status == "Pending"
+        assert err.missing_connections_url == "https://make.example/missing"
+        assert err.all_connections_url == "https://make.example/all"
+        assert "mcp_Salesforce" in err.server_names
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_gate_passes_when_ready(self, service):
+        payload = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "mcp_Salesforce",
+                    "mcpServerUniqueName": "mcp_Salesforce",
+                    "url": "https://gw.example/mcp_Salesforce",
+                    "connectivityStatus": "Ready",
+                }
+            ],
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Ready",
+        }
+        with self._gateway_response(payload):
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id", auth_token="test-token"
+            )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "mcp_Salesforce"
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_gate_passes_for_legacy_raw_array(self, service):
+        payload = [
+            {
+                "mcpServerName": "V1Server",
+                "mcpServerUniqueName": "v1_server",
+                "url": "https://v1.example.com/mcp",
+            }
+        ]
+        with self._gateway_response(payload):
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id", auth_token="test-token"
+            )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "V1Server"
+
+    @patch.object(McpToolServerConfigurationService, "_load_servers_from_manifest")
+    @patch.dict(os.environ, {"ENVIRONMENT": "Development"})
+    @pytest.mark.asyncio
+    async def test_gate_not_applied_in_dev_mode(self, mock_load_manifest, service):
+        mock_load_manifest.return_value = [
+            MCPServerConfig(
+                mcp_server_name="DevServer",
+                mcp_server_unique_name="dev_server",
+                url="https://dev.server/mcp",
+            )
+        ]
+        servers = await service.list_tool_servers(
+            agentic_app_id="test-app-id", auth_token="test-token"
+        )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "DevServer"

@@ -34,6 +34,7 @@ import aiohttp
 from microsoft_agents.hosting.core import Authorization, TurnContext
 
 # Local imports
+from ..exceptions import McpConnectionsRequiredError
 from ..models import ChatHistoryMessage, ChatMessageRequest, MCPServerConfig, ToolOptions
 from ..utils import Constants
 from ..utils.utility import (
@@ -175,6 +176,9 @@ class McpToolServerConfigurationService:
             discovery = await self._load_servers_from_gateway(
                 agentic_app_id, auth_token, options, turn_context
             )
+            # Gate execution when configured MCP servers are not connection-ready.
+            # Runs before token attachment because readiness is independent of tokens.
+            self._enforce_connection_readiness(discovery)
             servers = discovery.servers
             if (
                 authorization is not None
@@ -205,6 +209,43 @@ class McpToolServerConfigurationService:
 
         servers = await self._attach_per_audience_tokens(servers, acquire)
         return servers
+
+    # Sentinel aggregate status that means all connections are satisfied.
+    _CONNECTIVITY_READY = "Ready"
+
+    def _enforce_connection_readiness(self, discovery: "McpDiscoveryResult") -> None:
+        """Raise if the aggregate connectivity status indicates missing connections.
+
+        Blocks only when the response-level ``connectivity_status`` is present and not
+        ``"Ready"`` (i.e. ``"Pending"``). Absent status (legacy raw-array gateway
+        responses, dev-mode manifests) is always treated as ready, so those paths are
+        never gated. The ``!= "Ready"`` form is intentionally defensive against any
+        unexpected future status value.
+
+        Raises:
+            McpConnectionsRequiredError: when connections are not yet ready.
+        """
+        status = discovery.connectivity_status
+        if status is None or status == self._CONNECTIVITY_READY:
+            return
+
+        not_ready = [
+            s
+            for s in discovery.servers
+            if s.connectivity_status is not None
+            and s.connectivity_status != self._CONNECTIVITY_READY
+        ]
+        server_names = [s.mcp_server_name or s.mcp_server_unique_name for s in not_ready]
+        self._logger.info(
+            f"MCP connection gate blocking turn: connectivityStatus={status}, "
+            f"servers={server_names}"
+        )
+        raise McpConnectionsRequiredError(
+            missing_connections_url=discovery.missing_connections_url,
+            all_connections_url=discovery.all_connections_url,
+            connectivity_status=status,
+            server_names=server_names,
+        )
 
     # --------------------------------------------------------------------------
     # ENVIRONMENT DETECTION
