@@ -9,12 +9,10 @@ from microsoft_agents_a365.tooling import McpConnectionsRequiredError
 def test_exception_exposes_payload():
     err = McpConnectionsRequiredError(
         missing_connections_url="https://make.example/missing",
-        all_connections_url="https://make.example/all",
         connectivity_status="Pending",
         server_names=["mcp_Salesforce", "mcp_Zendesk"],
     )
     assert err.missing_connections_url == "https://make.example/missing"
-    assert err.all_connections_url == "https://make.example/all"
     assert err.connectivity_status == "Pending"
     assert err.server_names == ["mcp_Salesforce", "mcp_Zendesk"]
 
@@ -22,7 +20,6 @@ def test_exception_exposes_payload():
 def test_exception_message_is_actionable():
     err = McpConnectionsRequiredError(
         missing_connections_url="https://make.example/missing",
-        all_connections_url=None,
         connectivity_status="Pending",
         server_names=["mcp_Salesforce"],
     )

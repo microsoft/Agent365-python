@@ -1037,7 +1037,6 @@ class TestConnectionGating:
         err = exc_info.value
         assert err.connectivity_status == "Pending"
         assert err.missing_connections_url == "https://make.example/missing"
-        assert err.all_connections_url == "https://make.example/all"
         assert "mcp_Salesforce" in err.server_names
 
     @patch.dict(os.environ, {"ENVIRONMENT": "Production"})

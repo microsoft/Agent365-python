@@ -19,12 +19,10 @@ class McpConnectionsRequiredError(Exception):
     def __init__(
         self,
         missing_connections_url: Optional[str],
-        all_connections_url: Optional[str],
         connectivity_status: Optional[str],
         server_names: List[str],
     ) -> None:
         self.missing_connections_url = missing_connections_url
-        self.all_connections_url = all_connections_url
         self.connectivity_status = connectivity_status
         self.server_names = server_names
         servers_text = ", ".join(server_names) if server_names else "(unknown)"

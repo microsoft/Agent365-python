@@ -242,7 +242,6 @@ class McpToolServerConfigurationService:
         )
         raise McpConnectionsRequiredError(
             missing_connections_url=discovery.missing_connections_url,
-            all_connections_url=discovery.all_connections_url,
             connectivity_status=status,
             server_names=server_names,
         )
