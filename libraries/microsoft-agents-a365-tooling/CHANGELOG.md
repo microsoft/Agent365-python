@@ -35,3 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `ChatHistoryMessage` Pydantic model for representing individual messages in chat history
 - Added `ChatMessageRequest` Pydantic model for the chat history API request payload
 - Added `py.typed` marker for PEP 561 compliance, enabling type checker support
+- Added connection-readiness gating to `McpToolServerConfigurationService.list_tool_servers()`. When the tooling gateway reports an aggregate `connectivityStatus` of `"Pending"`, a `McpConnectionsRequiredError` is raised carrying the response-level `missingConnectionsUrl` / `allConnectionsUrl` and the names of the not-`Ready` servers, so the agent's turn handler can prompt the user to set up connections instead of running tools that would fail. Dev-mode manifests and legacy raw-array gateway responses omit the field and are never gated
+- Added `McpConnectionsRequiredError` exception (exported from `microsoft_agents_a365.tooling`) with `missing_connections_url`, `all_connections_url`, `connectivity_status`, and `server_names` attributes
+- Added `id`, `all_connections_url`, `missing_connections_url`, and `connectivity_status` fields to `MCPServerConfig`, parsed from the per-server gateway payload
+- Added internal `McpDiscoveryResult` dataclass; `_parse_gateway_response()` and `_load_servers_from_gateway()` now return it to carry response-level connection metadata alongside the server list (the public return type of `list_tool_servers()` remains `List[MCPServerConfig]`)
