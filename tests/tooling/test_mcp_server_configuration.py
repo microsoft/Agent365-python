@@ -186,6 +186,42 @@ class TestMcpToolServerConfigurationService:
         assert config.url == "https://default.server/agents/servers/GatewayServer"
         mock_build_url.assert_called_once_with("GatewayServer")
 
+    def test_parse_server_config_populates_connection_fields(self, service):
+        """Per-server connection fields are parsed from a V2 gateway element."""
+        server_element = {
+            "mcpServerName": "mcp_Salesforce",
+            "mcpServerUniqueName": "mcp_Salesforce",
+            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "url": "https://gw.example/agents/v2/servers/mcp_Salesforce",
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Pending",
+        }
+
+        config = service._parse_server_config(server_element)
+
+        assert config is not None
+        assert config.id == "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        assert config.all_connections_url == "https://make.example/all"
+        assert config.missing_connections_url == "https://make.example/missing"
+        assert config.connectivity_status == "Pending"
+
+    def test_parse_server_config_connection_fields_absent(self, service):
+        """Manifest elements without connection fields yield None."""
+        server_element = {
+            "mcpServerName": "DevServer",
+            "mcpServerUniqueName": "dev_server",
+            "url": "https://dev.server/mcp",
+        }
+
+        config = service._parse_server_config(server_element)
+
+        assert config is not None
+        assert config.id is None
+        assert config.all_connections_url is None
+        assert config.missing_connections_url is None
+        assert config.connectivity_status is None
+
     @patch.dict(os.environ, {"ENVIRONMENT": "Development"})
     def test_is_development_scenario(self, service):
         """Test development scenario detection."""
