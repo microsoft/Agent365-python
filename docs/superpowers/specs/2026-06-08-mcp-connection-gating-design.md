@@ -50,9 +50,9 @@ Notes:
   the single "fix everything" link surfaced to the user.
 - The **per-server** copies are parsed and retained for diagnostics only; they do not
   drive the gate decision.
-- Key casing has been observed as both `connectivityStatus` and `ConnectivityStatus`.
-  Parsing is tolerant of known key-name variants. **Open item:** confirm the exact
-  JSON key casing with the gateway team and tighten if possible.
+- All JSON keys are camelCase: `connectivityStatus`, `allConnectionsUrl`,
+  `missingConnectionsUrl`, `id`, `mcpServerName`. Parsing uses these exact keys (no
+  case-variant fallback needed).
 
 ## Compatibility Rules
 
@@ -60,12 +60,10 @@ Notes:
 |---|---|---|
 | V2 gateway, all connections satisfied | `"Ready"` | proceeds |
 | V2 gateway, missing connections | `"Pending"` | **blocks**, raises exception |
-| Legacy raw-array gateway response | absent → `None` | proceeds (not gated) |
-| Dev mode (`ToolingManifest.json`) | absent → `None` | proceeds (not gated) |
+| Legacy `ToolingManifest.json` | absent → `None` | proceeds (not gated) |
 
 The gateway only ever emits `"Ready"` or `"Pending"` for `connectivityStatus` — never
-`null` and never any other value. Sources that predate the field (legacy raw-array
-responses, dev-mode manifests) omit it entirely, yielding `None`.
+`null` and never any other value. Sources that predate the field (legacy manifests) omit it entirely, yielding `None`.
 
 **Gate rule:** block only when the aggregate `connectivity_status` is **present and
 not equal to** `"Ready"` (i.e. `"Pending"`). Absent status (`None`) is always treated
@@ -102,7 +100,7 @@ class McpDiscoveryResult:
 ### 3. Parsing changes
 
 - `_parse_server_config` reads `id`, `allConnectionsUrl`, `missingConnectionsUrl`,
-  `connectivityStatus` (tolerant casing) onto each `MCPServerConfig`. Gateway and
+  `connectivityStatus` (exact camelCase key) onto each `MCPServerConfig`. Gateway and
   manifest share this path; manifest entries simply lack the fields → `None`.
 - `_parse_gateway_response` returns `McpDiscoveryResult`: it parses the server list as
   today and additionally extracts the **response-level** aggregate fields when the
@@ -187,7 +185,7 @@ are actionable.
 ## Testing
 
 - **Parser:** per-server new fields populated from a V2 element; absent in manifest
-  element → `None`. Tolerant casing variants map to the same field.
+  element → `None`.
 - **Aggregate parsing:** `_parse_gateway_response` extracts response-level fields for
   wrapped shape; raw-array shape → aggregate `None`.
 - **Gate fires:** aggregate `connectivity_status == "Pending"` raises
@@ -214,9 +212,11 @@ are actionable.
 - `libraries/microsoft-agents-a365-tooling/CHANGELOG.md` — changelog entry.
 - Tooling extension docs/samples — catch-and-reply pattern (follow-up).
 
-## Open Items
+## Resolved Decisions
 
-1. Confirm exact JSON key casing for `connectivityStatus` (response and server level).
-2. Confirmed: `connectivityStatus` is always `"Ready"` or `"Pending"` (never `null` or
-   other values) from the V2 gateway. Field is absent only from legacy raw-array
-   responses and dev-mode manifests.
+1. JSON keys are camelCase (`connectivityStatus`, `allConnectionsUrl`,
+   `missingConnectionsUrl`, etc.) at both response and server level — parsed with exact
+   keys.
+2. `connectivityStatus` is always `"Ready"` or `"Pending"` (never `null` or other
+   values) from the gateway. Field is absent only from legacy raw-array responses and
+   dev-mode manifests.
