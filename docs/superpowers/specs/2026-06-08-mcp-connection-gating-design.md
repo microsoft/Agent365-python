@@ -58,15 +58,19 @@ Notes:
 
 | Source | Aggregate `connectivityStatus` | Gate behavior |
 |---|---|---|
-| V2 gateway, all connected | `"Connected"` | proceeds |
-| V2 gateway, missing connections | not `"Connected"` (e.g. `"Pending"`) | **blocks**, raises exception |
-| V1 wrapped gateway (legacy) | always `"Connected"` | proceeds |
+| V2 gateway, all connections satisfied | `"Ready"` | proceeds |
+| V2 gateway, missing connections | `"Pending"` | **blocks**, raises exception |
 | Legacy raw-array gateway response | absent → `None` | proceeds (not gated) |
 | Dev mode (`ToolingManifest.json`) | absent → `None` | proceeds (not gated) |
 
+The gateway only ever emits `"Ready"` or `"Pending"` for `connectivityStatus` — never
+`null` and never any other value. Sources that predate the field (legacy raw-array
+responses, dev-mode manifests) omit it entirely, yielding `None`.
+
 **Gate rule:** block only when the aggregate `connectivity_status` is **present and
-not equal to** `"Connected"`. Absent status is always treated as ready, so dev mode
-and legacy callers are unaffected.
+not equal to** `"Ready"` (i.e. `"Pending"`). Absent status (`None`) is always treated
+as ready, so dev mode and legacy callers are unaffected. The `!= "Ready"` form (rather
+than `== "Pending"`) is deliberately defensive against any unexpected future value.
 
 ## Design
 
@@ -114,10 +118,10 @@ After discovery and per-audience token attachment, evaluate the aggregate status
 
 ```python
 if (result.connectivity_status is not None
-        and result.connectivity_status != "Connected"):
+        and result.connectivity_status != "Ready"):
     not_ready = [s for s in result.servers
                  if s.connectivity_status is not None
-                 and s.connectivity_status != "Connected"]
+                 and s.connectivity_status != "Ready"]
     raise McpConnectionsRequiredError(
         missing_connections_url=result.missing_connections_url,
         all_connections_url=result.all_connections_url,
@@ -129,7 +133,7 @@ if (result.connectivity_status is not None
 
 The public return type of `list_tool_servers` remains `List[MCPServerConfig]`
 (`result.servers`). The gate is the only new externally observable behavior, and only
-fires for V2 gateway responses with unsatisfied connections.
+fires for gateway responses reporting `connectivityStatus: "Pending"`.
 
 ### 5. Exception — `McpConnectionsRequiredError`
 
@@ -149,12 +153,12 @@ class McpConnectionsRequiredError(Exception):
 ```
 
 Exposes (per design decision) the **response-level** aggregate links plus the list of
-not-`Connected` server names for context:
+not-`Ready` server names for context:
 - `missing_connections_url` — single aggregate link to set up missing connections
   (primary value the handler surfaces to the user).
 - `all_connections_url` — aggregate link to view/manage all connections.
-- `connectivity_status` — the aggregate status that triggered the block.
-- `server_names` — names of servers that are not yet `Connected`.
+- `connectivity_status` — the aggregate status that triggered the block (`"Pending"`).
+- `server_names` — names of servers that are not yet `Ready`.
 
 The `__str__`/message includes the missing-connections URL and server names so logs
 are actionable.
@@ -186,11 +190,11 @@ are actionable.
   element → `None`. Tolerant casing variants map to the same field.
 - **Aggregate parsing:** `_parse_gateway_response` extracts response-level fields for
   wrapped shape; raw-array shape → aggregate `None`.
-- **Gate fires:** aggregate `connectivity_status` not `"Connected"` raises
+- **Gate fires:** aggregate `connectivity_status == "Pending"` raises
   `McpConnectionsRequiredError` carrying the correct response-level URLs and the
-  not-Connected server names.
-- **Gate passes:** aggregate `"Connected"`; aggregate absent (dev manifest); legacy
-  raw array; V1 wrapped all-`Connected`.
+  not-Ready server names.
+- **Gate passes:** aggregate `"Ready"`; aggregate absent (dev manifest); legacy
+  raw array.
 - **Exception payload:** `missing_connections_url` / `all_connections_url` /
   `connectivity_status` / `server_names` correct; message string actionable.
 - **Propagation:** extension `add_tool_servers_to_agent` does not swallow the exception
@@ -213,5 +217,6 @@ are actionable.
 ## Open Items
 
 1. Confirm exact JSON key casing for `connectivityStatus` (response and server level).
-2. Confirm the exact "ready" sentinel value is `"Connected"` (and any other terminal
-   states that should count as ready).
+2. Confirmed: `connectivityStatus` is always `"Ready"` or `"Pending"` (never `null` or
+   other values) from the V2 gateway. Field is absent only from legacy raw-array
+   responses and dev-mode manifests.
