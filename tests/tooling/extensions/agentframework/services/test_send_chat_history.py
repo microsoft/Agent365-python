@@ -65,9 +65,9 @@ class TestSendChatHistoryAsync:
 
     @pytest.fixture
     def mock_chat_message_store(self, sample_chat_messages):
-        """Create a mock ChatMessageStoreProtocol."""
+        """Create a mock HistoryProvider."""
         store = AsyncMock()
-        store.list_messages = AsyncMock(return_value=sample_chat_messages)
+        store.get_messages = AsyncMock(return_value=sample_chat_messages)
         return store
 
     @pytest.fixture
@@ -238,7 +238,7 @@ class TestSendChatHistoryAsync:
 
         # Assert
         assert result.succeeded is True
-        mock_chat_message_store.list_messages.assert_called_once()
+        mock_chat_message_store.get_messages.assert_called_once()
         service._mcp_server_configuration_service.send_chat_history.assert_called_once()
 
     @pytest.mark.asyncio
@@ -260,7 +260,7 @@ class TestSendChatHistoryAsync:
 
             # Assert
             assert result.succeeded is True
-            mock_chat_message_store.list_messages.assert_called_once()
+            mock_chat_message_store.get_messages.assert_called_once()
             mock_messages_method.assert_called_once_with(
                 chat_messages=sample_chat_messages,
                 turn_context=mock_turn_context,
@@ -424,10 +424,10 @@ class TestSendChatHistoryAsync:
     async def test_send_chat_history_from_store_propagates_store_exception(
         self, service, mock_turn_context
     ):
-        """Test that exceptions from chat_message_store.list_messages() propagate (CRM-001)."""
+        """Test that exceptions from chat_message_store.get_messages() propagate (CRM-001)."""
         # Arrange
         mock_store = AsyncMock()
-        mock_store.list_messages = AsyncMock(side_effect=RuntimeError("Store connection failed"))
+        mock_store.get_messages = AsyncMock(side_effect=RuntimeError("Store connection failed"))
 
         # Act & Assert
         with pytest.raises(RuntimeError, match="Store connection failed"):

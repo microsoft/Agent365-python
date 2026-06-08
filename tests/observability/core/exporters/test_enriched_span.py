@@ -34,6 +34,7 @@ class TestEnrichedReadableSpan(unittest.TestCase):
         mock_span = Mock()
         mock_span.name = "test-span"
         mock_span.context = Mock(trace_id=123, span_id=456)
+        mock_span.get_span_context.return_value = mock_span.context
         mock_span.parent = Mock(span_id=789)
         mock_span.start_time = 1000000000
         mock_span.end_time = 2000000000

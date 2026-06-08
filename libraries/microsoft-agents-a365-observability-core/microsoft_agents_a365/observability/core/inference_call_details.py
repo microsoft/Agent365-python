@@ -4,17 +4,7 @@
 from dataclasses import dataclass
 
 from .inference_operation_type import InferenceOperationType
-
-
-@dataclass
-class ServiceEndpoint:
-    """Represents a service endpoint with hostname and optional port."""
-
-    hostname: str
-    """The hostname of the service endpoint."""
-
-    port: int | None = None
-    """The port of the service endpoint."""
+from .models.service_endpoint import ServiceEndpoint
 
 
 @dataclass

@@ -41,7 +41,7 @@ class ObservabilityHostingManager:
     _instance: ObservabilityHostingManager | None = None
 
     def __init__(self) -> None:
-        """Private constructor — use :meth:`configure` instead."""
+        """Private constructor — use :meth:`~microsoft_agents_a365.observability.hosting.middleware.observability_hosting_manager.ObservabilityHostingManager.configure` instead."""
 
     @classmethod
     def configure(
@@ -59,7 +59,7 @@ class ObservabilityHostingManager:
             options: Configuration options controlling which middleware to enable.
 
         Returns:
-            The singleton :class:`ObservabilityHostingManager` instance.
+            The singleton :class:`~microsoft_agents_a365.observability.hosting.middleware.observability_hosting_manager.ObservabilityHostingManager` instance.
 
         Raises:
             TypeError: If *middleware_set* or *options* is ``None``.

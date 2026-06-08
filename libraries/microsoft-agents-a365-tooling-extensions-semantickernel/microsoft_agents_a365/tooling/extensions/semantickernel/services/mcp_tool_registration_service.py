@@ -15,7 +15,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, List, Optional, Sequence
+from typing import List, Optional, Sequence
 
 # Third-party imports
 from semantic_kernel import kernel as sk
@@ -33,6 +33,7 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
+    is_development_environment,
 )
 
 
@@ -74,11 +75,11 @@ class McpToolRegistrationService:
         )
         if self._strict_parameter_validation:
             self._logger.info(
-                "🔒 Strict parameter validation enabled - only schema-defined parameters are allowed"
+                "Strict parameter validation enabled - only schema-defined parameters are allowed"
             )
         else:
             self._logger.info(
-                "🔓 Strict parameter validation disabled - dynamic parameters are allowed"
+                "Strict parameter validation disabled - dynamic parameters are allowed"
             )
 
     # ============================================================================
@@ -108,33 +109,50 @@ class McpToolRegistrationService:
             Exception: If there's an error connecting to or configuring MCP servers.
         """
 
-        if not auth_token:
+        is_dev = is_development_environment()
+        if not auth_token and not is_dev:
+            # Only exchange a token in production; dev mode uses BEARER_TOKEN* env vars instead.
             scopes = get_mcp_platform_authentication_scope()
             authToken = await auth.exchange_token(context, scopes, auth_handler_name)
             auth_token = authToken.token
 
-        agentic_app_id = Utility.resolve_agent_identity(context, auth_token)
+        # In dev mode, agentic_app_id is not needed for manifest-based discovery.
+        agentic_app_id = "" if is_dev else Utility.resolve_agent_identity(context, auth_token)
         self._validate_inputs(kernel, agentic_app_id, auth_token)
 
         # Get and process servers
         options = ToolOptions(orchestrator_name=self._orchestrator_name)
         servers = await self._mcp_server_configuration_service.list_tool_servers(
-            agentic_app_id, auth_token, options
+            agentic_app_id,
+            auth_token,
+            options,
+            authorization=auth,
+            auth_handler_name=auth_handler_name,
+            turn_context=context,
         )
-        self._logger.info(f"🔧 Adding MCP tools from {len(servers)} servers")
+        self._logger.info(f"Adding MCP tools from {len(servers)} servers")
 
         # Process each server (matching C# foreach pattern)
         for server in servers:
             try:
-                headers = {
-                    Constants.Headers.AUTHORIZATION: (
-                        f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
-                    ),
+                base_headers = {
+                    Constants.Headers.USER_AGENT: Utility.get_user_agent_header(
+                        self._orchestrator_name
+                    )
                 }
-
-                headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
-                    self._orchestrator_name
-                )
+                server_headers = dict(server.headers) if server.headers else {}
+                # Fall back to the shared discovery token when no per-server
+                # Authorization header was attached (e.g. dev mode without
+                # BEARER_TOKEN* env vars, or legacy V1 callers).
+                if Constants.Headers.AUTHORIZATION not in server_headers and auth_token:
+                    server_headers[Constants.Headers.AUTHORIZATION] = (
+                        auth_token
+                        if auth_token.lower().startswith(
+                            f"{Constants.Headers.BEARER_PREFIX.lower()} "
+                        )
+                        else f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                    )
+                headers = {**base_headers, **server_headers}  # per-audience token takes precedence
 
                 # Use the URL from server (always populated by the configuration service)
                 server_url = server.url
@@ -162,23 +180,25 @@ class McpToolRegistrationService:
                 # Tools can be invoked because their underlying connections stay alive.
                 self._connected_plugins.append(plugin)
 
-                self._logger.info(
-                    f"✅ Connected and added MCP plugin for: {server.mcp_server_name}"
-                )
+                self._logger.info(f"Connected and added MCP plugin for: {server.mcp_server_name}")
 
             except Exception as e:
                 self._logger.error(f"Failed to add tools from {server.mcp_server_name}: {str(e)}")
 
-        self._logger.info("✅ Successfully configured MCP tool servers for the agent!")
+        self._logger.info("Successfully configured MCP tool servers for the agent")
 
     # ============================================================================
     # Private Methods - Input Validation & Processing
     # ============================================================================
 
-    def _validate_inputs(self, kernel: Any, agentic_app_id: str, auth_token: str) -> None:
-        """Validate all required inputs."""
+    def _validate_inputs(
+        self, kernel: sk.Kernel, agentic_app_id: str, auth_token: Optional[str]
+    ) -> None:
+        """Validate all required inputs. In dev mode only kernel is checked."""
         if kernel is None:
             raise ValueError("kernel cannot be None")
+        if is_development_environment():
+            return
         if not agentic_app_id or not agentic_app_id.strip():
             raise ValueError("agentic_app_id cannot be null or empty")
         if not auth_token or not auth_token.strip():
@@ -547,7 +567,7 @@ class McpToolRegistrationService:
 
     async def cleanup_connections(self) -> None:
         """Clean up all connected MCP plugins."""
-        self._logger.info(f"🧹 Cleaning up {len(self._connected_plugins)} MCP plugin connections")
+        self._logger.info(f"Cleaning up {len(self._connected_plugins)} MCP plugin connections")
 
         for plugin in self._connected_plugins:
             try:
@@ -556,10 +576,10 @@ class McpToolRegistrationService:
                 elif hasattr(plugin, "disconnect"):
                     await plugin.disconnect()
                 self._logger.debug(
-                    f"✅ Closed connection for plugin: {getattr(plugin, 'name', 'unknown')}"
+                    f"Closed connection for plugin: {getattr(plugin, 'name', 'unknown')}"
                 )
             except Exception as e:
-                self._logger.warning(f"⚠️ Error closing plugin connection: {e}")
+                self._logger.warning(f"Error closing plugin connection: {e}")
 
         self._connected_plugins.clear()
-        self._logger.info("✅ All MCP plugin connections cleaned up")
+        self._logger.info("All MCP plugin connections cleaned up")

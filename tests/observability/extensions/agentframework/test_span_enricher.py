@@ -3,6 +3,7 @@
 
 """Tests for Agent Framework span enricher."""
 
+import json
 import unittest
 from unittest.mock import Mock
 
@@ -23,7 +24,7 @@ class TestAgentFrameworkSpanEnricher(unittest.TestCase):
     """Test suite for enrich_agent_framework_span function."""
 
     def test_invoke_agent_span_enrichment(self):
-        """Test invoke_agent span extracts user input and assistant output text only."""
+        """Test invoke_agent span maps messages to A365 versioned format."""
         span = Mock(
             name="invoke_agent Agent365Assistant",
             attributes={
@@ -33,8 +34,24 @@ class TestAgentFrameworkSpanEnricher(unittest.TestCase):
         )
         span.name = "invoke_agent Agent365Assistant"
         result = enrich_agent_framework_span(span)
-        self.assertEqual(result.attributes[GEN_AI_INPUT_MESSAGES_KEY], '["Compute 15 % 4"]')
-        self.assertEqual(result.attributes[GEN_AI_OUTPUT_MESSAGES_KEY], '["Result is 3."]')
+
+        # Input should be structured array format with user message
+        input_json = json.loads(result.attributes[GEN_AI_INPUT_MESSAGES_KEY])
+        self.assertIsInstance(input_json, list)
+        self.assertEqual(len(input_json), 1)
+        self.assertEqual(input_json[0]["role"], "user")
+        self.assertEqual(input_json[0]["parts"][0]["content"], "Compute 15 % 4")
+
+        # Output should be structured array format: tool_call (no name -> filtered) + tool response + text
+        output_json = json.loads(result.attributes[GEN_AI_OUTPUT_MESSAGES_KEY])
+        self.assertIsInstance(output_json, list)
+        # tool_call with no name is filtered, tool_call_response with no id/response passes,
+        # assistant text passes
+        assistant_msgs = [m for m in output_json if m["role"] == "assistant"]
+        self.assertTrue(len(assistant_msgs) >= 1)
+        # At least one assistant message should have a text part
+        text_parts = [p for m in assistant_msgs for p in m["parts"] if p.get("type") == "text"]
+        self.assertEqual(text_parts[0]["content"], "Result is 3.")
 
     def test_execute_tool_span_enrichment(self):
         """Test execute_tool span maps tool arguments and result to standard keys."""

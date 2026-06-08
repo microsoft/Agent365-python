@@ -65,10 +65,10 @@ configure(
 class OpenTelemetryScope:
     """Base class for OpenTelemetry tracing scopes."""
 
-    def __init__(self, kind, operation_name, activity_name, agent_details, tenant_details):
+    def __init__(self, kind, operation_name, activity_name, agent_details):
         # Creates span with given parameters
         # Sets common attributes (gen_ai.system, operation name)
-        # Sets agent/tenant details as span attributes
+        # Sets agent details as span attributes
 
     def __enter__(self):
         # Makes span active in current context
@@ -96,19 +96,15 @@ Traces agent invocation operations (entry point for agent requests):
 ```python
 from microsoft_agents_a365.observability.core import (
     InvokeAgentScope,
-    InvokeAgentDetails,
-    TenantDetails,
+    InvokeAgentScopeDetails,
     AgentDetails,
+    Request,
 )
 
 with InvokeAgentScope.start(
-    invoke_agent_details=InvokeAgentDetails(
-        endpoint=parsed_url,
-        session_id="session-123",
-        details=AgentDetails(agent_id="agent-456", agent_name="MyAgent")
-    ),
-    tenant_details=TenantDetails(tenant_id="tenant-789"),
-    request=Request(content="Hello", execution_type=ExecutionType.CHAT),
+    request=Request(content="Hello"),
+    invoke_scope_details=InvokeAgentScopeDetails(endpoint=parsed_url),
+    agent_details=AgentDetails(agent_id="agent-456", agent_name="MyAgent"),
 ) as scope:
     # Agent processing
     scope.record_response("Agent response")
@@ -116,9 +112,7 @@ with InvokeAgentScope.start(
 
 **Span attributes recorded:**
 - Server address and port
-- Session ID
 - Execution source metadata
-- Execution type
 - Input/output messages
 - Caller details (if provided)
 
@@ -127,15 +121,15 @@ with InvokeAgentScope.start(
 Traces LLM/AI model inference calls:
 
 ```python
-from microsoft_agents_a365.observability.core import InferenceScope, InferenceCallDetails
+from microsoft_agents_a365.observability.core import InferenceScope, InferenceCallDetails, Request
 
 with InferenceScope.start(
-    inference_call_details=InferenceCallDetails(
+    request=Request(content="Hello"),
+    details=InferenceCallDetails(
         model_name="gpt-4",
         provider="openai"
     ),
     agent_details=agent_details,
-    tenant_details=tenant_details,
 ) as scope:
     # LLM call
     scope.record_input_tokens(100)
@@ -148,15 +142,15 @@ with InferenceScope.start(
 Traces tool execution operations:
 
 ```python
-from microsoft_agents_a365.observability.core import ExecuteToolScope, ToolCallDetails
+from microsoft_agents_a365.observability.core import ExecuteToolScope, ToolCallDetails, Request
 
 with ExecuteToolScope.start(
-    tool_call_details=ToolCallDetails(
+    request=Request(content="search for weather"),
+    details=ToolCallDetails(
         tool_name="search",
         tool_arguments={"query": "weather"}
     ),
     agent_details=agent_details,
-    tenant_details=tenant_details,
 ) as scope:
     # Tool execution
     scope.record_response("Tool result")
@@ -174,7 +168,7 @@ with BaggageBuilder() \
     .tenant_id("tenant-123") \
     .agent_id("agent-456") \
     .correlation_id("corr-789") \
-    .caller_id("user-abc") \
+    .user_id("user-abc") \
     .session_id("session-xyz") \
     .build():
     # All child spans inherit this baggage
@@ -195,9 +189,11 @@ with BaggageBuilder.set_request_context(
 | `tenant_id(value)` | `tenant_id` |
 | `agent_id(value)` | `gen_ai.agent.id` |
 | `agent_auid(value)` | `gen_ai.agent.auid` |
-| `agent_upn(value)` | `gen_ai.agent.upn` |
+| `agent_email(value)` | `gen_ai.agent.upn` |
 | `correlation_id(value)` | `correlation_id` |
-| `caller_id(value)` | `gen_ai.caller.id` |
+| `user_id(value)` | `gen_ai.caller.id` |
+| `user_name(value)` | `gen_ai.caller.name` |
+| `user_email(value)` | `gen_ai.caller.upn` |
 | `session_id(value)` | `session_id` |
 | `conversation_id(value)` | `gen_ai.conversation.id` |
 | `channel_name(value)` | `gen_ai.execution.source.name` |
@@ -246,14 +242,12 @@ options = Agent365ExporterOptions(
 
 ## Data Classes
 
-### InvokeAgentDetails
+### InvokeAgentScopeDetails
 
 ```python
 @dataclass
-class InvokeAgentDetails:
+class InvokeAgentScopeDetails:
     endpoint: ParseResult | None  # Parsed URL of the agent endpoint
-    session_id: str | None        # Session identifier
-    details: AgentDetails         # Agent metadata
 ```
 
 ### AgentDetails
@@ -265,20 +259,42 @@ class AgentDetails:
     agent_name: str | None
     agent_description: str | None
     agent_auid: str | None        # Agent unique identifier
-    agent_upn: str | None         # User principal name
+    agent_email: str | None       # Agent email address
     agent_blueprint_id: str | None
     agent_type: AgentType | None
     tenant_id: str | None
-    conversation_id: str | None
     icon_uri: str | None
 ```
 
-### TenantDetails
+### UserDetails
 
 ```python
 @dataclass
-class TenantDetails:
-    tenant_id: str | None
+class UserDetails:
+    user_id: str | None
+    user_email: str | None
+    user_name: str | None
+    caller_client_ip: str | None
+```
+
+### CallerDetails
+
+```python
+@dataclass
+class CallerDetails:
+    user_details: UserDetails | None
+    caller_agent_details: AgentDetails | None
+```
+
+### SpanDetails
+
+```python
+@dataclass
+class SpanDetails:
+    parent_context: Context | None
+    start_time: int | None
+    end_time: int | None
+    span_kind: SpanKind | None
 ```
 
 ### InferenceCallDetails
@@ -358,14 +374,15 @@ microsoft_agents_a365/observability/core/
 ├── invoke_agent_scope.py          # Agent invocation tracing
 ├── inference_scope.py             # LLM inference tracing
 ├── execute_tool_scope.py          # Tool execution tracing
+├── output_scope.py                # Output tracing
 ├── agent_details.py               # AgentDetails dataclass
-├── tenant_details.py              # TenantDetails dataclass
-├── invoke_agent_details.py        # InvokeAgentDetails dataclass
+├── invoke_agent_scope_details.py   # InvokeAgentScopeDetails dataclass
+├── user_details.py                # UserDetails dataclass
+├── span_details.py                # SpanDetails dataclass
 ├── inference_call_details.py      # InferenceCallDetails dataclass
 ├── tool_call_details.py           # ToolCallDetails dataclass
 ├── request.py                     # Request dataclass
 ├── source_metadata.py             # SourceMetadata dataclass
-├── execution_type.py              # ExecutionType enum
 ├── inference_operation_type.py    # InferenceOperationType enum
 ├── tool_type.py                   # ToolType enum
 ├── constants.py                   # Attribute key constants

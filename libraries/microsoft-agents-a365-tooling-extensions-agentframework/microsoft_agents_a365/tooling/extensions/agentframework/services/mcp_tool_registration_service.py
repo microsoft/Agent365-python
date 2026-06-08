@@ -1,15 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+from __future__ import annotations
+
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, List, Optional, Sequence
 
-from agent_framework import ChatAgent, ChatMessage, ChatMessageStoreProtocol, MCPStreamableHTTPTool
-from agent_framework.azure import AzureOpenAIChatClient
-from agent_framework.openai import OpenAIChatClient
+from agent_framework import RawAgent, Message, HistoryProvider, MCPStreamableHTTPTool
 import httpx
+
+if TYPE_CHECKING:
+    from agent_framework.openai import OpenAIChatClient
 
 from microsoft_agents.hosting.core import Authorization, TurnContext
 
@@ -22,6 +25,7 @@ from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_servic
 from microsoft_agents_a365.tooling.utils.constants import Constants
 from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
+    is_development_environment,
 )
 
 
@@ -55,19 +59,19 @@ class McpToolRegistrationService:
 
     async def add_tool_servers_to_agent(
         self,
-        chat_client: Union[OpenAIChatClient, AzureOpenAIChatClient],
+        chat_client: OpenAIChatClient,
         agent_instructions: str,
-        initial_tools: List[Any],
+        initial_tools: List[object],
         auth: Authorization,
         auth_handler_name: str,
         turn_context: TurnContext,
         auth_token: Optional[str] = None,
-    ) -> Optional[ChatAgent]:
+    ) -> RawAgent:
         """
-        Add MCP tool servers to a chat agent (mirrors .NET implementation).
+        Add MCP tool servers to a RawAgent (mirrors .NET implementation).
 
         Args:
-            chat_client: The chat client instance (Union[OpenAIChatClient, AzureOpenAIChatClient])
+            chat_client: The chat client instance (OpenAIChatClient supports both OpenAI and Azure OpenAI)
             agent_instructions: Instructions for the agent behavior
             initial_tools: List of initial tools to add to the agent
             auth: Authorization context for token exchange
@@ -76,26 +80,37 @@ class McpToolRegistrationService:
             auth_token: Optional bearer token for authentication
 
         Returns:
-            ChatAgent instance with MCP tools registered, or None if creation failed
+            RawAgent instance with MCP tools registered.
+
+        Raises:
+            Exception: If agent creation fails.
         """
         try:
-            # Exchange token if not provided
-            if not auth_token:
+            is_dev = is_development_environment()
+            if not auth_token and not is_dev:
+                # Only exchange a token in production; dev mode uses BEARER_TOKEN* env vars instead.
                 scopes = get_mcp_platform_authentication_scope()
                 authToken = await auth.exchange_token(turn_context, scopes, auth_handler_name)
                 auth_token = authToken.token
 
-            agentic_app_id = Utility.resolve_agent_identity(turn_context, auth_token)
+            # In dev mode, agentic_app_id is not needed for manifest-based discovery.
+            agentic_app_id = (
+                "" if is_dev else Utility.resolve_agent_identity(turn_context, auth_token)
+            )
 
             self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
             options = ToolOptions(orchestrator_name=self._orchestrator_name)
 
-            # Get MCP server configurations
+            # Get MCP server configurations — pass auth context so each server receives
+            # its own per-audience Authorization token (V1 = shared ATG, V2 = per-GUID).
             server_configs = await self._mcp_server_configuration_service.list_tool_servers(
                 agentic_app_id=agentic_app_id,
                 auth_token=auth_token,
                 options=options,
+                authorization=auth,
+                auth_handler_name=auth_handler_name,
+                turn_context=turn_context,
             )
 
             self._logger.info(f"Loaded {len(server_configs)} MCP server configurations")
@@ -109,16 +124,26 @@ class McpToolRegistrationService:
                 server_name = config.mcp_server_name or config.mcp_server_unique_name
 
                 try:
-                    # Prepare auth headers
-                    headers = {}
-                    if auth_token:
-                        headers[Constants.Headers.AUTHORIZATION] = (
-                            f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                    # Merge base (non-auth) headers with per-server headers from list_tool_servers.
+                    # server.headers already contains the correct per-audience Authorization token.
+                    base_headers = {
+                        Constants.Headers.USER_AGENT: Utility.get_user_agent_header(
+                            self._orchestrator_name
                         )
-
-                    headers[Constants.Headers.USER_AGENT] = Utility.get_user_agent_header(
-                        self._orchestrator_name
-                    )
+                    }
+                    server_headers = dict(config.headers) if config.headers else {}
+                    # Fall back to the shared discovery token when no per-server
+                    # Authorization header was attached (e.g. dev mode without
+                    # BEARER_TOKEN* env vars, or legacy V1 callers).
+                    if Constants.Headers.AUTHORIZATION not in server_headers and auth_token:
+                        server_headers[Constants.Headers.AUTHORIZATION] = (
+                            auth_token
+                            if auth_token.lower().startswith(
+                                f"{Constants.Headers.BEARER_PREFIX.lower()} "
+                            )
+                            else f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                        )
+                    headers = {**base_headers, **server_headers}  # server auth takes precedence
 
                     # Create httpx client with auth headers configured
                     http_client = httpx.AsyncClient(
@@ -148,9 +173,9 @@ class McpToolRegistrationService:
                     )
                     continue
 
-            # Create the ChatAgent
-            agent = ChatAgent(
-                chat_client=chat_client,
+            # Create the RawAgent
+            agent = RawAgent(
+                client=chat_client,
                 tools=all_tools,
                 instructions=agent_instructions,
             )
@@ -164,17 +189,17 @@ class McpToolRegistrationService:
 
     def _convert_chat_messages_to_history(
         self,
-        chat_messages: Sequence[ChatMessage],
+        chat_messages: Sequence[Message],
     ) -> List[ChatHistoryMessage]:
         """
-        Convert Agent Framework ChatMessage objects to ChatHistoryMessage format.
+        Convert Agent Framework Message objects to ChatHistoryMessage format.
 
-        This internal helper method transforms Agent Framework's native ChatMessage
+        This internal helper method transforms Agent Framework's native Message
         objects into the ChatHistoryMessage format expected by the MCP platform's
         real-time threat protection endpoint.
 
         Args:
-            chat_messages: Sequence of ChatMessage objects to convert.
+            chat_messages: Sequence of Message objects to convert.
 
         Returns:
             List of ChatHistoryMessage objects ready for the MCP platform.
@@ -182,7 +207,7 @@ class McpToolRegistrationService:
         Note:
             - If message_id is None, a new UUID is generated
             - Role is extracted via the .value property of the Role object
-            - Timestamp is set to current UTC time (ChatMessage has no timestamp)
+            - Timestamp is set to current UTC time (Message has no timestamp)
             - Messages with empty or whitespace-only content are filtered out and
               logged at WARNING level. This is because ChatHistoryMessage requires
               non-empty content for validation. The filtered messages will not be
@@ -225,7 +250,7 @@ class McpToolRegistrationService:
 
     async def send_chat_history_messages(
         self,
-        chat_messages: Sequence[ChatMessage],
+        chat_messages: Sequence[Message],
         turn_context: TurnContext,
         tool_options: Optional[ToolOptions] = None,
     ) -> OperationResult:
@@ -236,7 +261,7 @@ class McpToolRegistrationService:
         and delegation to the core tooling service.
 
         Args:
-            chat_messages: Sequence of Agent Framework ChatMessage objects to send.
+            chat_messages: Sequence of Agent Framework Message objects to send.
                            Can be empty - the request will still be sent to register
                            the user message from turn_context.activity.text.
             turn_context: TurnContext from the Agents SDK containing conversation info.
@@ -257,7 +282,7 @@ class McpToolRegistrationService:
 
         Example:
             >>> service = McpToolRegistrationService()
-            >>> messages = [ChatMessage(role=Role.USER, text="Hello")]
+            >>> messages = [Message(role="user", text="Hello")]
             >>> result = await service.send_chat_history_messages(messages, turn_context)
             >>> if result.succeeded:
             ...     print("Chat history sent successfully")
@@ -304,18 +329,18 @@ class McpToolRegistrationService:
 
     async def send_chat_history_from_store(
         self,
-        chat_message_store: ChatMessageStoreProtocol,
+        chat_message_store: HistoryProvider,
         turn_context: TurnContext,
         tool_options: Optional[ToolOptions] = None,
     ) -> OperationResult:
         """
-        Send chat history from a ChatMessageStore to the MCP platform.
+        Send chat history from a HistoryProvider to the MCP platform.
 
         This is a convenience method that extracts messages from the store
         and delegates to send_chat_history_messages().
 
         Args:
-            chat_message_store: ChatMessageStore containing the conversation history.
+            chat_message_store: HistoryProvider containing the conversation history.
             turn_context: TurnContext from the Agents SDK containing conversation info.
             tool_options: Optional configuration for the request.
 
@@ -339,7 +364,7 @@ class McpToolRegistrationService:
             raise ValueError("turn_context cannot be None")
 
         # Extract messages from the store
-        messages = await chat_message_store.list_messages()
+        messages = await chat_message_store.get_messages()
 
         # Delegate to the primary implementation
         return await self.send_chat_history_messages(

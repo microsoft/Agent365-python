@@ -18,7 +18,7 @@ from microsoft_agents_a365.observability.extensions.agentframework.trace_instrum
 
 # AgentFramework SDK
 try:
-    from agent_framework import ChatAgent, ai_function
+    from agent_framework import RawAgent, ai_function
     from agent_framework.azure import AzureOpenAIChatClient
     from agent_framework.observability import setup_observability
     from azure.identity import AzureCliCredential
@@ -80,8 +80,8 @@ class TestAgentFrameworkTraceProcessorIntegration:
             )
 
             # Create agent framework agent
-            agent = ChatAgent(
-                chat_client=chat_client,
+            agent = RawAgent(
+                client=chat_client,
                 instructions="You are a helpful assistant.",
                 tools=[],
             )
@@ -149,8 +149,8 @@ class TestAgentFrameworkTraceProcessorIntegration:
             )
 
             # Create agent framework agent
-            agent = ChatAgent(
-                chat_client=chat_client,
+            agent = RawAgent(
+                client=chat_client,
                 instructions="You are a helpful agent framework assistant.",
                 tools=[add_numbers],
             )

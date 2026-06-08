@@ -22,27 +22,44 @@ import asyncio
 import json
 import logging
 import os
-import sys
+import uuid
+from dataclasses import replace as dataclass_replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
 # Third-party imports
 import aiohttp
-from microsoft_agents.hosting.core import TurnContext
+from microsoft_agents.hosting.core import Authorization, TurnContext
 
 # Local imports
 from ..models import ChatHistoryMessage, ChatMessageRequest, MCPServerConfig, ToolOptions
 from ..utils import Constants
 from ..utils.utility import (
-    get_tooling_gateway_for_digital_worker,
+    ATG_APP_ID,
+    ATG_APP_ID_URI,
     build_mcp_server_url,
     get_chat_history_endpoint,
+    get_mcp_platform_authentication_scope,
+    get_tooling_gateway_for_digital_worker,
+    is_development_environment,
+    resolve_token_scope_for_server,
 )
 
 # Runtime Imports
 from microsoft_agents_a365.runtime import OperationError, OperationResult
 from microsoft_agents_a365.runtime.utility import Utility as RuntimeUtility
+
+
+# ==============================================================================
+# TYPES
+# ==============================================================================
+
+# Callable that acquires an auth token for a given server and scope.
+# Returns the raw token string (without Bearer prefix), or None if unavailable.
+# Used by _attach_per_audience_tokens to decouple token acquisition strategy
+# (dev env-var reads vs. production OBO exchange) from token attachment logic.
+TokenAcquirer = Callable[["MCPServerConfig", str], Awaitable[Optional[str]]]
 
 
 # ==============================================================================
@@ -89,22 +106,38 @@ class McpToolServerConfigurationService:
     # --------------------------------------------------------------------------
 
     async def list_tool_servers(
-        self, agentic_app_id: str, auth_token: str, options: Optional[ToolOptions] = None
+        self,
+        agentic_app_id: str,
+        auth_token: Optional[str] = None,
+        options: Optional[ToolOptions] = None,
+        authorization: Optional[Authorization] = None,
+        auth_handler_name: Optional[str] = None,
+        turn_context: Optional[TurnContext] = None,
     ) -> List[MCPServerConfig]:
         """
         Gets the list of MCP Servers that are configured for the agent.
 
+        When ``authorization``, ``auth_handler_name``, and ``turn_context`` are all provided,
+        per-audience OAuth tokens are acquired for each server after discovery:
+        - V1 servers (no ``audience`` field) share the shared ATG token (one exchange).
+        - V2 servers each receive a token scoped to their own audience GUID.
+
         Args:
             agentic_app_id: Agentic App ID for the agent.
-            auth_token: Authentication token to access the MCP servers.
+            auth_token: Authentication token used for gateway discovery.
             options: Optional ToolOptions instance containing optional parameters.
+            authorization: Optional Authorization context for per-audience token exchange.
+            auth_handler_name: Optional auth handler name used with ``authorization``.
+            turn_context: Optional TurnContext used with ``authorization``.
 
         Returns:
-            List[MCPServerConfig]: Returns the list of MCP Servers that are configured.
+            List[MCPServerConfig]: Returns the list of MCP Servers that are configured,
+            each with an ``Authorization`` header attached when auth context is provided.
 
         Raises:
             ValueError: If required parameters are invalid or empty.
-            Exception: If there's an error communicating with the tooling gateway.
+            Exception: If there's an error communicating with the tooling gateway or
+                       a per-audience token exchange fails.
         """
         # Validate input parameters
         self._validate_input_parameters(agentic_app_id, auth_token)
@@ -115,11 +148,45 @@ class McpToolServerConfigurationService:
 
         self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
 
-        # Determine configuration source based on environment
+        # Determine configuration source and token acquirer based on environment.
         if self._is_development_scenario():
-            return self._load_servers_from_manifest()
+            servers = self._load_servers_from_manifest()
+            # Dev: read pre-acquired tokens from env vars (no OBO exchange).
+            # BEARER_TOKEN_<MCPSERVERNAME_UPPER> takes precedence; BEARER_TOKEN is the fallback.
+            acquire: TokenAcquirer = self._create_dev_token_acquirer()
         else:
-            return await self._load_servers_from_gateway(agentic_app_id, auth_token, options)
+            servers = await self._load_servers_from_gateway(
+                agentic_app_id, auth_token, options, turn_context
+            )
+            if (
+                authorization is not None
+                and auth_handler_name is not None
+                and turn_context is not None
+            ):
+                # Prod: acquire per-audience tokens via OBO for each unique server audience.
+                # V1 servers share the shared ATG token; V2 servers each get their own audience token.
+                acquire = self._create_obo_token_acquirer(
+                    authorization, auth_handler_name, turn_context
+                )
+            else:
+                # Legacy call without auth context — guard against V2 servers.
+                # V2 servers require per-audience OBO exchange; returning them without a
+                # token would cause silent 401s downstream. Raise early with a clear
+                # migration hint so callers know which parameters to add.
+                v2_servers = [s for s in servers if self._is_v2_server(s)]
+                if v2_servers:
+                    names = ", ".join(
+                        s.mcp_server_name or s.mcp_server_unique_name for s in v2_servers
+                    )
+                    raise Exception(
+                        f"MCP servers [{names}] require per-audience token exchange (V2) but "
+                        "no authorization context was provided. Pass authorization, "
+                        "auth_handler_name, and turn_context to list_tool_servers()."
+                    )
+                return servers
+
+        servers = await self._attach_per_audience_tokens(servers, acquire)
+        return servers
 
     # --------------------------------------------------------------------------
     # ENVIRONMENT DETECTION
@@ -129,14 +196,166 @@ class McpToolServerConfigurationService:
         """
         Determines if this is a development scenario.
 
+        Delegates to ``is_development_environment()`` from utility so all callers
+        use the same env-var resolution order.
+
         Returns:
             bool: True if running in development mode, False otherwise.
         """
-        environment = os.getenv("ENVIRONMENT", "Development")
-
-        is_dev = environment.lower() == "development"
-        self._logger.debug(f"Environment: {environment}, Development scenario: {is_dev}")
+        is_dev = is_development_environment()
+        self._logger.debug(f"Development scenario: {is_dev}")
         return is_dev
+
+    def _is_v2_server(self, server: MCPServerConfig) -> bool:
+        """
+        Returns True if the server requires a per-audience token (V2).
+
+        V2 servers carry a distinct ``audience`` that is neither the shared ATG AppId
+        (bare GUID or ``api://`` URI form) nor the sentinel value ``"default"``.
+        Uses the same normalization as ``resolve_token_scope_for_server`` so the
+        V1/V2 classification is always consistent.
+        """
+        if server.audience is None:
+            return False
+        audience = server.audience.strip().lower()
+        return audience != "default" and audience != ATG_APP_ID and audience != ATG_APP_ID_URI
+
+    def _create_dev_token_acquirer(self) -> TokenAcquirer:
+        """
+        Returns a ``TokenAcquirer`` that reads pre-acquired tokens from environment variables.
+
+        The CLI (``a365 develop get-token``) writes tokens to the environment before the agent
+        starts. Resolution order per server:
+
+        1. ``BEARER_TOKEN_<MCP_SERVER_NAME_UPPER>`` — per-server token
+        2. ``BEARER_TOKEN`` — shared fallback token
+
+        Tokens are returned **without** a ``Bearer `` prefix. If the env var already contains
+        a ``Bearer `` prefix (any casing), it is stripped so that
+        ``_attach_per_audience_tokens`` does not produce ``Authorization: Bearer Bearer …``.
+
+        A WARNING is emitted when the shared ``BEARER_TOKEN`` is used for a V2 server
+        whose resolved scope differs from the shared ATG scope, because the shared token
+        is audience-locked and will cause a 401 against that server's endpoint.
+
+        Returns:
+            TokenAcquirer: Async callable ``(server, scope) → Optional[str]``.
+        """
+        shared_scope = get_mcp_platform_authentication_scope()[0]
+
+        async def acquire(server: MCPServerConfig, scope: str) -> Optional[str]:
+            server_name = server.mcp_server_name or ""
+            per_server_key = f"BEARER_TOKEN_{server_name.upper()}"
+            has_per_server = per_server_key in os.environ
+            token = os.environ.get(per_server_key) or os.environ.get("BEARER_TOKEN")
+            if not token:
+                return None
+            if token and not has_per_server and scope != shared_scope:
+                self._logger.warning(
+                    f"Dev: MCP server '{server_name}' requires scope '{scope}' "
+                    f"but only BEARER_TOKEN is set. The shared token is scoped to "
+                    f"a different audience and will likely cause a 401. "
+                    f"Set {per_server_key} to a token acquired for the correct audience."
+                )
+            # Strip an existing "Bearer " prefix (case-insensitive) so the caller
+            # always receives a raw token and the Authorization header is never doubled.
+            if token.lower().startswith("bearer "):
+                token = token[7:]
+            self._logger.debug(
+                f"Attached {'per-server' if has_per_server else 'shared'} "
+                f"dev token for '{server.mcp_server_name}'"
+            )
+            return token
+
+        return acquire
+
+    def _create_obo_token_acquirer(
+        self,
+        authorization: Authorization,
+        auth_handler_name: str,
+        turn_context: TurnContext,
+    ) -> TokenAcquirer:
+        """
+        Returns a ``TokenAcquirer`` that performs an OBO token exchange per unique scope.
+
+        V1 servers (no ``audience`` field) share the shared ATG-scoped token (one exchange).
+        V2 servers each receive a token scoped to their own audience GUID.
+
+        Args:
+            authorization: Authorization context for token exchange.
+            auth_handler_name: Auth handler name to pass to the token exchange.
+            turn_context: TurnContext to pass to the token exchange.
+
+        Returns:
+            TokenAcquirer: Async callable ``(server, scope) → str`` (raises on failure).
+        """
+
+        async def acquire(server: MCPServerConfig, scope: str) -> Optional[str]:
+            self._logger.debug(
+                f"Acquiring OBO token for MCP server '{server.mcp_server_name}' (scope: {scope})"
+            )
+            token_result = await authorization.exchange_token(
+                turn_context, [scope], auth_handler_name
+            )
+            if token_result is None or not token_result.token:
+                raise Exception(
+                    f"Failed to obtain token for MCP server '{server.mcp_server_name}'"
+                    f" (scope: {scope})"
+                )
+            return token_result.token
+
+        return acquire
+
+    async def _attach_per_audience_tokens(
+        self,
+        servers: List[MCPServerConfig],
+        acquire: TokenAcquirer,
+    ) -> List[MCPServerConfig]:
+        """
+        Acquire one token per unique audience scope and attach ``Authorization: Bearer`` headers.
+
+        Caches acquired tokens by scope so each unique audience triggers exactly one
+        ``acquire`` call regardless of how many servers share that scope.
+
+        V1 servers (no ``audience`` field) all share one token exchange.
+        V2 servers each receive a token scoped to their own audience GUID.
+
+        Args:
+            servers: List of MCP server configs returned from discovery.
+            acquire: ``TokenAcquirer`` callable returned by ``_create_dev_token_acquirer`` or
+                     ``_create_obo_token_acquirer``. Receives ``(server, scope)`` and returns
+                     the raw token string (no Bearer prefix), or ``None`` if unavailable.
+
+        Returns:
+            List[MCPServerConfig]: New list of server configs with ``Authorization`` headers set
+            where a token was available.
+
+        Raises:
+            Exception: If the OBO acquirer fails for any server (propagated from ``acquire``).
+        """
+        token_cache: Dict[str, Optional[str]] = {}  # scope → raw token (None = not available)
+        result: List[MCPServerConfig] = []
+
+        for server in servers:
+            scope = resolve_token_scope_for_server(server)
+
+            if scope not in token_cache:
+                token_cache[scope] = await acquire(server, scope)
+
+            token = token_cache[scope]
+            if token:
+                merged_headers: Dict[str, str] = dict(server.headers) if server.headers else {}
+                merged_headers[Constants.Headers.AUTHORIZATION] = (
+                    f"{Constants.Headers.BEARER_PREFIX} {token}"
+                )
+                final_headers: Optional[Dict[str, str]] = merged_headers
+            else:
+                # No token acquired — preserve original headers (including None) unchanged.
+                final_headers = dict(server.headers) if server.headers else None
+
+            result.append(dataclass_replace(server, headers=final_headers))
+
+        return result
 
     # --------------------------------------------------------------------------
     # DEVELOPMENT: MANIFEST-BASED CONFIGURATION
@@ -168,77 +387,62 @@ class McpToolServerConfigurationService:
         Raises:
             Exception: If manifest file cannot be read or parsed.
         """
-        mcp_servers: List[MCPServerConfig] = []
-
         try:
-            manifest_path = self._find_manifest_file()
+            search_locations = self._get_manifest_search_locations()
+            manifest_path = self._find_manifest_file(search_locations)
 
-            if manifest_path and manifest_path.exists():
+            if manifest_path is not None:
                 self._logger.info(f"Loading MCP servers from: {manifest_path}")
-                mcp_servers = self._parse_manifest_file(manifest_path)
-            else:
-                self._log_manifest_search_failure()
+                return self._parse_manifest_file(manifest_path)
+
+            self._logger.info(
+                f"ToolingManifest.json not found. Checked {len(search_locations)} locations"
+            )
+            for path in search_locations:
+                self._logger.debug(f"  Checked: {path}")
+            self._logger.info(
+                "Please ensure ToolingManifest.json exists in your project's output directory."
+            )
+            return []
 
         except Exception as e:
             raise Exception(
                 f"Failed to read MCP servers from ToolingManifest.json: {str(e)}"
             ) from e
 
-        return mcp_servers
-
-    def _find_manifest_file(self) -> Optional[Path]:
+    def _find_manifest_file(self, search_locations: List[Path]) -> Optional[Path]:
         """
-        Searches for ToolingManifest.json in various common locations.
+        Searches for ToolingManifest.json in the provided locations.
+
+        Args:
+            search_locations: Ordered list of paths to check.
 
         Returns:
             Path to manifest file if found, None otherwise.
         """
-        search_locations = self._get_manifest_search_locations()
-
         for potential_path in search_locations:
             self._logger.debug(f"Checking for manifest at: {potential_path}")
             if potential_path.exists():
                 self._logger.info(f"Found manifest at: {potential_path}")
                 return potential_path
-            else:
-                self._logger.debug(f"Manifest not found at: {potential_path}")
 
         return None
 
     def _get_manifest_search_locations(self) -> List[Path]:
         """
-        Gets list of potential locations for ToolingManifest.json.
+        Gets the ordered list of candidate paths for ToolingManifest.json.
+
+        Searches the current working directory and its parent only. File-relative
+        path traversal is not used because it is unreliable for installed packages.
 
         Returns:
             List of Path objects to search for the manifest file.
         """
         current_dir = Path.cwd()
-        search_locations = []
-
-        # Current working directory
-        search_locations.append(current_dir / "ToolingManifest.json")
-
-        # Parent directory
-        search_locations.append(current_dir.parent / "ToolingManifest.json")
-
-        # Script location and project root
-        if __file__:
-            if hasattr(sys, "_MEIPASS"):
-                # Running as PyInstaller bundle
-                base_dir = Path(sys._MEIPASS)
-            else:
-                # Running as normal Python script
-                current_file_path = Path(__file__)
-                # Navigate to project root
-                base_dir = current_file_path.parent.parent.parent.parent
-
-            search_locations.extend(
-                [
-                    base_dir / "ToolingManifest.json",
-                ]
-            )
-
-        return search_locations
+        return [
+            current_dir / "ToolingManifest.json",
+            current_dir.parent / "ToolingManifest.json",
+        ]
 
     def _parse_manifest_file(self, manifest_path: Path) -> List[MCPServerConfig]:
         """
@@ -250,60 +454,40 @@ class McpToolServerConfigurationService:
         Returns:
             List of parsed MCP server configurations.
         """
-        mcp_servers: List[MCPServerConfig] = []
-
         with open(manifest_path, "r", encoding="utf-8") as file:
-            json_content = file.read()
+            manifest_data = json.load(file)
 
-        print(f"📄 Manifest content: {json_content}")
-        manifest_data = json.loads(json_content)
+        if "mcpServers" not in manifest_data:
+            self._logger.warning("No 'mcpServers' section found in ToolingManifest.json")
+            return []
 
-        if "mcpServers" in manifest_data:
-            print("✅ Found 'mcpServers' section in ToolingManifest.json")
-            self._logger.info("Found 'mcpServers' section in ToolingManifest.json")
-            mcp_servers_data = manifest_data["mcpServers"]
+        self._logger.info("Found 'mcpServers' section in ToolingManifest.json")
+        mcp_servers_data = manifest_data["mcpServers"]
 
-            if isinstance(mcp_servers_data, list):
-                print(f"📊 Processing {len(mcp_servers_data)} server entries")
-                for server_element in mcp_servers_data:
-                    print(f"🔧 Processing server element: {server_element}")
-                    server_config = self._parse_manifest_server_config(server_element)
-                    if server_config is not None:
-                        print(
-                            f"✅ Created server config: {server_config.mcp_server_name} -> {server_config.mcp_server_unique_name}"
-                        )
-                        mcp_servers.append(server_config)
-                    else:
-                        print(f"❌ Failed to parse server config from: {server_element}")
-        else:
-            print("❌ No 'mcpServers' section found in ToolingManifest.json")
+        if not isinstance(mcp_servers_data, list):
+            self._logger.warning("'mcpServers' in ToolingManifest.json is not a list — skipping")
+            return []
 
-        print(f"📊 Final result: Loaded {len(mcp_servers)} MCP server configurations")
-        self._logger.info(f"Loaded {len(mcp_servers)} MCP server configurations")
+        self._logger.debug(f"Processing {len(mcp_servers_data)} server entries from manifest")
+        mcp_servers: List[MCPServerConfig] = []
+        for server_element in mcp_servers_data:
+            server_config = self._parse_server_config(server_element)
+            if server_config is not None:
+                mcp_servers.append(server_config)
 
+        self._logger.info(f"Loaded {len(mcp_servers)} MCP server configurations from manifest")
         return mcp_servers
-
-    def _log_manifest_search_failure(self) -> None:
-        """Logs information about failed manifest file search."""
-        search_locations = self._get_manifest_search_locations()
-
-        print("❌ ToolingManifest.json not found. Checked locations:")
-        for path in search_locations:
-            print(f"   - {path}")
-
-        self._logger.info(
-            f"ToolingManifest.json not found. Checked {len(search_locations)} locations"
-        )
-        self._logger.info(
-            "Please ensure ToolingManifest.json exists in your project's output directory."
-        )
 
     # --------------------------------------------------------------------------
     # PRODUCTION: GATEWAY-BASED CONFIGURATION
     # --------------------------------------------------------------------------
 
     async def _load_servers_from_gateway(
-        self, agentic_app_id: str, auth_token: str, options: ToolOptions
+        self,
+        agentic_app_id: str,
+        auth_token: str,
+        options: ToolOptions,
+        turn_context: Optional[TurnContext] = None,
     ) -> List[MCPServerConfig]:
         """
         Reads MCP server configurations from tooling gateway endpoint for production scenario.
@@ -312,6 +496,8 @@ class McpToolServerConfigurationService:
             agentic_app_id: Agentic App ID for the agent.
             auth_token: Authentication token to access the tooling gateway.
             options: ToolOptions instance containing optional parameters.
+            turn_context: Optional TurnContext used to derive the correlation ID from
+                          ``activity.id``. A new UUID is generated when not provided.
 
         Returns:
             List[MCPServerConfig]: List of MCP server configurations from tooling gateway.
@@ -319,21 +505,21 @@ class McpToolServerConfigurationService:
         Raises:
             Exception: If there's an error communicating with the tooling gateway.
         """
-        mcp_servers: List[MCPServerConfig] = []
-
         try:
             config_endpoint = get_tooling_gateway_for_digital_worker(agentic_app_id)
-            headers = self._prepare_gateway_headers(auth_token, options)
+            headers = self._prepare_gateway_headers(auth_token, options, turn_context)
 
             self._logger.info(f"Calling tooling gateway endpoint: {config_endpoint}")
 
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT_SECONDS)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(config_endpoint, headers=headers) as response:
                     if response.status == 200:
                         mcp_servers = await self._parse_gateway_response(response)
                         self._logger.info(
                             f"Retrieved {len(mcp_servers)} MCP tool servers from tooling gateway"
                         )
+                        return mcp_servers
                     else:
                         raise Exception(f"HTTP {response.status}: {await response.text()}")
 
@@ -350,8 +536,6 @@ class McpToolServerConfigurationService:
             self._logger.error(error_msg)
             raise Exception(error_msg) from e
 
-        return mcp_servers
-
     def _prepare_gateway_headers(
         self, auth_token: str, options: ToolOptions, turn_context: Optional[TurnContext] = None
     ) -> Dict[str, str]:
@@ -361,7 +545,8 @@ class McpToolServerConfigurationService:
         Args:
             auth_token: Authentication token.
             options: ToolOptions instance containing optional parameters.
-            turn_context: Optional TurnContext for extracting agent blueprint ID for request headers.
+            turn_context: Optional TurnContext for extracting agent blueprint ID and
+                          correlation ID from ``activity.id``.
 
         Returns:
             Dictionary of HTTP headers.
@@ -378,7 +563,38 @@ class McpToolServerConfigurationService:
         if agent_id:
             headers[Constants.Headers.AGENT_ID] = agent_id
 
+        # Add x-ms-correlation-id: prefer activity.id from TurnContext, fall back to a new UUID
+        correlation_id = self._resolve_correlation_id(turn_context)
+        headers[Constants.Headers.CORRELATION_ID] = correlation_id
+        self._logger.debug(f"Gateway request correlation ID: {correlation_id}")
+
         return headers
+
+    def _resolve_correlation_id(self, turn_context: Optional[TurnContext] = None) -> str:
+        """
+        Resolves the correlation ID to attach to outbound gateway requests.
+
+        Uses ``turn_context.activity.id`` when available so the gateway log entry can be
+        correlated with the inbound activity. Falls back to a newly generated UUID4 when
+        no context is provided.
+
+        Args:
+            turn_context: Optional TurnContext to extract the activity ID from.
+
+        Returns:
+            str: Correlation ID string (non-empty).
+        """
+        try:
+            if (
+                turn_context is not None
+                and turn_context.activity is not None
+                and turn_context.activity.id
+            ):
+                return turn_context.activity.id
+        except (AttributeError, TypeError):
+            pass
+
+        return str(uuid.uuid4())
 
     def _resolve_agent_id_for_header(
         self, auth_token: str, turn_context: Optional[TurnContext] = None
@@ -426,20 +642,37 @@ class McpToolServerConfigurationService:
         """
         Parses the response from the tooling gateway.
 
+        Supports two response shapes:
+        - Wrapped: ``{"mcpServers": [...]}``
+        - Raw array: ``[...]`` (legacy V1 gateway format)
+
         Args:
             response: HTTP response from the gateway.
 
         Returns:
             List of parsed MCP server configurations.
         """
+        config_data = await response.json(content_type=None)
+
+        server_elements: Optional[List[object]] = None
+        if isinstance(config_data, list):
+            # Raw array format (legacy V1 gateway returns bare array)
+            self._logger.debug("Gateway returned raw array response")
+            server_elements = config_data
+        elif isinstance(config_data, dict) and isinstance(config_data.get("mcpServers"), list):
+            # Wrapped format: {"mcpServers": [...]}
+            self._logger.debug("Gateway returned wrapped mcpServers response")
+            server_elements = config_data["mcpServers"]
+        else:
+            self._logger.warning(
+                'Unexpected gateway response format: expected a list or {"mcpServers": [...]}'
+            )
+            return []
+
         mcp_servers: List[MCPServerConfig] = []
-
-        response_text = await response.text()
-        config_data = json.loads(response_text)
-
-        if "mcpServers" in config_data and isinstance(config_data["mcpServers"], list):
-            for server_element in config_data["mcpServers"]:
-                server_config = self._parse_gateway_server_config(server_element)
+        for server_element in server_elements:
+            if isinstance(server_element, dict):
+                server_config = self._parse_server_config(server_element)
                 if server_config is not None:
                     mcp_servers.append(server_config)
 
@@ -449,17 +682,18 @@ class McpToolServerConfigurationService:
     # CONFIGURATION PARSING HELPERS
     # --------------------------------------------------------------------------
 
-    def _parse_manifest_server_config(
-        self, server_element: Dict[str, Any]
-    ) -> Optional[MCPServerConfig]:
+    def _parse_server_config(self, server_element: Dict[str, object]) -> Optional[MCPServerConfig]:
         """
-        Parses a server configuration from manifest data, constructing full URL.
+        Parses a server configuration from manifest or gateway response data.
+
+        Handles both development (manifest) and production (gateway) payloads —
+        the two sources share the same JSON field schema.
 
         Args:
-            server_element: Dictionary containing server configuration from manifest.
+            server_element: Dictionary containing server configuration.
 
         Returns:
-            MCPServerConfig object or None if parsing fails.
+            MCPServerConfig object, or None if the element is invalid or unparseable.
         """
         try:
             mcp_server_name = self._extract_server_name(server_element)
@@ -468,82 +702,71 @@ class McpToolServerConfigurationService:
             if not self._validate_server_strings(mcp_server_name, mcp_server_unique_name):
                 return None
 
-            # Check if a URL is provided
             endpoint = self._extract_server_url(server_element)
-
-            # Use mcp_server_name if available, otherwise fall back to mcp_server_unique_name for URL construction
+            # Use mcp_server_name if available, otherwise fall back to mcp_server_unique_name
             server_name = mcp_server_name or mcp_server_unique_name
-
-            # Determine the final URL: use custom URL if provided, otherwise construct it
             final_url = endpoint if endpoint else build_mcp_server_url(server_name)
+
+            scope_raw = server_element.get("scope")
+            scope = (
+                None
+                if not scope_raw or (isinstance(scope_raw, str) and scope_raw.lower() == "null")
+                else str(scope_raw)
+            )
+
+            audience_raw = server_element.get("audience")
+            audience = (
+                None
+                if not audience_raw
+                or (isinstance(audience_raw, str) and audience_raw.lower() == "default")
+                else str(audience_raw)
+            )
+
+            publisher_raw = server_element.get("publisher")
+            publisher = str(publisher_raw) if publisher_raw is not None else None
 
             return MCPServerConfig(
                 mcp_server_name=mcp_server_name,
                 mcp_server_unique_name=mcp_server_unique_name,
                 url=final_url,
+                audience=audience,
+                scope=scope,
+                publisher=publisher,
             )
 
-        except Exception:
-            return None
-
-    def _parse_gateway_server_config(
-        self, server_element: Dict[str, Any]
-    ) -> Optional[MCPServerConfig]:
-        """
-        Parses a server configuration from gateway response data.
-
-        Args:
-            server_element: Dictionary containing server configuration from gateway.
-
-        Returns:
-            MCPServerConfig object or None if parsing fails.
-        """
-        try:
-            mcp_server_name = self._extract_server_name(server_element)
-            mcp_server_unique_name = self._extract_server_unique_name(server_element)
-
-            if not self._validate_server_strings(mcp_server_name, mcp_server_unique_name):
-                return None
-
-            # Check if a URL is provided by the gateway
-            endpoint = self._extract_server_url(server_element)
-
-            # Use mcp_server_name if available, otherwise fall back to mcp_server_unique_name for URL construction
-            server_name = mcp_server_name or mcp_server_unique_name
-
-            # Determine the final URL: use custom URL if provided, otherwise construct it
-            final_url = endpoint if endpoint else build_mcp_server_url(server_name)
-
-            return MCPServerConfig(
-                mcp_server_name=mcp_server_name,
-                mcp_server_unique_name=mcp_server_unique_name,
-                url=final_url,
+        except Exception as exc:
+            self._logger.warning(
+                f"Failed to parse server config from element {server_element!r}: {exc}"
             )
-
-        except Exception:
             return None
 
     # --------------------------------------------------------------------------
     # VALIDATION AND UTILITY HELPERS
     # --------------------------------------------------------------------------
 
-    def _validate_input_parameters(self, agentic_app_id: str, auth_token: str) -> None:
+    def _validate_input_parameters(self, agentic_app_id: str, auth_token: Optional[str]) -> None:
         """
         Validates input parameters for the main API method.
 
+        In development mode, servers are loaded from ToolingManifest.json rather than
+        the gateway, so neither ``agentic_app_id`` nor ``auth_token`` is required.
+        Validation is therefore skipped in dev mode to allow token-free local development.
+
         Args:
-            agentic_app_id: Agentic App ID to validate.
-            auth_token: Authentication token to validate.
+            agentic_app_id: Agentic App ID to validate (required in production).
+            auth_token: Authentication token to validate (required in production).
 
         Raises:
-            ValueError: If any parameter is invalid or empty.
+            ValueError: If any required parameter is invalid or empty (production only).
         """
+        if self._is_development_scenario():
+            return
         if not agentic_app_id:
             raise ValueError("agentic_app_id cannot be empty or None")
         if not auth_token:
             raise ValueError("auth_token cannot be empty or None")
 
-    def _extract_server_name(self, server_element: Dict[str, Any]) -> Optional[str]:
+    def _extract_server_name(self, server_element: Dict[str, object]) -> Optional[str]:
         """
         Extracts server name from configuration element.
 
@@ -553,13 +776,14 @@ class McpToolServerConfigurationService:
         Returns:
             Server name string or None.
         """
-        if "mcpServerName" in server_element and isinstance(server_element["mcpServerName"], str):
-            return server_element["mcpServerName"]
-        return None
+        value = server_element.get("mcpServerName")
+        return value if isinstance(value, str) else None
 
-    def _extract_server_unique_name(self, server_element: Dict[str, Any]) -> Optional[str]:
+    def _extract_server_unique_name(self, server_element: Dict[str, object]) -> Optional[str]:
         """
         Extracts server unique name from configuration element.
+
+        Falls back to ``mcpServerName`` when ``mcpServerUniqueName`` is absent.
 
         Args:
             server_element: Configuration dictionary.
@@ -567,13 +791,14 @@ class McpToolServerConfigurationService:
         Returns:
             Server unique name string or None.
         """
-        if "mcpServerUniqueName" in server_element and isinstance(
-            server_element["mcpServerUniqueName"], str
-        ):
-            return server_element["mcpServerUniqueName"]
-        return None
+        value = server_element.get("mcpServerUniqueName")
+        if isinstance(value, str):
+            return value
+        # Fall back to mcpServerName when mcpServerUniqueName is absent
+        fallback = server_element.get("mcpServerName")
+        return fallback if isinstance(fallback, str) else None
 
-    def _extract_server_url(self, server_element: Dict[str, Any]) -> Optional[str]:
+    def _extract_server_url(self, server_element: Dict[str, object]) -> Optional[str]:
         """
         Extracts custom server URL from configuration element.
 
@@ -583,14 +808,12 @@ class McpToolServerConfigurationService:
         Returns:
             Server URL string or None.
         """
-        # Check for 'url' field in both manifest and gateway responses
-        if "url" in server_element and isinstance(server_element["url"], str):
-            return server_element["url"]
-        return None
+        value = server_element.get("url")
+        return value if isinstance(value, str) else None
 
     def _validate_server_strings(self, name: Optional[str], unique_name: Optional[str]) -> bool:
         """
-        Validates that server name and unique name are valid strings.
+        Validates that server name and unique name are non-empty strings.
 
         Args:
             name: Server name to validate.
@@ -599,7 +822,12 @@ class McpToolServerConfigurationService:
         Returns:
             True if both strings are valid, False otherwise.
         """
-        return name is not None and name.strip() and unique_name is not None and unique_name.strip()
+        return (
+            name is not None
+            and bool(name.strip())
+            and unique_name is not None
+            and bool(unique_name.strip())
+        )
 
     # --------------------------------------------------------------------------
     # SEND CHAT HISTORY

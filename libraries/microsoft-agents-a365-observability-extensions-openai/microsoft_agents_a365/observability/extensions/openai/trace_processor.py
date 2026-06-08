@@ -20,9 +20,9 @@ from agents.tracing.span_data import (
     ResponseSpanData,
 )
 from microsoft_agents_a365.observability.core.constants import (
+    CHAT_OPERATION_NAME,
     CUSTOM_PARENT_SPAN_ID_KEY,
     EXECUTE_TOOL_OPERATION_NAME,
-    GEN_AI_EXECUTION_TYPE_KEY,
     GEN_AI_INPUT_MESSAGES_KEY,
     GEN_AI_OPERATION_NAME_KEY,
     GEN_AI_OUTPUT_MESSAGES_KEY,
@@ -32,7 +32,6 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_TOOL_TYPE_KEY,
     INVOKE_AGENT_OPERATION_NAME,
 )
-from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 from microsoft_agents_a365.observability.core.utils import as_utc_nano, safe_json_dumps
 from opentelemetry import trace as ot_trace
 from opentelemetry.context import attach, detach
@@ -51,6 +50,7 @@ from openai.types.responses import (
 from .constants import (
     GEN_AI_GRAPH_NODE_PARENT_ID,
 )
+from .message_mapper import map_input_messages, map_output_messages
 from .utils import (
     capture_input_message,
     capture_output_message,
@@ -247,7 +247,6 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 while len(self._reverse_handoffs_dict) > self._MAX_HANDOFFS_IN_FLIGHT:
                     self._reverse_handoffs_dict.popitem(last=False)
         elif isinstance(data, AgentSpanData):
-            otel_span.set_attribute(GEN_AI_EXECUTION_TYPE_KEY, ExecutionType.HUMAN_TO_AGENT.value)
             # Lookup the parent node if exists
             key = f"{data.name}:{span.trace_id}"
             if parent_node := self._reverse_handoffs_dict.pop(key, None):
@@ -261,6 +260,9 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
             # Clean up tracking
             self._agent_span_ids.pop(span.span_id, None)
 
+        # Map raw messages to A365 versioned format before ending the span
+        self._apply_message_mapping(otel_span)
+
         end_time: int | None = None
         if span.ended_at:
             try:
@@ -269,6 +271,26 @@ class OpenAIAgentsTraceProcessor(TracingProcessor):
                 pass
         otel_span.set_status(status=get_span_status(span))
         otel_span.end(end_time)
+
+    @staticmethod
+    def _apply_message_mapping(otel_span: OtelSpan) -> None:
+        """Map raw ``gen_ai.input/output.messages`` to the A365 versioned format."""
+        attrs = otel_span.attributes or {}
+        operation = attrs.get(GEN_AI_OPERATION_NAME_KEY, "")
+        if operation not in (INVOKE_AGENT_OPERATION_NAME, CHAT_OPERATION_NAME):
+            return
+
+        raw_input = attrs.get(GEN_AI_INPUT_MESSAGES_KEY)
+        if raw_input and isinstance(raw_input, str):
+            mapped = map_input_messages(raw_input)
+            if mapped is not None:
+                otel_span.set_attribute(GEN_AI_INPUT_MESSAGES_KEY, mapped)
+
+        raw_output = attrs.get(GEN_AI_OUTPUT_MESSAGES_KEY)
+        if raw_output and isinstance(raw_output, str):
+            mapped = map_output_messages(raw_output)
+            if mapped is not None:
+                otel_span.set_attribute(GEN_AI_OUTPUT_MESSAGES_KEY, mapped)
 
     def force_flush(self) -> None:
         """Forces an immediate flush of all queued spans/traces."""

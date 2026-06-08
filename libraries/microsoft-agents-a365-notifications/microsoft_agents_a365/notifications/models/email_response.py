@@ -36,12 +36,12 @@ class EmailResponse(Entity):
             entity attached to its entities list.
 
         Example:
-            ```python
-            activity = EmailResponse.create_email_response_activity(
-                "<p>Thank you for your email. I'll get back to you soon.</p>"
-            )
-            await context.send_activity(activity)
-            ```
+            .. code-block:: python
+
+                activity = EmailResponse.create_email_response_activity(
+                    "<p>Thank you for your email. I'll get back to you soon.</p>"
+                )
+                await context.send_activity(activity)
         """
         working_activity = Activity(type="message")
         email_response = EmailResponse(html_body=email_response_html_body)

@@ -7,6 +7,7 @@
 INVOKE_AGENT_OPERATION_NAME = "invoke_agent"
 EXECUTE_TOOL_OPERATION_NAME = "execute_tool"
 OUTPUT_MESSAGES_OPERATION_NAME = "output_messages"
+APPLY_GUARDRAIL_OPERATION_NAME = "apply_guardrail"
 CHAT_OPERATION_NAME = "chat"
 
 # OpenTelemetry semantic conventions
@@ -38,6 +39,7 @@ GEN_AI_RESPONSE_ID_KEY = "gen_ai.response.id"
 GEN_AI_AGENT_ID_KEY = "gen_ai.agent.id"
 GEN_AI_AGENT_NAME_KEY = "gen_ai.agent.name"
 GEN_AI_AGENT_DESCRIPTION_KEY = "gen_ai.agent.description"
+GEN_AI_AGENT_VERSION_KEY = "gen_ai.agent.version"
 GEN_AI_AGENT_PLATFORM_ID_KEY = "microsoft.a365.agent.platform.id"
 GEN_AI_AGENT_THOUGHT_PROCESS_KEY = "microsoft.a365.agent.thought.process"
 GEN_AI_CONVERSATION_ID_KEY = "gen_ai.conversation.id"
@@ -60,19 +62,20 @@ GEN_AI_TOOL_ARGS_KEY = "gen_ai.tool.call.arguments"
 GEN_AI_TOOL_CALL_RESULT_KEY = "gen_ai.tool.call.result"
 GEN_AI_TOOL_TYPE_KEY = "gen_ai.tool.type"
 
-# Agent user (user tied to agent instance during creation) or caller dimensions
-GEN_AI_CALLER_ID_KEY = "microsoft.caller.id"
-GEN_AI_CALLER_NAME_KEY = "microsoft.caller.name"
-GEN_AI_CALLER_UPN_KEY = "microsoft.caller.upn"
+# Human caller dimensions (OTel user.* namespace)
+USER_ID_KEY = "user.id"
+USER_NAME_KEY = "user.name"
+USER_EMAIL_KEY = "user.email"
 GEN_AI_CALLER_CLIENT_IP_KEY = "client.address"
 
 # Agent to Agent caller agent dimensions
 GEN_AI_CALLER_AGENT_USER_ID_KEY = "microsoft.a365.caller.agent.user.id"
-GEN_AI_CALLER_AGENT_UPN_KEY = "microsoft.a365.caller.agent.user.upn"
+GEN_AI_CALLER_AGENT_EMAIL_KEY = "microsoft.a365.caller.agent.user.email"
 GEN_AI_CALLER_AGENT_NAME_KEY = "microsoft.a365.caller.agent.name"
 GEN_AI_CALLER_AGENT_ID_KEY = "microsoft.a365.caller.agent.id"
 GEN_AI_CALLER_AGENT_APPLICATION_ID_KEY = "microsoft.a365.caller.agent.blueprint.id"
 GEN_AI_CALLER_AGENT_PLATFORM_ID_KEY = "microsoft.a365.caller.agent.platform.id"
+GEN_AI_CALLER_AGENT_VERSION_KEY = "microsoft.a365.caller.agent.version"
 
 # Agent-specific dimensions
 AGENT_ID_KEY = "gen_ai.agent.id"
@@ -84,11 +87,13 @@ TENANT_ID_KEY = "microsoft.tenant.id"
 
 # Baggage keys
 GEN_AI_AGENT_AUID_KEY = "microsoft.agent.user.id"
-GEN_AI_AGENT_UPN_KEY = "microsoft.agent.user.upn"
+GEN_AI_AGENT_EMAIL_KEY = "microsoft.agent.user.email"
 GEN_AI_AGENT_BLUEPRINT_ID_KEY = "microsoft.a365.agent.blueprint.id"
 
+# Error type constants
+ERROR_TYPE_CANCELLED = "TaskCanceledException"
+
 # Execution context dimensions
-GEN_AI_EXECUTION_TYPE_KEY = "gen_ai.execution.type"
 GEN_AI_EXECUTION_PAYLOAD_KEY = "gen_ai.execution.payload"
 
 # Channel dimensions
@@ -108,3 +113,32 @@ TELEMETRY_SDK_LANGUAGE_KEY = "telemetry.sdk.language"
 TELEMETRY_SDK_VERSION_KEY = "telemetry.sdk.version"
 TELEMETRY_SDK_NAME_VALUE = "A365ObservabilitySDK"
 TELEMETRY_SDK_LANGUAGE_VALUE = "python"
+
+# Guardian attributes
+GUARDIAN_ID_KEY = "microsoft.guardian.id"
+GUARDIAN_NAME_KEY = "microsoft.guardian.name"
+GUARDIAN_PROVIDER_NAME_KEY = "microsoft.guardian.provider.name"
+GUARDIAN_VERSION_KEY = "microsoft.guardian.version"
+
+# Security attributes
+SECURITY_DECISION_TYPE_KEY = "microsoft.security.decision.type"
+SECURITY_DECISION_REASON_KEY = "microsoft.security.decision.reason"
+SECURITY_DECISION_CODE_KEY = "microsoft.security.decision.code"
+SECURITY_TARGET_TYPE_KEY = "microsoft.security.target.type"
+SECURITY_TARGET_ID_KEY = "microsoft.security.target.id"
+SECURITY_POLICY_ID_KEY = "microsoft.security.policy.id"
+SECURITY_POLICY_NAME_KEY = "microsoft.security.policy.name"
+SECURITY_POLICY_VERSION_KEY = "microsoft.security.policy.version"
+SECURITY_CONTENT_INPUT_HASH_KEY = "microsoft.security.content.input.hash"
+SECURITY_CONTENT_MODIFIED_KEY = "microsoft.security.content.modified"
+SECURITY_EXTERNAL_EVENT_ID_KEY = "microsoft.security.external_event_id"
+SECURITY_CONTENT_INPUT_VALUE_KEY = "microsoft.security.content.input.value"
+SECURITY_CONTENT_OUTPUT_VALUE_KEY = "microsoft.security.content.output.value"
+
+# Security finding event
+SECURITY_FINDING_EVENT_NAME = "microsoft.security.finding"
+SECURITY_RISK_CATEGORY_KEY = "microsoft.security.risk.category"
+SECURITY_RISK_SEVERITY_KEY = "microsoft.security.risk.severity"
+SECURITY_RISK_SCORE_KEY = "microsoft.security.risk.score"
+SECURITY_RISK_METADATA_KEY = "microsoft.security.risk.metadata"
+SECURITY_POLICY_DECISION_TYPE_KEY = "microsoft.security.policy.decision.type"

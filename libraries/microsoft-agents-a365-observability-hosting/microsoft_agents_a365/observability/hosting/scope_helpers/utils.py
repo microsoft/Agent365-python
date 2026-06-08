@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -9,18 +10,16 @@ from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_NAME_KEY,
     GEN_AI_AGENT_AUID_KEY,
     GEN_AI_AGENT_DESCRIPTION_KEY,
+    GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
-    GEN_AI_AGENT_UPN_KEY,
-    GEN_AI_CALLER_ID_KEY,
-    GEN_AI_CALLER_NAME_KEY,
-    GEN_AI_CALLER_UPN_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
     GEN_AI_CONVERSATION_ITEM_LINK_KEY,
-    GEN_AI_EXECUTION_TYPE_KEY,
     TENANT_ID_KEY,
+    USER_EMAIL_KEY,
+    USER_ID_KEY,
+    USER_NAME_KEY,
 )
-from microsoft_agents_a365.observability.core.execution_type import ExecutionType
 
 AGENT_ROLE = "agenticUser"
 
@@ -38,22 +37,9 @@ def get_caller_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     frm = activity.from_property
     if not frm:
         return
-    yield GEN_AI_CALLER_ID_KEY, frm.aad_object_id
-    yield GEN_AI_CALLER_NAME_KEY, frm.name
-    yield GEN_AI_CALLER_UPN_KEY, frm.agentic_user_id
-
-
-def get_execution_type_pair(activity: Activity) -> Iterator[tuple[str, Any]]:
-    frm = activity.from_property
-    rec = activity.recipient
-    is_agentic_caller = _is_agentic(frm)
-    is_agentic_recipient = _is_agentic(rec)
-    exec_type = (
-        ExecutionType.AGENT_TO_AGENT.value
-        if (is_agentic_caller and is_agentic_recipient)
-        else ExecutionType.HUMAN_TO_AGENT.value
-    )
-    yield GEN_AI_EXECUTION_TYPE_KEY, exec_type
+    yield USER_ID_KEY, frm.aad_object_id
+    yield USER_NAME_KEY, frm.name
+    yield USER_EMAIL_KEY, frm.agentic_user_id
 
 
 def get_target_agent_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
@@ -63,7 +49,7 @@ def get_target_agent_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     yield GEN_AI_AGENT_ID_KEY, activity.get_agentic_instance_id()
     yield GEN_AI_AGENT_NAME_KEY, rec.name
     yield GEN_AI_AGENT_AUID_KEY, rec.aad_object_id
-    yield GEN_AI_AGENT_UPN_KEY, activity.get_agentic_user()
+    yield GEN_AI_AGENT_EMAIL_KEY, activity.get_agentic_user()
     yield (
         GEN_AI_AGENT_DESCRIPTION_KEY,
         rec.role,
@@ -74,12 +60,12 @@ def get_tenant_id_pair(activity: Activity) -> Iterator[tuple[str, Any]]:
     yield TENANT_ID_KEY, activity.recipient.tenant_id
 
 
-def get_source_metadata_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
+def get_channel_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     """
-    Generate source metadata pairs from activity, handling both string and ChannelId object cases.
+    Generate channel pairs from activity, handling both string and ChannelId object cases.
 
     :param activity: The activity object (Activity instance or dict)
-    :return: Iterator of (key, value) tuples for source metadata
+    :return: Iterator of (key, value) tuples for channel information
     """
     # Handle channel_id (can be string or ChannelId object)
     channel_id = activity.channel_id
@@ -89,13 +75,35 @@ def get_source_metadata_pairs(activity: Activity) -> Iterator[tuple[str, Any]]:
     sub_channel = None
 
     if channel_id is not None:
-        if isinstance(channel_id, str):
-            # Direct string value
-            channel_name = channel_id
-        elif hasattr(channel_id, "channel"):
+        # Check for ChannelId object first
+        if hasattr(channel_id, "channel"):
             # ChannelId object
             channel_name = channel_id.channel
             sub_channel = channel_id.sub_channel
+        elif isinstance(channel_id, str):
+            # Direct string value
+            channel_name = channel_id
+
+    # Try to get sub_channel from productContext in channel_data if sub_channel is not set
+    if not sub_channel and activity.channel_data:
+        try:
+            # Convert channel_data to dict if it's a string
+            if isinstance(activity.channel_data, str):
+                channel_data_dict = json.loads(activity.channel_data)
+            elif isinstance(activity.channel_data, dict):
+                channel_data_dict = activity.channel_data
+            else:
+                # Try to convert to dict if it has __dict__
+                channel_data_dict = getattr(activity.channel_data, "__dict__", {})
+
+            # Extract productContext if available
+            if isinstance(channel_data_dict, dict) and "productContext" in channel_data_dict:
+                product_context = channel_data_dict["productContext"]
+                if isinstance(product_context, str):
+                    sub_channel = product_context
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            # Silently ignore any parsing errors
+            pass
 
     # Yield channel name as source name
     yield CHANNEL_NAME_KEY, channel_name

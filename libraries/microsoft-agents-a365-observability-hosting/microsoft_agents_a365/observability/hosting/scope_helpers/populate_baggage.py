@@ -11,9 +11,8 @@ from microsoft_agents_a365.observability.core.middleware.baggage_builder import 
 
 from .utils import (
     get_caller_pairs,
+    get_channel_pairs,
     get_conversation_pairs,
-    get_execution_type_pair,
-    get_source_metadata_pairs,
     get_target_agent_pairs,
     get_tenant_id_pair,
 )
@@ -24,10 +23,9 @@ def _iter_all_pairs(turn_context: TurnContext) -> Iterator[tuple[str, Any]]:
     if not activity:
         return
     yield from get_caller_pairs(activity)
-    yield from get_execution_type_pair(activity)
     yield from get_target_agent_pairs(activity)
     yield from get_tenant_id_pair(activity)
-    yield from get_source_metadata_pairs(activity)
+    yield from get_channel_pairs(activity)
     yield from get_conversation_pairs(activity)
 
 
