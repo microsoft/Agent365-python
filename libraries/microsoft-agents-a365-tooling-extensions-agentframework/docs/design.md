@@ -41,8 +41,7 @@ McpToolRegistrationService.add_tool_servers_to_agent()
        │
        ├── Resolve agent identity
        ├── Exchange token for MCP scope
-       ├── Gate: raise McpConnectionsRequiredError if any server is Pending
-       ├── Create MCPStreamableHTTPTool for each (Ready) server
+       ├── Gate (per server, non-blocking): Ready → MCPStreamableHTTPTool; Pending → placeholder tool
        └── Create ChatAgent with all tools
        │
        ▼
@@ -77,50 +76,65 @@ mcp_tool = MCPStreamableHTTPTool(
 )
 ```
 
-### Connection-readiness gating
+### Connection-readiness gating (non-blocking, per server)
 
-MCP server discovery runs every turn. The gateway reports each server's
-`connectivityStatus` (`"Ready"` or `"Pending"`) along with an `allConnectionsUrl` the user
-can visit to view and manage the connectors required by that server. When **any** discovered
-server is `Pending`, `add_tool_servers_to_agent` raises `McpConnectionsRequiredError`
-**before** building the agent, so the developer's turn handler can prompt the user to set up
-connections and return. A later turn re-runs discovery and proceeds automatically once the
-connections are in place.
+MCP server discovery runs every turn. The gateway reports each server's `connectivityStatus`
+(`"Ready"` or `"Pending"`) along with a `missingConnectionsUrl` the user can visit to set up the
+connection(s) that server needs. Gating is **per server and non-blocking**:
 
-The gate raises at agent-construction time — not from inside a tool call — on purpose. Agent
-Framework's tool-call loop catches exceptions raised inside a `FunctionTool` and reflects them
-to the model as an opaque error string (`"Error: Function failed."` by default), which would
-drop the setup URL before it reached the user. Raising during construction lets the typed
-exception propagate intact to the turn handler.
+- A **Ready** server (or a legacy source with no `connectivityStatus`) is wired as a live
+  `MCPStreamableHTTPTool`, exactly as before.
+- A **Pending** server is wired as a single **placeholder tool** named after the server. The agent
+  is still built and the Ready servers remain fully usable for the turn. Only if the model invokes
+  the placeholder — because the user's request actually needs that server — does it return a static
+  message (including `missingConnectionsUrl`) for the model to relay to the user. If the turn never
+  needs the Pending server, the user is never bothered. A later turn re-runs discovery and wires the
+  server for real once its connections are in place.
+
+The placeholder **returns** the message rather than raising it. Agent Framework's tool-call loop
+catches exceptions raised inside a `FunctionTool` and reflects them to the model as an opaque error
+string (`"Error: Function failed."` by default), and it converts `UserInputRequiredException` into
+tool-result content rather than propagating it — so returning the text is the only way to surface
+the setup URL through the model. Because surfacing flows through the model, exact verbatim delivery
+is best-effort; the placeholder's description instructs the model to relay the message and URL
+verbatim, and `max_invocations=1` stops the model from looping on it within a turn.
+
+> **Note:** A Pending server is represented by one placeholder named after the server (its real
+> sub-tools are invisible until it connects). The model routes the user's intent to it by server
+> name plus description — best-effort, not guaranteed.
 
 ```python
 from microsoft_agents_a365.tooling.extensions.agentframework import (
     McpToolRegistrationService,
-    McpConnectionsRequiredError,
 )
 
 service = McpToolRegistrationService()
 
-try:
-    agent = await service.add_tool_servers_to_agent(
-        chat_client=chat_client,
-        agent_instructions="You are a helpful assistant.",
-        initial_tools=[],
-        auth=auth_context,
-        auth_handler_name="graph",
-        turn_context=turn_context,
-    )
-except McpConnectionsRequiredError as err:
-    await turn_context.send_activity(
-        f"Before I can help, please set up the required connections for "
-        f"{', '.join(err.server_names)}: {err.all_connections_url}"
-    )
-    return  # Skip running the model/tools this turn.
+# Non-blocking: Pending servers become placeholders, so no special handling is needed in the
+# turn handler. The agent is always built and Ready tools always run.
+agent = await service.add_tool_servers_to_agent(
+    chat_client=chat_client,
+    agent_instructions="You are a helpful assistant.",
+    initial_tools=[],
+    auth=auth_context,
+    auth_handler_name="graph",
+    turn_context=turn_context,
+)
 ```
 
-`McpConnectionsRequiredError` exposes `all_connections_url`, `connectivity_status`, and
-`server_names`. It is owned and exported by this extension (`microsoft_agents_a365.tooling`
-core only parses the per-server connection metadata; it never gates or raises).
+For developers who instead want **blocking** behavior (abort the whole turn until every server is
+connected), the extension still exports `McpConnectionsRequiredError`. Inspect the discovered
+servers yourself and raise it before building the agent:
+
+```python
+from microsoft_agents_a365.tooling.extensions.agentframework import McpConnectionsRequiredError
+```
+
+`McpConnectionsRequiredError` exposes `missing_connections_url`, `connectivity_status`, and
+`server_names`, and its message is built from the same `format_mcp_connections_required_message`
+helper the placeholder uses. It is owned and exported by this extension
+(`microsoft_agents_a365.tooling` core only parses the per-server connection metadata; it never
+gates or raises).
 
 ### Chat History API
 

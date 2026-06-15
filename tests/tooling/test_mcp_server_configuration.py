@@ -1025,10 +1025,9 @@ class TestConnectionGating:
 
         Connection gating has been removed from the core service.  It is now
         the responsibility of framework-specific extensions (see e.g.
-        ``microsoft-agents-a365-tooling-extensions-agentframework``), which raise
-        ``McpConnectionsRequiredError`` before building the agent when a server is
-        Pending.  Core simply returns the configs with their per-server connection
-        metadata intact.
+        ``microsoft-agents-a365-tooling-extensions-agentframework``), which register
+        a non-blocking placeholder tool for each Pending server.  Core simply returns
+        the configs with their per-server connection metadata intact.
         """
         payload = {
             "mcpServers": [

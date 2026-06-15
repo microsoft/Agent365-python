@@ -743,17 +743,13 @@ class TestHttpxClientLifecycle:
 
 
 class TestPendingServerGate:
-    """Tests for the connection-readiness gate in ``add_tool_servers_to_agent``.
+    """Tests for the non-blocking, per-server connection gate in ``add_tool_servers_to_agent``.
 
-    When the gateway flags any MCP server's downstream connections as
-    ``Pending``, ``add_tool_servers_to_agent`` must raise
-    ``McpConnectionsRequiredError`` (carrying ``all_connections_url``) *before*
-    building the agent, so the developer's turn handler can prompt the user to
-    set up connections. Raising at registration time — rather than from inside a
-    tool call — ensures the exception (and the setup URL) reaches the turn
-    handler, because Agent Framework's tool-call loop swallows exceptions raised
-    inside a ``FunctionTool``. When every server is Ready, the agent is built
-    normally with real ``MCPStreamableHTTPTool`` instances.
+    When the gateway flags an MCP server's downstream connections as ``Pending``, the service
+    registers a placeholder ``FunctionTool`` (named after the server) in place of a live
+    ``MCPStreamableHTTPTool``. The agent is still built and Ready servers stay usable; only if the
+    model invokes the placeholder does it return a static setup message (including
+    ``missing_connections_url``). The turn is never aborted.
     """
 
     @pytest.fixture
@@ -781,31 +777,29 @@ class TestPendingServerGate:
         return auth
 
     @staticmethod
-    def _config(name, status, all_url=None):
+    def _config(name, status, missing_url=None, all_url=None):
         c = Mock()
         c.mcp_server_name = name
         c.mcp_server_unique_name = name
         c.url = f"https://gw.example/{name}"
         c.headers = None
         c.connectivity_status = status
-        # The gate surfaces all_connections_url (view/manage all connectors
-        # required by the server, including ones already set up), not the
-        # narrower missing_connections_url.
+        c.missing_connections_url = missing_url
         c.all_connections_url = all_url
-        c.missing_connections_url = None
         return c
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_pending_server_raises_before_building_agent(
+    async def test_pending_server_registers_placeholder_and_builds_agent(
         self, service, mock_chat_client, mock_turn_context, mock_auth
     ):
-        """A Pending server raises McpConnectionsRequiredError; no agent is built."""
-        from microsoft_agents_a365.tooling.extensions.agentframework import (
-            McpConnectionsRequiredError,
-        )
+        """A Pending server is wired as a placeholder tool; the agent is still built."""
+        from agent_framework import FunctionTool
 
-        pending = self._config("mcp_Salesforce", "Pending", "https://make.example/all/salesforce")
+        pending = self._config(
+            "mcp_Salesforce", "Pending", missing_url="https://make.example/missing/salesforce"
+        )
+        captured_tools = []
         with (
             patch.object(
                 service._mcp_server_configuration_service,
@@ -827,44 +821,52 @@ class TestPendingServerGate:
                 return_value="test-agent-id",
             ),
         ):
-            with pytest.raises(McpConnectionsRequiredError) as exc_info:
-                await service.add_tool_servers_to_agent(
-                    chat_client=mock_chat_client,
-                    agent_instructions="Test",
-                    initial_tools=[],
-                    auth=mock_auth,
-                    auth_handler_name="h",
-                    turn_context=mock_turn_context,
-                    auth_token="discovery-token",
-                )
-        # The gate fires before any tool wiring or agent construction.
+            mock_raw_agent.side_effect = lambda **kw: captured_tools.extend(kw["tools"]) or Mock()
+            await service.add_tool_servers_to_agent(
+                chat_client=mock_chat_client,
+                agent_instructions="Test",
+                initial_tools=[],
+                auth=mock_auth,
+                auth_handler_name="h",
+                turn_context=mock_turn_context,
+                auth_token="discovery-token",
+            )
+        # No live MCP tool / httpx client for the Pending server; agent still built.
         mock_httpx_client.assert_not_called()
         mock_mcp_tool.assert_not_called()
-        mock_raw_agent.assert_not_called()
-        # The exception surfaces the setup URL, status, and server name.
-        assert exc_info.value.all_connections_url == "https://make.example/all/salesforce"
-        assert exc_info.value.connectivity_status == "Pending"
-        assert exc_info.value.server_names == ["mcp_Salesforce"]
-        assert "https://make.example/all/salesforce" in str(exc_info.value)
+        mock_raw_agent.assert_called_once()
+        # Exactly one placeholder FunctionTool, named after the server.
+        placeholders = [t for t in captured_tools if isinstance(t, FunctionTool)]
+        assert len(placeholders) == 1
+        placeholder = placeholders[0]
+        assert placeholder.name == "mcp_Salesforce"
+        # The placeholder is registered, not connected, so it isn't tracked for cleanup.
+        assert service._connected_servers == []
+        # Invoking the placeholder returns the static message with the missing-connections URL.
+        message = placeholder.func()
+        assert "https://make.example/missing/salesforce" in message
+        assert "mcp_Salesforce" in message
+        # Capped so the model can't loop on it within a turn.
+        assert placeholder.max_invocations == 1
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_mixed_ready_and_pending_raises(
+    async def test_placeholder_falls_back_to_all_connections_url(
         self, service, mock_chat_client, mock_turn_context, mock_auth
     ):
-        """Any Pending server blocks the whole turn, even alongside Ready servers."""
-        from microsoft_agents_a365.tooling.extensions.agentframework import (
-            McpConnectionsRequiredError,
-        )
+        """When the gateway omits missing_connections_url, the placeholder uses all_connections_url."""
+        from agent_framework import FunctionTool
 
-        ready = self._config("mcp_Mail", "Ready")
-        pending = self._config("mcp_Salesforce", "Pending", "https://make.example/all/sf")
+        pending = self._config(
+            "mcp_Zendesk", "Pending", missing_url=None, all_url="https://make.example/all/zendesk"
+        )
+        captured_tools = []
         with (
             patch.object(
                 service._mcp_server_configuration_service,
                 "list_tool_servers",
                 new_callable=AsyncMock,
-                return_value=[ready, pending],
+                return_value=[pending],
             ),
             patch(
                 "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
@@ -874,26 +876,79 @@ class TestPendingServerGate:
                 return_value="test-agent-id",
             ),
         ):
-            with pytest.raises(McpConnectionsRequiredError) as exc_info:
-                await service.add_tool_servers_to_agent(
-                    chat_client=mock_chat_client,
-                    agent_instructions="Test",
-                    initial_tools=[],
-                    auth=mock_auth,
-                    auth_handler_name="h",
-                    turn_context=mock_turn_context,
-                    auth_token="discovery-token",
-                )
-        mock_raw_agent.assert_not_called()
-        assert exc_info.value.server_names == ["mcp_Salesforce"]
-        assert exc_info.value.all_connections_url == "https://make.example/all/sf"
+            mock_raw_agent.side_effect = lambda **kw: captured_tools.extend(kw["tools"]) or Mock()
+            await service.add_tool_servers_to_agent(
+                chat_client=mock_chat_client,
+                agent_instructions="Test",
+                initial_tools=[],
+                auth=mock_auth,
+                auth_handler_name="h",
+                turn_context=mock_turn_context,
+                auth_token="discovery-token",
+            )
+        placeholder = next(t for t in captured_tools if isinstance(t, FunctionTool))
+        assert "https://make.example/all/zendesk" in placeholder.func()
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_mixed_ready_and_pending_wires_both(
+        self, service, mock_chat_client, mock_turn_context, mock_auth
+    ):
+        """Ready servers become real tools; Pending servers become placeholders — turn proceeds."""
+        from agent_framework import FunctionTool
+
+        ready = self._config("mcp_Mail", "Ready")
+        pending = self._config(
+            "mcp_Salesforce", "Pending", missing_url="https://make.example/missing/sf"
+        )
+        captured_tools = []
+        with (
+            patch.object(
+                service._mcp_server_configuration_service,
+                "list_tool_servers",
+                new_callable=AsyncMock,
+                return_value=[ready, pending],
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.httpx.AsyncClient"
+            ),
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.MCPStreamableHTTPTool"
+            ) as mock_mcp_tool,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.RawAgent"
+            ) as mock_raw_agent,
+            patch(
+                "microsoft_agents_a365.tooling.extensions.agentframework.services.mcp_tool_registration_service.Utility.resolve_agent_identity",
+                return_value="test-agent-id",
+            ),
+        ):
+            mock_raw_agent.side_effect = lambda **kw: captured_tools.extend(kw["tools"]) or Mock()
+            await service.add_tool_servers_to_agent(
+                chat_client=mock_chat_client,
+                agent_instructions="Test",
+                initial_tools=[],
+                auth=mock_auth,
+                auth_handler_name="h",
+                turn_context=mock_turn_context,
+                auth_token="discovery-token",
+            )
+        # Ready server wired once as a live MCP tool; agent built once.
+        assert mock_mcp_tool.call_count == 1
+        mock_raw_agent.assert_called_once()
+        # One placeholder for the Pending server, and the live tool for the Ready one.
+        placeholders = [t for t in captured_tools if isinstance(t, FunctionTool)]
+        assert [p.name for p in placeholders] == ["mcp_Salesforce"]
+        assert len(captured_tools) == 2
 
     @pytest.mark.asyncio
     @pytest.mark.unit
     async def test_all_ready_builds_agent_with_real_tools(
         self, service, mock_chat_client, mock_turn_context, mock_auth
     ):
-        """All-Ready (and legacy None) servers → real MCPStreamableHTTPTool; agent built."""
+        """All-Ready (and legacy None) servers → real MCPStreamableHTTPTool; no placeholders."""
+        from agent_framework import FunctionTool
+
         ready = self._config("mcp_Mail", "Ready")
         legacy = self._config("mcp_Files", None)  # legacy / no status
         captured_tools = []
@@ -928,14 +983,15 @@ class TestPendingServerGate:
                 turn_context=mock_turn_context,
                 auth_token="discovery-token",
             )
-        # Both servers wired as real MCP tools; agent constructed.
+        # Both servers wired as real MCP tools; agent constructed; no placeholders.
         assert mock_mcp_tool.call_count == 2
         mock_raw_agent.assert_called_once()
+        assert [t for t in captured_tools if isinstance(t, FunctionTool)] == []
         assert len(captured_tools) == 2
 
 
 class TestExtensionExceptionExport:
-    """The connection-gating exception is owned and exported by this extension."""
+    """The connection-gating exception/formatter are owned by this extension."""
 
     def test_exception_importable_from_package_root(self):
         from microsoft_agents_a365.tooling.extensions.agentframework import (
@@ -950,16 +1006,30 @@ class TestExtensionExceptionExport:
         )
 
         err = McpConnectionsRequiredError(
-            all_connections_url="https://make.example/all",
+            missing_connections_url="https://make.example/missing",
             connectivity_status="Pending",
             server_names=["mcp_Salesforce", "mcp_Zendesk"],
         )
-        assert err.all_connections_url == "https://make.example/all"
+        assert err.missing_connections_url == "https://make.example/missing"
         assert err.connectivity_status == "Pending"
         assert err.server_names == ["mcp_Salesforce", "mcp_Zendesk"]
         message = str(err)
         assert "mcp_Salesforce" in message
-        assert "https://make.example/all" in message
+        assert "https://make.example/missing" in message
+
+    def test_formatter_handles_missing_url(self):
+        from microsoft_agents_a365.tooling.extensions.agentframework.exceptions import (
+            format_mcp_connections_required_message,
+        )
+
+        message = format_mcp_connections_required_message(
+            server_names=["mcp_Salesforce"],
+            connectivity_status="Pending",
+            missing_connections_url=None,
+        )
+        assert "mcp_Salesforce" in message
+        assert "http" not in message  # no URL when none is supplied
+        assert "administrator" in message
 
 
 class TestMcpHttpClientTimeoutConstant:
