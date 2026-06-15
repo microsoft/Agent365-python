@@ -8,7 +8,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from microsoft_agents_a365.tooling import McpConnectionsRequiredError
 from microsoft_agents_a365.tooling.models import MCPServerConfig
 from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_service import (
     McpToolServerConfigurationService,
@@ -386,8 +385,8 @@ class TestMcpToolServerConfigurationService:
         assert servers[0].mcp_server_name == "V1Server"
 
     @pytest.mark.asyncio
-    async def test_parse_gateway_response_captures_aggregate(self, service):
-        """Response-level connection metadata is captured into McpDiscoveryResult."""
+    async def test_parse_gateway_response_wrapped_returns_servers(self, service):
+        """Wrapped responses return a List[MCPServerConfig] with per-server metadata."""
         payload = {
             "mcpServers": [
                 {
@@ -395,6 +394,8 @@ class TestMcpToolServerConfigurationService:
                     "mcpServerUniqueName": "mcp_Salesforce",
                     "url": "https://gw.example/agents/v2/servers/mcp_Salesforce",
                     "connectivityStatus": "Pending",
+                    "allConnectionsUrl": "https://make.example/all/salesforce",
+                    "missingConnectionsUrl": "https://make.example/missing/salesforce",
                 }
             ],
             "allConnectionsUrl": "https://make.example/all",
@@ -404,17 +405,18 @@ class TestMcpToolServerConfigurationService:
         mock_response = MagicMock()
         mock_response.json = AsyncMock(return_value=payload)
 
-        result = await service._parse_gateway_response(mock_response)
+        servers = await service._parse_gateway_response(mock_response)
 
-        assert len(result.servers) == 1
-        assert result.servers[0].mcp_server_name == "mcp_Salesforce"
-        assert result.all_connections_url == "https://make.example/all"
-        assert result.missing_connections_url == "https://make.example/missing"
-        assert result.connectivity_status == "Pending"
+        assert isinstance(servers, list)
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "mcp_Salesforce"
+        assert servers[0].connectivity_status == "Pending"
+        assert servers[0].all_connections_url == "https://make.example/all/salesforce"
+        assert servers[0].missing_connections_url == "https://make.example/missing/salesforce"
 
     @pytest.mark.asyncio
-    async def test_parse_gateway_response_raw_array_has_no_aggregate(self, service):
-        """Legacy raw-array responses produce a result with aggregate fields None."""
+    async def test_parse_gateway_response_raw_array_returns_servers(self, service):
+        """Legacy raw-array responses return a list; per-server metadata is None."""
         payload = [
             {
                 "mcpServerName": "V1Server",
@@ -425,12 +427,13 @@ class TestMcpToolServerConfigurationService:
         mock_response = MagicMock()
         mock_response.json = AsyncMock(return_value=payload)
 
-        result = await service._parse_gateway_response(mock_response)
+        servers = await service._parse_gateway_response(mock_response)
 
-        assert len(result.servers) == 1
-        assert result.all_connections_url is None
-        assert result.missing_connections_url is None
-        assert result.connectivity_status is None
+        assert isinstance(servers, list)
+        assert len(servers) == 1
+        assert servers[0].connectivity_status is None
+        assert servers[0].all_connections_url is None
+        assert servers[0].missing_connections_url is None
 
 
 class TestResolveTokenScopeForServer:
@@ -991,7 +994,9 @@ class TestResolveAgentIdForHeader:
 
 
 class TestConnectionGating:
-    """Tests for the connectivityStatus connection-readiness gate."""
+    """Core no longer gates on connectivityStatus — it parses the per-server
+    connection metadata onto each MCPServerConfig and returns the servers
+    unchanged. Gating is the responsibility of the framework extensions."""
 
     @pytest.fixture
     def service(self):
@@ -1015,7 +1020,16 @@ class TestConnectionGating:
 
     @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
     @pytest.mark.asyncio
-    async def test_gate_raises_when_pending(self, service):
+    async def test_pending_servers_returned_without_raising(self, service):
+        """Pending servers flow through ``list_tool_servers`` unchanged.
+
+        Connection gating has been removed from the core service.  It is now
+        the responsibility of framework-specific extensions (see e.g.
+        ``microsoft-agents-a365-tooling-extensions-agentframework``), which raise
+        ``McpConnectionsRequiredError`` before building the agent when a server is
+        Pending.  Core simply returns the configs with their per-server connection
+        metadata intact.
+        """
         payload = {
             "mcpServers": [
                 {
@@ -1023,6 +1037,7 @@ class TestConnectionGating:
                     "mcpServerUniqueName": "mcp_Salesforce",
                     "url": "https://gw.example/mcp_Salesforce",
                     "connectivityStatus": "Pending",
+                    "missingConnectionsUrl": "https://make.example/missing/salesforce",
                 }
             ],
             "allConnectionsUrl": "https://make.example/all",
@@ -1030,14 +1045,13 @@ class TestConnectionGating:
             "connectivityStatus": "Pending",
         }
         with self._gateway_response(payload):
-            with pytest.raises(McpConnectionsRequiredError) as exc_info:
-                await service.list_tool_servers(
-                    agentic_app_id="test-app-id", auth_token="test-token"
-                )
-        err = exc_info.value
-        assert err.connectivity_status == "Pending"
-        assert err.missing_connections_url == "https://make.example/missing"
-        assert "mcp_Salesforce" in err.server_names
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id", auth_token="test-token"
+            )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "mcp_Salesforce"
+        assert servers[0].connectivity_status == "Pending"
+        assert servers[0].missing_connections_url == "https://make.example/missing/salesforce"
 
     @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
     @pytest.mark.asyncio
@@ -1081,9 +1095,11 @@ class TestConnectionGating:
 
     @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
     @pytest.mark.asyncio
-    async def test_gate_raises_when_aggregate_pending_but_no_server_flagged(self, service):
-        from microsoft_agents_a365.tooling import McpConnectionsRequiredError
-
+    async def test_aggregate_pending_returns_servers_without_raising(self, service):
+        """Even when the response-level aggregate is Pending, ``list_tool_servers``
+        returns the servers without raising — core does not act on the aggregate
+        (or per-server) connection metadata.
+        """
         payload = {
             "mcpServers": [
                 {
@@ -1098,15 +1114,11 @@ class TestConnectionGating:
             "connectivityStatus": "Pending",
         }
         with self._gateway_response(payload):
-            with pytest.raises(McpConnectionsRequiredError) as exc_info:
-                await service.list_tool_servers(
-                    agentic_app_id="test-app-id", auth_token="test-token"
-                )
-        err = exc_info.value
-        assert err.connectivity_status == "Pending"
-        assert err.missing_connections_url == "https://make.example/missing"
-        assert err.server_names == []
-        assert "(unknown)" in str(err)
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id", auth_token="test-token"
+            )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "mcp_Salesforce"
 
     @patch.object(McpToolServerConfigurationService, "_load_servers_from_manifest")
     @patch.dict(os.environ, {"ENVIRONMENT": "Development"})

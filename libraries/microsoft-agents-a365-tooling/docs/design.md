@@ -108,35 +108,15 @@ User-Agent: Agent365SDK/0.1.0 (...)
 
 The gateway returns the same JSON structure, but `mcpServerUniqueName` contains the full endpoint URL.
 
-### Connection gating
+### Connection metadata (per-server)
 
-When the tooling gateway reports that an agent's MCP servers have unsatisfied downstream
-connections, `list_tool_servers()` raises `McpConnectionsRequiredError`. Discovery runs
-every turn, so the agent's turn handler should catch the error, reply with the
-connection-setup link, and return — a later turn proceeds automatically once the user has
-connected.
-
-```python
-from microsoft_agents_a365.tooling import McpConnectionsRequiredError
-
-try:
-    servers = await config_service.list_tool_servers(
-        agentic_app_id=agentic_app_id,
-        auth_token=auth_token,
-        authorization=auth,
-        auth_handler_name=auth_handler_name,
-        turn_context=context,
-    )
-except McpConnectionsRequiredError as err:
-    await context.send_activity(
-        f"Before I can help, please set up the required connections for "
-        f"{', '.join(err.server_names)}: {err.missing_connections_url}"
-    )
-    return  # Skip running the model/tools this turn.
-```
-
-The gate fires only for gateway responses with aggregate `connectivityStatus == "Pending"`.
-Dev-mode manifests and legacy raw-array responses omit the field and are never gated.
+The core service parses each server's connection metadata — `connectivityStatus`,
+`allConnectionsUrl`, and `missingConnectionsUrl` — onto the returned `MCPServerConfig`
+objects, but it does **not** gate on them. Connection-readiness gating is the
+responsibility of the framework-specific tooling extensions (e.g.
+`microsoft-agents-a365-tooling-extensions-agentframework`), which decide how to surface a
+`Pending` server and raise/handle the appropriate error. See the relevant extension's
+design document for details.
 
 ### MCPServerConfig ([models/mcp_server_config.py](../microsoft_agents_a365/tooling/models/mcp_server_config.py))
 

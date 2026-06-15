@@ -28,9 +28,17 @@ from microsoft_agents_a365.tooling.utils.utility import (
     is_development_environment,
 )
 
+from ..exceptions import McpConnectionsRequiredError
+
 
 # Default timeout for MCP server HTTP requests (in seconds)
 MCP_HTTP_CLIENT_TIMEOUT_SECONDS = 90.0
+
+# Sentinel per-server status that means a server's downstream connections are
+# already in place. Anything else (typically "Pending") triggers the
+# connection-readiness gate, which raises McpConnectionsRequiredError before the
+# agent is built so the turn handler can prompt the user to set up connections.
+_CONNECTIVITY_READY = "Ready"
 
 
 class McpToolRegistrationService:
@@ -114,11 +122,59 @@ class McpToolRegistrationService:
             )
 
             self._logger.info(f"Loaded {len(server_configs)} MCP server configurations")
+            for c in server_configs:
+                _name = c.mcp_server_name or c.mcp_server_unique_name
+                self._logger.info(
+                    "  per-server gateway state: name=%s connectivity_status=%r missing_url=%s",
+                    _name,
+                    c.connectivity_status,
+                    c.missing_connections_url,
+                )
+
+            # Connection-readiness gate.  Discovery runs every turn; when the
+            # gateway flags any MCP server's downstream connection(s) as not yet
+            # set up (``connectivityStatus == "Pending"``), raise before building
+            # the agent so the developer's turn handler can catch the error,
+            # prompt the user with ``all_connections_url``, and return without
+            # running the model/tools.  A later turn re-runs discovery and
+            # proceeds automatically once the connections are in place.
+            #
+            # The gate raises here — at agent-construction time — rather than
+            # from inside a tool call on purpose: Agent Framework's tool-call
+            # loop swallows exceptions raised inside a ``FunctionTool`` and
+            # reflects them to the model as an opaque error string, which would
+            # drop the setup URL before it ever reaches the user.
+            pending = [
+                c
+                for c in server_configs
+                if c.connectivity_status is not None
+                and c.connectivity_status != _CONNECTIVITY_READY
+            ]
+            if pending:
+                pending_names = [c.mcp_server_name or c.mcp_server_unique_name for c in pending]
+                # Surface all_connections_url so the user can view and manage the
+                # full set of connectors required by the affected servers. Use the
+                # first pending server that provides one (they are environment-scoped
+                # and typically identical across servers).
+                all_connections_url = next(
+                    (c.all_connections_url for c in pending if c.all_connections_url),
+                    None,
+                )
+                self._logger.info(
+                    "MCP connection gate blocking turn: pending servers=%s, setup URL=%s",
+                    pending_names,
+                    all_connections_url,
+                )
+                raise McpConnectionsRequiredError(
+                    all_connections_url=all_connections_url,
+                    connectivity_status=pending[0].connectivity_status,
+                    server_names=pending_names,
+                )
 
             # Create the agent with all tools (initial + MCP tools)
             all_tools = list(initial_tools)
 
-            # Add servers as MCPStreamableHTTPTool instances
+            # Add each Ready server as an MCPStreamableHTTPTool instance.
             for config in server_configs:
                 # Use mcp_server_name if available (not None or empty), otherwise fall back to mcp_server_unique_name
                 server_name = config.mcp_server_name or config.mcp_server_unique_name
@@ -183,6 +239,9 @@ class McpToolRegistrationService:
             self._logger.info(f"Agent created with {len(all_tools)} total tools")
             return agent
 
+        except McpConnectionsRequiredError:
+            # Connection-readiness gate — propagate intact to the turn handler.
+            raise
         except Exception as ex:
             self._logger.error(f"Failed to add tool servers to agent: {ex}")
             raise

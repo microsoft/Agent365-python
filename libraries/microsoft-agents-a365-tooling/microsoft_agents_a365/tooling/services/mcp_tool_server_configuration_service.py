@@ -23,7 +23,6 @@ import json
 import logging
 import os
 import uuid
-from dataclasses import dataclass
 from dataclasses import replace as dataclass_replace
 from pathlib import Path
 from typing import Awaitable, Callable, Dict, List, Optional
@@ -34,7 +33,6 @@ import aiohttp
 from microsoft_agents.hosting.core import Authorization, TurnContext
 
 # Local imports
-from ..exceptions import McpConnectionsRequiredError
 from ..models import ChatHistoryMessage, ChatMessageRequest, MCPServerConfig, ToolOptions
 from ..utils import Constants
 from ..utils.utility import (
@@ -62,22 +60,6 @@ from microsoft_agents_a365.runtime.utility import Utility as RuntimeUtility
 # Used by _attach_per_audience_tokens to decouple token acquisition strategy
 # (dev env-var reads vs. production OBO exchange) from token attachment logic.
 TokenAcquirer = Callable[["MCPServerConfig", str], Awaitable[Optional[str]]]
-
-
-@dataclass
-class McpDiscoveryResult:
-    """Internal result of MCP server discovery from the gateway.
-
-    Carries the parsed server list plus the response-level (aggregate) connection
-    metadata used for connection gating. Sources that predate the connection fields
-    (legacy raw-array gateway responses, dev-mode manifests) leave the aggregate
-    fields as ``None``.
-    """
-
-    servers: List["MCPServerConfig"]
-    all_connections_url: Optional[str] = None
-    missing_connections_url: Optional[str] = None
-    connectivity_status: Optional[str] = None
 
 
 # ==============================================================================
@@ -173,13 +155,16 @@ class McpToolServerConfigurationService:
             # BEARER_TOKEN_<MCPSERVERNAME_UPPER> takes precedence; BEARER_TOKEN is the fallback.
             acquire: TokenAcquirer = self._create_dev_token_acquirer()
         else:
-            discovery = await self._load_servers_from_gateway(
+            servers = await self._load_servers_from_gateway(
                 agentic_app_id, auth_token, options, turn_context
             )
-            # Gate execution when configured MCP servers are not connection-ready.
-            # Runs before token attachment because readiness is independent of tokens.
-            self._enforce_connection_readiness(discovery)
-            servers = discovery.servers
+            # Connection-readiness gating is the responsibility of the
+            # framework-specific tooling extensions (e.g.
+            # ``microsoft-agents-a365-tooling-extensions-agentframework``).
+            # Core simply parses and returns the per-server connection
+            # metadata (``connectivity_status``, ``all_connections_url``,
+            # ``missing_connections_url``) on each ``MCPServerConfig`` and
+            # never gates or raises on it.
             if (
                 authorization is not None
                 and auth_handler_name is not None
@@ -209,42 +194,6 @@ class McpToolServerConfigurationService:
 
         servers = await self._attach_per_audience_tokens(servers, acquire)
         return servers
-
-    # Sentinel aggregate status that means all connections are satisfied.
-    _CONNECTIVITY_READY = "Ready"
-
-    def _enforce_connection_readiness(self, discovery: "McpDiscoveryResult") -> None:
-        """Raise if the aggregate connectivity status indicates missing connections.
-
-        Blocks only when the response-level ``connectivity_status`` is present and not
-        ``"Ready"`` (i.e. ``"Pending"``). Absent status (legacy raw-array gateway
-        responses, dev-mode manifests) is always treated as ready, so those paths are
-        never gated. The ``!= "Ready"`` form is intentionally defensive against any
-        unexpected future status value.
-
-        Raises:
-            McpConnectionsRequiredError: when connections are not yet ready.
-        """
-        status = discovery.connectivity_status
-        if status is None or status == self._CONNECTIVITY_READY:
-            return
-
-        not_ready = [
-            s
-            for s in discovery.servers
-            if s.connectivity_status is not None
-            and s.connectivity_status != self._CONNECTIVITY_READY
-        ]
-        server_names = [s.mcp_server_name or s.mcp_server_unique_name for s in not_ready]
-        self._logger.info(
-            f"MCP connection gate blocking turn: connectivityStatus={status}, "
-            f"servers={server_names}"
-        )
-        raise McpConnectionsRequiredError(
-            missing_connections_url=discovery.missing_connections_url,
-            connectivity_status=status,
-            server_names=server_names,
-        )
 
     # --------------------------------------------------------------------------
     # ENVIRONMENT DETECTION
@@ -546,7 +495,7 @@ class McpToolServerConfigurationService:
         auth_token: str,
         options: ToolOptions,
         turn_context: Optional[TurnContext] = None,
-    ) -> McpDiscoveryResult:
+    ) -> List[MCPServerConfig]:
         """
         Reads MCP server configurations from tooling gateway endpoint for production scenario.
 
@@ -558,7 +507,8 @@ class McpToolServerConfigurationService:
                           ``activity.id``. A new UUID is generated when not provided.
 
         Returns:
-            McpDiscoveryResult: Discovery result with server list and aggregate connection metadata.
+            List[MCPServerConfig]: Parsed MCP server configurations, each carrying its
+            per-server connection metadata.
 
         Raises:
             Exception: If there's an error communicating with the tooling gateway.
@@ -573,12 +523,11 @@ class McpToolServerConfigurationService:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(config_endpoint, headers=headers) as response:
                     if response.status == 200:
-                        discovery = await self._parse_gateway_response(response)
+                        servers = await self._parse_gateway_response(response)
                         self._logger.info(
-                            f"Retrieved {len(discovery.servers)} MCP tool servers "
-                            f"from tooling gateway"
+                            f"Retrieved {len(servers)} MCP tool servers from tooling gateway"
                         )
-                        return discovery
+                        return servers
                     else:
                         raise Exception(f"HTTP {response.status}: {await response.text()}")
 
@@ -695,50 +644,44 @@ class McpToolServerConfigurationService:
         # Priority 4: Application name from AGENT365_APPLICATION_NAME env or pyproject.toml
         return RuntimeUtility.get_application_name()
 
-    async def _parse_gateway_response(self, response: aiohttp.ClientResponse) -> McpDiscoveryResult:
+    async def _parse_gateway_response(
+        self, response: aiohttp.ClientResponse
+    ) -> List[MCPServerConfig]:
         """
         Parses the response from the tooling gateway.
 
         Supports two response shapes:
         - Wrapped: ``{"mcpServers": [...], "connectivityStatus": ..., ...}``
-        - Raw array: ``[...]`` (legacy V1 gateway format, no aggregate metadata)
+        - Raw array: ``[...]`` (legacy V1 gateway format)
+
+        Per-server connection metadata (``connectivityStatus``, ``allConnectionsUrl``,
+        ``missingConnectionsUrl``) is parsed onto each ``MCPServerConfig`` by
+        ``_parse_server_config``. Response-level (aggregate) fields are ignored — gating
+        is the responsibility of the framework-specific tooling extensions.
 
         Args:
             response: HTTP response from the gateway.
 
         Returns:
-            McpDiscoveryResult: parsed servers plus response-level connection metadata
-            (aggregate fields are None for the legacy raw-array shape).
+            List[MCPServerConfig]: parsed MCP server configurations.
         """
         config_data = await response.json(content_type=None)
 
         server_elements: Optional[List[object]] = None
-        all_connections_url: Optional[str] = None
-        missing_connections_url: Optional[str] = None
-        connectivity_status: Optional[str] = None
 
         if isinstance(config_data, list):
-            # Raw array format (legacy V1 gateway returns bare array, no aggregate).
+            # Raw array format (legacy V1 gateway returns bare array).
             self._logger.debug("Gateway returned raw array response")
             server_elements = config_data
         elif isinstance(config_data, dict) and isinstance(config_data.get("mcpServers"), list):
-            # Wrapped format: {"mcpServers": [...], aggregate connection fields}
+            # Wrapped format: {"mcpServers": [...], ...}
             self._logger.debug("Gateway returned wrapped mcpServers response")
             server_elements = config_data["mcpServers"]
-
-            all_raw = config_data.get("allConnectionsUrl")
-            all_connections_url = str(all_raw) if all_raw is not None else None
-
-            missing_raw = config_data.get("missingConnectionsUrl")
-            missing_connections_url = str(missing_raw) if missing_raw is not None else None
-
-            status_raw = config_data.get("connectivityStatus")
-            connectivity_status = str(status_raw) if status_raw is not None else None
         else:
             self._logger.warning(
                 'Unexpected gateway response format: expected a list or {"mcpServers": [...]}'
             )
-            return McpDiscoveryResult(servers=[])
+            return []
 
         mcp_servers: List[MCPServerConfig] = []
         for server_element in server_elements:
@@ -747,12 +690,7 @@ class McpToolServerConfigurationService:
                 if server_config is not None:
                     mcp_servers.append(server_config)
 
-        return McpDiscoveryResult(
-            servers=mcp_servers,
-            all_connections_url=all_connections_url,
-            missing_connections_url=missing_connections_url,
-            connectivity_status=connectivity_status,
-        )
+        return mcp_servers
 
     # --------------------------------------------------------------------------
     # CONFIGURATION PARSING HELPERS

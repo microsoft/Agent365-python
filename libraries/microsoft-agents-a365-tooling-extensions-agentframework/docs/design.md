@@ -41,7 +41,8 @@ McpToolRegistrationService.add_tool_servers_to_agent()
        │
        ├── Resolve agent identity
        ├── Exchange token for MCP scope
-       ├── Create MCPStreamableHTTPTool for each server
+       ├── Gate: raise McpConnectionsRequiredError if any server is Pending
+       ├── Create MCPStreamableHTTPTool for each (Ready) server
        └── Create ChatAgent with all tools
        │
        ▼
@@ -75,6 +76,51 @@ mcp_tool = MCPStreamableHTTPTool(
     description=f"MCP tools from {config.mcp_server_name}"
 )
 ```
+
+### Connection-readiness gating
+
+MCP server discovery runs every turn. The gateway reports each server's
+`connectivityStatus` (`"Ready"` or `"Pending"`) along with an `allConnectionsUrl` the user
+can visit to view and manage the connectors required by that server. When **any** discovered
+server is `Pending`, `add_tool_servers_to_agent` raises `McpConnectionsRequiredError`
+**before** building the agent, so the developer's turn handler can prompt the user to set up
+connections and return. A later turn re-runs discovery and proceeds automatically once the
+connections are in place.
+
+The gate raises at agent-construction time — not from inside a tool call — on purpose. Agent
+Framework's tool-call loop catches exceptions raised inside a `FunctionTool` and reflects them
+to the model as an opaque error string (`"Error: Function failed."` by default), which would
+drop the setup URL before it reached the user. Raising during construction lets the typed
+exception propagate intact to the turn handler.
+
+```python
+from microsoft_agents_a365.tooling.extensions.agentframework import (
+    McpToolRegistrationService,
+    McpConnectionsRequiredError,
+)
+
+service = McpToolRegistrationService()
+
+try:
+    agent = await service.add_tool_servers_to_agent(
+        chat_client=chat_client,
+        agent_instructions="You are a helpful assistant.",
+        initial_tools=[],
+        auth=auth_context,
+        auth_handler_name="graph",
+        turn_context=turn_context,
+    )
+except McpConnectionsRequiredError as err:
+    await turn_context.send_activity(
+        f"Before I can help, please set up the required connections for "
+        f"{', '.join(err.server_names)}: {err.all_connections_url}"
+    )
+    return  # Skip running the model/tools this turn.
+```
+
+`McpConnectionsRequiredError` exposes `all_connections_url`, `connectivity_status`, and
+`server_names`. It is owned and exported by this extension (`microsoft_agents_a365.tooling`
+core only parses the per-server connection metadata; it never gates or raises).
 
 ### Chat History API
 
