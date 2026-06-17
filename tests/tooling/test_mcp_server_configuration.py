@@ -1119,6 +1119,48 @@ class TestConnectionGating:
         assert len(servers) == 1
         assert servers[0].mcp_server_name == "mcp_Salesforce"
 
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_gate_blocks_ready_server_when_unrelated_server_pending(self, service):
+        """A Ready server is blocked from use when an unrelated server is Pending.
+
+        Simulates: agent wants to call a tool on mcp_Salesforce (Ready), but
+        mcp_Zendesk (unrelated) has a Pending connection. The aggregate status
+        is Pending, so the entire turn is gated. The error identifies only the
+        pending server (mcp_Zendesk), not the ready one.
+        """
+        payload = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "mcp_Salesforce",
+                    "mcpServerUniqueName": "mcp_Salesforce",
+                    "url": "https://gw.example/mcp_Salesforce",
+                    "connectivityStatus": "Ready",
+                },
+                {
+                    "mcpServerName": "mcp_Zendesk",
+                    "mcpServerUniqueName": "mcp_Zendesk",
+                    "url": "https://gw.example/mcp_Zendesk",
+                    "connectivityStatus": "Pending",
+                    "missingConnectionsUrl": "https://make.example/zendesk-missing",
+                },
+            ],
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Pending",
+        }
+        with self._gateway_response(payload):
+            with pytest.raises(McpConnectionsRequiredError) as exc_info:
+                await service.list_tool_servers(
+                    agentic_app_id="test-app-id", auth_token="test-token"
+                )
+        err = exc_info.value
+        assert err.connectivity_status == "Pending"
+        assert err.missing_connections_url == "https://make.example/missing"
+        # Only the unrelated pending server is named — the ready one is not.
+        assert "mcp_Zendesk" in err.server_names
+        assert "mcp_Salesforce" not in err.server_names
+
     @patch.object(McpToolServerConfigurationService, "_load_servers_from_manifest")
     @patch.dict(os.environ, {"ENVIRONMENT": "Development"})
     @pytest.mark.asyncio
