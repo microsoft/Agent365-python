@@ -26,7 +26,6 @@ license = {text = "MIT"}
 keywords = ["observability", "telemetry", "tracing", "opentelemetry", "langchain", "agents", "ai"]
 dependencies = [
     "microsoft-agents-a365-observability-core",
-    "langchain",
     "langchain-core",
     "opentelemetry-api",
     "opentelemetry-sdk",
