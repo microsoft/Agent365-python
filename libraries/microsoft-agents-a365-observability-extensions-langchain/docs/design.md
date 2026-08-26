@@ -65,5 +65,5 @@ microsoft_agents_a365/observability/extensions/langchain/
 
 ## Dependencies
 
-- `langchain` - LangChain framework
+- `langchain-core` - LangChain core framework (tracers, callbacks, message types)
 - `microsoft-agents-a365-observability-core` - Core observability
