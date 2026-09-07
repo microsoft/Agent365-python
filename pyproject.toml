@@ -100,7 +100,7 @@ constraint-dependencies = [
     # pre-release bound) already excludes 2.0.0 pre-releases like `2.0.0a2`
     # under the resolver's default pre-release exclusion behavior; no `a0`
     # suffix is needed unless prereleases are explicitly allowed elsewhere.
-    "google-adk >= 1.28.1, < 2.0.0",
+    "google-adk >= 1.28.1,<2.0.0",
 
     # --- Microsoft Agents SDK ---
     "microsoft-agents-activity >= 0.4.0",
