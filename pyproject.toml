@@ -92,7 +92,12 @@ constraint-dependencies = [
     "langchain-core >= 0.1.0",
     "openai-agents >= 0.2.6",
     "semantic-kernel >= 1.39.3",
-    "google-adk >= 1.0.0",
+    # google-adk >=1.28.1,<2.0.0 - security remediation (S360 [SFI-ES5.2] 1ES
+    # Open Source Vulnerabilities). Fixes CVE-2026-4810 (code injection and
+    # missing authentication allowing unauthenticated remote code execution).
+    # Pinned within the 1.x line to avoid the breaking 2.x major; remove the
+    # upper bound once the 2.x migration is planned and verified separately.
+    "google-adk >= 1.28.1, < 2.0.0",
 
     # --- Microsoft Agents SDK ---
     "microsoft-agents-activity >= 0.4.0",
