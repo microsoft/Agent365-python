@@ -35,3 +35,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `ChatHistoryMessage` Pydantic model for representing individual messages in chat history
 - Added `ChatMessageRequest` Pydantic model for the chat history API request payload
 - Added `py.typed` marker for PEP 561 compliance, enabling type checker support
+- Added `id`, `all_connections_url`, `missing_connections_url`, and `connectivity_status` fields to `MCPServerConfig`, parsed from the per-server gateway payload (`allConnectionsUrl`, `missingConnectionsUrl`, `connectivityStatus`). The core service parses this connection metadata onto each server but does not gate on it — connection-readiness gating is owned by the framework-specific tooling extensions
+- `_parse_gateway_response()` and `_load_servers_from_gateway()` return `List[MCPServerConfig]`; the wrapped `{"mcpServers": [...]}` and legacy raw-array gateway response shapes are both supported, and response-level (aggregate) connection fields are ignored

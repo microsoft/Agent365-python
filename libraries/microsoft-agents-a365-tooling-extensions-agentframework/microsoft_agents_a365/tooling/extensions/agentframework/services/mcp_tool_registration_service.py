@@ -8,7 +8,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List, Optional, Sequence
 
-from agent_framework import RawAgent, Message, HistoryProvider, MCPStreamableHTTPTool
+from agent_framework import (
+    RawAgent,
+    Message,
+    HistoryProvider,
+    MCPStreamableHTTPTool,
+    FunctionTool,
+)
 import httpx
 
 if TYPE_CHECKING:
@@ -18,7 +24,7 @@ from microsoft_agents.hosting.core import Authorization, TurnContext
 
 from microsoft_agents_a365.runtime import OperationResult
 from microsoft_agents_a365.runtime.utility import Utility
-from microsoft_agents_a365.tooling.models import ChatHistoryMessage, ToolOptions
+from microsoft_agents_a365.tooling.models import ChatHistoryMessage, MCPServerConfig, ToolOptions
 from microsoft_agents_a365.tooling.services.mcp_tool_server_configuration_service import (
     McpToolServerConfigurationService,
 )
@@ -28,9 +34,20 @@ from microsoft_agents_a365.tooling.utils.utility import (
     is_development_environment,
 )
 
+from ..exceptions import format_mcp_connections_required_message
+
 
 # Default timeout for MCP server HTTP requests (in seconds)
 MCP_HTTP_CLIENT_TIMEOUT_SECONDS = 90.0
+
+# Sentinel per-server status that means a server's downstream connections are
+# already in place. Anything else (typically "Pending") means the server is not
+# connection-ready: instead of wiring it as a real tool, the extension registers
+# a placeholder tool that returns a static "set up your connections" message when
+# the model invokes it. This gates per server without blocking the rest of the
+# turn — Ready servers stay usable. None means the source predates the field
+# (dev manifest / legacy gateway) and is treated as Ready.
+_CONNECTIVITY_READY = "Ready"
 
 
 class McpToolRegistrationService:
@@ -114,14 +131,46 @@ class McpToolRegistrationService:
             )
 
             self._logger.info(f"Loaded {len(server_configs)} MCP server configurations")
+            for c in server_configs:
+                _name = c.mcp_server_name or c.mcp_server_unique_name
+                self._logger.info(
+                    "  per-server gateway state: name=%s connectivity_status=%r missing_url=%s",
+                    _name,
+                    c.connectivity_status,
+                    c.missing_connections_url,
+                )
 
             # Create the agent with all tools (initial + MCP tools)
             all_tools = list(initial_tools)
 
-            # Add servers as MCPStreamableHTTPTool instances
+            # Connection-readiness gate (non-blocking, per server). Discovery runs
+            # every turn; the gateway flags each server's downstream connections via
+            # ``connectivityStatus``. A "Ready" (or legacy ``None``) server is wired
+            # as a real ``MCPStreamableHTTPTool``. A "Pending" server is instead
+            # registered as a placeholder tool that, when the model invokes it,
+            # returns a static "set up your connections" message (including the
+            # server's ``missing_connections_url``). This keeps the turn running with
+            # the Ready tools and only prompts the user about connection setup if the
+            # model actually needs the Pending server. A later turn re-runs discovery
+            # and wires the server for real once its connections are in place.
             for config in server_configs:
                 # Use mcp_server_name if available (not None or empty), otherwise fall back to mcp_server_unique_name
                 server_name = config.mcp_server_name or config.mcp_server_unique_name
+
+                if (
+                    config.connectivity_status is not None
+                    and config.connectivity_status != _CONNECTIVITY_READY
+                ):
+                    placeholder = self._build_pending_placeholder_tool(config)
+                    all_tools.append(placeholder)
+                    self._logger.info(
+                        "MCP server '%s' is %s; registered connection-setup placeholder "
+                        "instead of live tools (setup URL=%s)",
+                        server_name,
+                        config.connectivity_status,
+                        config.missing_connections_url or config.all_connections_url,
+                    )
+                    continue
 
                 try:
                     # Merge base (non-auth) headers with per-server headers from list_tool_servers.
@@ -186,6 +235,50 @@ class McpToolRegistrationService:
         except Exception as ex:
             self._logger.error(f"Failed to add tool servers to agent: {ex}")
             raise
+
+    def _build_pending_placeholder_tool(self, config: MCPServerConfig) -> FunctionTool:
+        """Build the placeholder tool registered in place of a not-yet-connected MCP server.
+
+        The gateway reported this server's ``connectivityStatus`` as something other than
+        ``"Ready"`` (typically ``"Pending"``), meaning the user has not finished setting up the
+        downstream data connection(s) the server needs. The server's real sub-tools are not
+        available until those connections exist, so instead of wiring it as a live
+        ``MCPStreamableHTTPTool`` we expose a single stand-in tool named after the server. When
+        the model invokes it — because the user's request needs that server — the tool returns a
+        static message (including ``missing_connections_url``) that the model relays to the user.
+
+        The message is **returned**, not raised: Agent Framework swallows exceptions raised inside
+        a tool (and converts ``UserInputRequiredException`` into tool-result content), so returning
+        the text is the only way to surface the URL through the model. ``max_invocations=1`` keeps
+        the model from calling the placeholder repeatedly within a turn.
+
+        Args:
+            config: The discovered configuration for the Pending MCP server.
+
+        Returns:
+            A ``FunctionTool`` standing in for the not-yet-connected server.
+        """
+        server_name = config.mcp_server_name or config.mcp_server_unique_name
+        message = format_mcp_connections_required_message(
+            server_names=[server_name],
+            connectivity_status=config.connectivity_status,
+            missing_connections_url=config.missing_connections_url or config.all_connections_url,
+        )
+
+        def _connections_required() -> str:
+            return message
+
+        return FunctionTool(
+            name=server_name,
+            description=(
+                f"Tools provided by the '{server_name}' MCP server. The required data "
+                "connection(s) for this server are not set up yet, so its tools cannot run. "
+                "Call this when the user's request needs this server, then relay the returned "
+                "message — including the setup URL — to the user verbatim."
+            ),
+            func=_connections_required,
+            max_invocations=1,
+        )
 
     def _convert_chat_messages_to_history(
         self,
