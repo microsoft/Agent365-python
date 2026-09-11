@@ -73,7 +73,6 @@ The OTel **backend** (where spans go) and the **instrumentation style** (how spa
 For auto-instrumentation, install the framework-specific extension package — for example:
 
 - OpenAI Agents SDK → `microsoft-agents-a365-observability-extensions-openai`
-- LangChain → `microsoft-agents-a365-observability-extensions-langchain`
 - Semantic Kernel → `microsoft-agents-a365-observability-extensions-semantickernel`
 - Microsoft Agent Framework → `microsoft-agents-a365-observability-extensions-agentframework`
 

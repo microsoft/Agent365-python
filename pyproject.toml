@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 members = [
     "libraries/microsoft-agents-a365-notifications",
     "libraries/microsoft-agents-a365-observability-core",
-    "libraries/microsoft-agents-a365-observability-extensions-langchain",
     "libraries/microsoft-agents-a365-observability-extensions-openai",
     "libraries/microsoft-agents-a365-observability-extensions-semantickernel",
     "libraries/microsoft-agents-a365-observability-extensions-agentframework",
@@ -29,7 +28,6 @@ exclude = [
 microsoft-agents-a365-notifications = { workspace = true }
 microsoft-agents-a365-observability-core = { workspace = true }
 microsoft-agents-a365-observability-extensions-agentframework = { workspace = true }
-microsoft-agents-a365-observability-extensions-langchain = { workspace = true }
 microsoft-agents-a365-observability-extensions-openai = { workspace = true }
 microsoft-agents-a365-observability-extensions-semantickernel = { workspace = true }
 microsoft-agents-a365-observability-hosting = { workspace = true }
@@ -57,7 +55,6 @@ dev-dependencies = [
     "agent-framework",
     "azure-identity",
     "openai-agents",
-    "langchain-openai",
 ]
 
 # azure-ai-projects is capped at <2.0.0 because:
@@ -89,7 +86,6 @@ constraint-dependencies = [
     # --- AI Frameworks ---
     "agent-framework >= 1.0.0",
     "agent-framework-core >= 1.0.0",
-    "langchain-core >= 0.1.0",
     "openai-agents >= 0.2.6",
     "semantic-kernel >= 1.39.3",
     # google-adk >=1.28.1,<2.0.0 - security remediation. Fixes CVE-2026-4810
