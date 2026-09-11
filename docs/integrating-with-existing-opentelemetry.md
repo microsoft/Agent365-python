@@ -2,6 +2,8 @@
 
 This guide is for developers whose application **already** initializes OpenTelemetry — for example with `azure-monitor-opentelemetry`, an OTLP collector, or a vendor-specific exporter — and who want Agent 365 spans to flow alongside their existing telemetry. If you're starting fresh, see the [observability-core README](../libraries/microsoft-agents-a365-observability-core/README.md) for the standalone setup.
 
+> **Don't want the SDK dependency at all?** See [Manual Agent 365 span instrumentation](./manual-a365-span-instrumentation.md) for how to set the right attributes and export to the A365 backend using only `opentelemetry-sdk` + `requests`.
+
 ## The integration rule
 
 > **Initialize your existing OpenTelemetry stack first, then call Agent 365's `configure()`.** The SDK detects the existing `TracerProvider` and adds its processors to it. Your existing backend receives every span; the Agent 365 backend also receives spans when `ENABLE_A365_OBSERVABILITY_EXPORTER=true` and a `token_resolver` is provided (otherwise `configure()` falls back to `ConsoleSpanExporter`).
