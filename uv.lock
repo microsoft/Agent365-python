@@ -3200,6 +3200,7 @@ name = "microsoft-agents-a365-observability-hosting"
 source = { editable = "libraries/microsoft-agents-a365-observability-hosting" }
 dependencies = [
     { name = "microsoft-agents-a365-observability-core" },
+    { name = "microsoft-agents-a365-runtime" },
     { name = "microsoft-agents-hosting-core" },
     { name = "opentelemetry-api" },
 ]
@@ -3207,6 +3208,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
+    { name = "microsoft-agents-a365-runtime", editable = "libraries/microsoft-agents-a365-runtime" },
     { name = "microsoft-agents-hosting-core" },
     { name = "opentelemetry-api" },
 ]

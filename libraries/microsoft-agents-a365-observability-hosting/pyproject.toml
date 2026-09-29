@@ -27,6 +27,7 @@ keywords = ["observability", "telemetry", "tracing", "opentelemetry", "monitorin
 dependencies = [
     "microsoft-agents-hosting-core",
     "microsoft-agents-a365-observability-core",
+    "microsoft-agents-a365-runtime",
     "opentelemetry-api",
 ]
 
