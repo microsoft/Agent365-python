@@ -62,9 +62,10 @@ def token_cache():
     return AgenticTokenCache()
 
 
-def test_get_observability_token_returns_none_without_entry(token_cache):
+@pytest.mark.asyncio
+async def test_get_observability_token_returns_none_without_entry(token_cache):
     """A cache miss returns None."""
-    assert token_cache.get_observability_token("agent", "tenant") is None
+    assert await token_cache.get_observability_token("agent", "tenant") is None
 
 
 @pytest.mark.asyncio
@@ -80,7 +81,7 @@ async def test_refresh_passes_identity_and_default_app_only_scope(token_cache):
     refreshed = await token_cache.refresh_observability_token("agent", "tenant", resolver)
 
     assert refreshed == token
-    assert token_cache.get_observability_token("agent", "tenant") == token
+    assert await token_cache.get_observability_token("agent", "tenant") == token
     assert calls == [("agent", "tenant", ["api://9b975845-388f-4429-889e-eab1ef63949c/.default"])]
 
 
@@ -112,7 +113,8 @@ async def test_refresh_accepts_async_resolver(token_cache):
     )
 
 
-def test_legacy_register_shape_logs_once_and_does_not_exchange(
+@pytest.mark.asyncio
+async def test_legacy_register_shape_logs_once_and_does_not_exchange(
     token_cache, mock_authorization, mock_turn_context, caplog
 ):
     """Removed delegated registration shape is a safe no-op."""
@@ -126,7 +128,7 @@ def test_legacy_register_shape_logs_once_and_does_not_exchange(
         token_cache.register_observability("agent", "tenant", token_struct, ["scope"])
 
     mock_authorization.exchange_token.assert_not_called()
-    assert token_cache.get_observability_token("agent", "tenant") is None
+    assert await token_cache.get_observability_token("agent", "tenant") is None
     assert sum("Delegated OBS token" in record.message for record in caplog.records) == 1
 
 
@@ -170,7 +172,7 @@ async def test_refresh_surfaces_empty_resolver_result(token_cache, token):
     with pytest.raises(RuntimeError, match="returned no token"):
         await token_cache.refresh_observability_token("agent", "tenant", resolver)
 
-    assert token_cache.get_observability_token("agent", "tenant") is None
+    assert await token_cache.get_observability_token("agent", "tenant") is None
 
 
 @pytest.mark.asyncio
@@ -184,7 +186,7 @@ async def test_refresh_propagates_permanent_resolver_failure(token_cache):
     with pytest.raises(RuntimeError, match="permission denied"):
         await token_cache.refresh_observability_token("agent", "tenant", resolver)
 
-    assert token_cache.get_observability_token("agent", "tenant") is None
+    assert await token_cache.get_observability_token("agent", "tenant") is None
 
 
 @pytest.mark.asyncio
@@ -202,7 +204,7 @@ async def test_refresh_retries_transient_failure_then_caches(token_cache, monkey
 
     assert refreshed == token
     assert resolver.call_count == 2
-    assert token_cache.get_observability_token("agent", "tenant") == token
+    assert await token_cache.get_observability_token("agent", "tenant") == token
 
 
 @pytest.mark.asyncio
@@ -235,12 +237,12 @@ async def test_refresh_reuses_cached_token_until_expiry_skew(token_cache):
     await token_cache.refresh_observability_token("agent", "tenant", resolver)
 
     assert resolver.call_count == 1
-    assert token_cache.get_observability_token("agent", "tenant") == token
+    assert await token_cache.get_observability_token("agent", "tenant") == token
 
     token_cache.invalidate_token("agent", "tenant")
     near_expiry = make_jwt(30)
     await token_cache.refresh_observability_token("agent", "tenant", lambda *_: near_expiry)
-    assert token_cache.get_observability_token("agent", "tenant") is None
+    assert await token_cache.get_observability_token("agent", "tenant") is None
 
 
 @pytest.mark.asyncio
@@ -250,10 +252,10 @@ async def test_opaque_token_uses_fresh_fallback_ttl(token_cache):
     token_cache.invalidate_token("agent", "tenant")
     await token_cache.refresh_observability_token("agent", "tenant", lambda *_: "opaque-token")
 
-    assert token_cache.get_observability_token("agent", "tenant") == "opaque-token"
+    assert await token_cache.get_observability_token("agent", "tenant") == "opaque-token"
     entry = token_cache._map[AgenticTokenCache.make_key("agent", "tenant")]
     entry.acquired_on_ms = (time.time() * 1000) - token_cache._default_max_token_age_ms - 1
-    assert token_cache.get_observability_token("agent", "tenant") is None
+    assert await token_cache.get_observability_token("agent", "tenant") is None
 
 
 @pytest.mark.asyncio
@@ -267,9 +269,15 @@ async def test_tokens_are_isolated_by_agent_and_tenant(token_cache):
     await token_cache.refresh_observability_token("agent-two", "tenant-a", resolver)
     await token_cache.refresh_observability_token("agent-one", "tenant-b", resolver)
 
-    assert token_cache.get_observability_token("agent-one", "tenant-a") == "agent-one:tenant-a"
-    assert token_cache.get_observability_token("agent-two", "tenant-a") == "agent-two:tenant-a"
-    assert token_cache.get_observability_token("agent-one", "tenant-b") == "agent-one:tenant-b"
+    assert (
+        await token_cache.get_observability_token("agent-one", "tenant-a") == "agent-one:tenant-a"
+    )
+    assert (
+        await token_cache.get_observability_token("agent-two", "tenant-a") == "agent-two:tenant-a"
+    )
+    assert (
+        await token_cache.get_observability_token("agent-one", "tenant-b") == "agent-one:tenant-b"
+    )
 
 
 @pytest.mark.asyncio
@@ -280,11 +288,11 @@ async def test_invalidate_one_then_all(token_cache):
     await token_cache.refresh_observability_token("two", "tenant", lambda *_: token)
 
     token_cache.invalidate_token("one", "tenant")
-    assert token_cache.get_observability_token("one", "tenant") is None
-    assert token_cache.get_observability_token("two", "tenant") == token
+    assert await token_cache.get_observability_token("one", "tenant") is None
+    assert await token_cache.get_observability_token("two", "tenant") == token
 
     token_cache.invalidate_all()
-    assert token_cache.get_observability_token("two", "tenant") is None
+    assert await token_cache.get_observability_token("two", "tenant") is None
 
 
 @pytest.mark.asyncio
@@ -296,6 +304,6 @@ async def test_cache_evicts_oldest_entry_when_capacity_is_reached(token_cache):
     await token_cache.refresh_observability_token("two", "tenant", lambda *_: token)
     await token_cache.refresh_observability_token("three", "tenant", lambda *_: token)
 
-    assert token_cache.get_observability_token("one", "tenant") is None
-    assert token_cache.get_observability_token("two", "tenant") == token
-    assert token_cache.get_observability_token("three", "tenant") == token
+    assert await token_cache.get_observability_token("one", "tenant") is None
+    assert await token_cache.get_observability_token("two", "tenant") == token
+    assert await token_cache.get_observability_token("three", "tenant") == token

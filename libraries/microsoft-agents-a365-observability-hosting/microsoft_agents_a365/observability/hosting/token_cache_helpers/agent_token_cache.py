@@ -127,8 +127,12 @@ class AgenticTokenCache:
 
             return await self._acquire_token(agent_id, tenant_id, entry, token_resolver)
 
-    def get_observability_token(self, agent_id: str, tenant_id: str) -> str | None:
-        """Get a non-expired cached app-only OBS token."""
+    async def get_observability_token(self, agent_id: str, tenant_id: str) -> str | None:
+        """Return a non-expired cached app-only OBS token, or ``None``.
+
+        This method is a pure cache read. It never acquires a token and never
+        calls delegated token exchange.
+        """
         key = self.make_key(agent_id, tenant_id)
         with self._lock:
             entry = self._map.get(key)

@@ -21,14 +21,13 @@ from microsoft_agents_a365.observability.hosting.token_cache_helpers import Agen
 cache = AgenticTokenCache()
 
 
-async def refresh_app_only_obs(agent_id: str, tenant_id: str, scopes: list[str]) -> str:
+async def acquire_app_only_obs_token(agent_id: str, tenant_id: str, scopes: list[str]) -> str:
     # Acquire a final app-only OBS token for agent_id and tenant_id.
     ...
 
 
-async def resolver(agent_id: str, tenant_id: str) -> str | None:
-    await cache.refresh_observability_token(agent_id, tenant_id, refresh_app_only_obs)
-    return cache.get_observability_token(agent_id, tenant_id)
+async def token_resolver(agent_id: str, tenant_id: str) -> str:
+    return await cache.refresh_observability_token(agent_id, tenant_id, acquire_app_only_obs_token)
 ```
 
 The resolver receives the OBS `/.default` scope and must not perform user_fic or
@@ -46,6 +45,9 @@ from inside a running event loop cannot await an async resolver, so that export
 fails with a logged error; call them with `await asyncio.to_thread(...)`. A
 synchronous, thread-safe cached resolver avoids both constraints and is the
 pattern used by the Agent365-Samples Python samples.
+Call `refresh_observability_token` only from the exporter's `token_resolver`;
+its per-key locks are `asyncio.Lock`s, so do not also refresh the same cache
+instance from your app's own event loop or threads.
 
 The previous delegated registration shape using `TurnContext` and
 `Authorization.exchange_token` is removed for OBS export. `register_observability(...)`
