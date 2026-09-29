@@ -299,6 +299,8 @@ class _Agent365Exporter(SpanExporter):
                 return asyncio.run(_await_token(cast(Awaitable[str | None], token)))
             if inspect.iscoroutine(token):
                 token.close()
+            elif isinstance(token, asyncio.Future):
+                token.cancel()
             raise RuntimeError(
                 "Agent365Exporter cannot await an async token_resolver while running "
                 "inside an active event loop; use a synchronous cached resolver or refresh "

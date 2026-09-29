@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+import asyncio
+import inspect
 import json
 import os
 import unittest
@@ -351,6 +353,34 @@ class TestAgent365Exporter(unittest.TestCase):
 
             self.assertEqual(result, SpanExportResult.SUCCESS)
             mock_post.assert_called_once()
+
+    def test_awaitable_resolver_in_active_event_loop_fails_and_is_released(self):
+        """Inside a running loop, export fails and the resolver's coroutine, future or task is released."""
+
+        async def pending_token():
+            await asyncio.sleep(3600)
+            return "never-used"
+
+        async def run_in_loop():
+            coroutine = pending_token()
+            future = asyncio.get_running_loop().create_future()
+            task = asyncio.ensure_future(pending_token())
+            for awaitable in (coroutine, future, task):
+                exporter = _Agent365Exporter(
+                    token_resolver=lambda _agent_id, _tenant_id, value=awaitable: value,
+                    cluster_category="test",
+                )
+                spans = [self._create_mock_span("active_loop_span")]
+                with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+                    self.assertEqual(exporter.export(spans), SpanExportResult.FAILURE)
+                    mock_post.assert_not_called()
+
+            await asyncio.wait([task], timeout=1)
+            self.assertEqual(inspect.getcoroutinestate(coroutine), inspect.CORO_CLOSED)
+            self.assertTrue(future.cancelled())
+            self.assertTrue(task.cancelled())
+
+        asyncio.run(run_in_loop())
 
     def test_auth_not_found_errors_do_not_fallback_to_delegated_route(self):
         """401/403/404 failures do not trigger a delegated route fallback."""
