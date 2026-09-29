@@ -5,18 +5,21 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import logging
 import threading
 import time
-from collections.abc import Callable, Sequence
-from typing import Any, final
+from collections.abc import Awaitable, Sequence
+from typing import Any, cast, final
 
 import requests
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
 
+from .agent365_exporter_options import TokenResolver
 from .utils import (
     DEFAULT_MAX_PAYLOAD_BYTES,
     build_export_url,
@@ -43,20 +46,23 @@ DEFAULT_ENDPOINT_URL = "https://agent365.svc.cloud.microsoft"
 logger = logging.getLogger(__name__)
 
 
+async def _await_token(awaitable: Awaitable[str | None]) -> str | None:
+    return await awaitable
+
+
 @final
 class _Agent365Exporter(SpanExporter):
     """
     Agent 365 span exporter for Agent 365:
       * Partitions spans by (tenantId, agentId)
       * Builds OTLP-like JSON: resourceSpans -> scopeSpans -> spans
-      * POSTs per group to https://{endpoint}/observability/tenants/{tenantId}/otlp/agents/{agentId}/traces?api-version=1
-      *   or, when use_s2s_endpoint is True, https://{endpoint}/observabilityService/tenants/{tenantId}/otlp/agents/{agentId}/traces?api-version=1
-      * Adds Bearer token via token_resolver(agentId, tenantId)
+      * POSTs per group to the S2S /observabilityService OTLP route.
+      * Adds an app-only authorization token via token_resolver(agentId, tenantId)
     """
 
     def __init__(
         self,
-        token_resolver: Callable[[str, str], str | None],
+        token_resolver: TokenResolver,
         cluster_category: str = "prod",
         use_s2s_endpoint: bool = False,
         max_payload_bytes: int = DEFAULT_MAX_PAYLOAD_BYTES,
@@ -126,8 +132,8 @@ class _Agent365Exporter(SpanExporter):
 
                 headers = {"content-type": "application/json"}
                 try:
-                    token = self._token_resolver(agent_id, tenant_id)
-                    if token:
+                    token = self._resolve_token(agent_id, tenant_id)
+                    if token is not None and token.strip():
                         # Warn if sending bearer token over non-HTTPS connection
                         if not url.lower().startswith("https://"):
                             logger.warning(
@@ -135,13 +141,21 @@ class _Agent365Exporter(SpanExporter):
                                 "This may expose credentials in transit."
                             )
                         headers["authorization"] = f"Bearer {token}"
-                        logger.debug(f"Token resolved successfully for agent {agent_id}")
+                        logger.debug(
+                            f"App-only OBS token resolved successfully for agent {agent_id}"
+                        )
                     else:
-                        logger.debug(f"No token returned for agent {agent_id}")
+                        logger.error(
+                            f"No app-only OBS token returned for agent {agent_id}, "
+                            f"tenant {tenant_id}; export request will not be sent"
+                        )
+                        any_failure = True
+                        continue
                 except Exception as e:
                     # If token resolution fails, treat as failure for this group
                     logger.error(
-                        f"Token resolution failed for agent {agent_id}, tenant {tenant_id}: {e}"
+                        f"App-only OBS token resolution failed for agent {agent_id}, "
+                        f"tenant {tenant_id}: {e}"
                     )
                     any_failure = True
                     continue
@@ -275,6 +289,22 @@ class _Agent365Exporter(SpanExporter):
                 logger.error(f"Request failed after {DEFAULT_MAX_RETRIES + 1} attempts: {e}")
                 return False
         return False
+
+    def _resolve_token(self, agent_id: str, tenant_id: str) -> str | None:
+        token = self._token_resolver(agent_id, tenant_id)
+        if inspect.isawaitable(token):
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return asyncio.run(_await_token(cast(Awaitable[str | None], token)))
+            if inspect.iscoroutine(token):
+                token.close()
+            raise RuntimeError(
+                "Agent365Exporter cannot await an async token_resolver while running "
+                "inside an active event loop; use a synchronous cached resolver or refresh "
+                "the app-only OBS token before export."
+            )
+        return token
 
     # ------------- Payload mapping ------------------
 

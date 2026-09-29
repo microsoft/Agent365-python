@@ -4,7 +4,6 @@
 import os
 import logging
 import threading
-from collections.abc import Callable
 from typing import Any, Optional
 
 from opentelemetry import trace
@@ -17,7 +16,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
 from .exporters.agent365_exporter import _Agent365Exporter
-from .exporters.agent365_exporter_options import Agent365ExporterOptions
+from .exporters.agent365_exporter_options import Agent365ExporterOptions, TokenResolver
 from .exporters.enriching_span_processor import (
     _EnrichingBatchSpanProcessor,
 )
@@ -60,7 +59,7 @@ class TelemetryManager:
         service_name: str,
         service_namespace: str,
         logger_name: str = DEFAULT_LOGGER_NAME,
-        token_resolver: Callable[[str, str], str | None] | None = None,
+        token_resolver: TokenResolver | None = None,
         cluster_category: str = "prod",
         exporter_options: Agent365ExporterOptions | SpectraExporterOptions | None = None,
         suppress_invoke_agent_input: bool = False,
@@ -72,8 +71,8 @@ class TelemetryManager:
         :param service_name: The name of the service.
         :param service_namespace: The namespace of the service.
         :param logger_name: The name of the logger to collect telemetry from.
-        :param token_resolver: (Deprecated) Callable that returns an auth token for a given agent + tenant.
-            Use exporter_options instead.
+        :param token_resolver: (Deprecated) Callable that returns an app-only OBS token
+            for a given agent + tenant. Use exporter_options instead.
         :param cluster_category: (Deprecated) Environment / cluster category (e.g. "prod").
             Use exporter_options instead.
         :param exporter_options: Exporter configuration. Pass Agent365ExporterOptions for A365 API
@@ -103,7 +102,7 @@ class TelemetryManager:
         service_name: str,
         service_namespace: str,
         logger_name: str,
-        token_resolver: Callable[[str, str], str | None] | None = None,
+        token_resolver: TokenResolver | None = None,
         cluster_category: str = "prod",
         exporter_options: Agent365ExporterOptions | SpectraExporterOptions | None = None,
         suppress_invoke_agent_input: bool = False,
@@ -175,7 +174,13 @@ class TelemetryManager:
                     endpoint=exporter_options.endpoint,
                 )
 
-        elif is_agent365_exporter_enabled() and exporter_options.token_resolver is not None:
+        elif is_agent365_exporter_enabled():
+            if exporter_options.token_resolver is None:
+                raise ValueError(
+                    "Agent365Exporter requires an app-only OBS token_resolver when "
+                    "ENABLE_A365_OBSERVABILITY_EXPORTER is enabled. Delegated/context "
+                    "tokens are not used for OBS export."
+                )
             exporter = _Agent365Exporter(
                 token_resolver=exporter_options.token_resolver,
                 cluster_category=exporter_options.cluster_category,
@@ -186,8 +191,7 @@ class TelemetryManager:
         else:
             exporter = ConsoleSpanExporter()
             self._logger.warning(
-                "is_agent365_exporter_enabled() not enabled or token_resolver not set."
-                " Falling back to console exporter."
+                "is_agent365_exporter_enabled() not enabled. Falling back to console exporter."
             )
 
         # Add span processors
@@ -270,7 +274,7 @@ def configure(
     service_name: str,
     service_namespace: str,
     logger_name: str = DEFAULT_LOGGER_NAME,
-    token_resolver: Callable[[str, str], str | None] | None = None,
+    token_resolver: TokenResolver | None = None,
     cluster_category: str = "prod",
     exporter_options: Agent365ExporterOptions | SpectraExporterOptions | None = None,
     suppress_invoke_agent_input: bool = False,
@@ -282,8 +286,8 @@ def configure(
     :param service_name: The name of the service.
     :param service_namespace: The namespace of the service.
     :param logger_name: The name of the logger to collect telemetry from.
-    :param token_resolver: (Deprecated) Callable that returns an auth token for a given agent + tenant.
-        Use exporter_options instead.
+    :param token_resolver: (Deprecated) Callable that returns an app-only OBS token for a given
+        agent + tenant. Use exporter_options instead.
     :param cluster_category: (Deprecated) Environment / cluster category (e.g. "prod").
         Use exporter_options instead.
     :param exporter_options: Exporter configuration. Pass Agent365ExporterOptions for A365 API

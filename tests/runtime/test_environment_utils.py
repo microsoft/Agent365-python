@@ -12,9 +12,10 @@ from microsoft_agents_a365.runtime.environment_utils import (
 
 
 def test_get_observability_authentication_scope():
-    """Test get_observability_authentication_scope returns production scope."""
+    """Test get_observability_authentication_scope returns app-only production scope."""
     result = get_observability_authentication_scope()
     assert result == [PROD_OBSERVABILITY_SCOPE]
+    assert result == ["api://9b975845-388f-4429-889e-eab1ef63949c/.default"]
 
 
 def test_get_observability_authentication_scope_with_override(monkeypatch):

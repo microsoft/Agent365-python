@@ -34,8 +34,7 @@ class TestExportConfigConsistency(unittest.TestCase):
     # ---- pinned production values ----
 
     EXPECTED_ENDPOINT = "https://agent365.svc.cloud.microsoft"
-    EXPECTED_SCOPE = "api://9b975845-388f-4429-889e-eab1ef63949c/Agent365.Observability.OtelWrite"
-    EXPECTED_STANDARD_PATH = "/observability/tenants/{tid}/otlp/agents/{aid}/traces"
+    EXPECTED_SCOPE = "api://9b975845-388f-4429-889e-eab1ef63949c/.default"
     EXPECTED_S2S_PATH = "/observabilityService/tenants/{tid}/otlp/agents/{aid}/traces"
 
     # ---- snapshot assertions ----
@@ -58,17 +57,17 @@ class TestExportConfigConsistency(unittest.TestCase):
             "and build_export_url() path. All three must stay in sync.",
         )
 
-    def test_export_url_standard_path_structure(self):
-        """Standard export URL must use the pinned path pattern."""
+    def test_export_url_legacy_false_path_structure(self):
+        """Deprecated false flag must still use the pinned S2S path pattern."""
         url = build_export_url(self.EXPECTED_ENDPOINT, "a1", "t1")
         expected = (
             f"{self.EXPECTED_ENDPOINT}"
-            f"{self.EXPECTED_STANDARD_PATH.format(tid='t1', aid='a1')}?api-version=1"
+            f"{self.EXPECTED_S2S_PATH.format(tid='t1', aid='a1')}?api-version=1"
         )
         self.assertEqual(
             url,
             expected,
-            "Standard export URL path changed — also review PROD_OBSERVABILITY_SCOPE "
+            "Export URL path changed — also review PROD_OBSERVABILITY_SCOPE "
             "and DEFAULT_ENDPOINT_URL. All three must stay in sync.",
         )
 
@@ -97,8 +96,8 @@ class TestExportConfigConsistency(unittest.TestCase):
         self.assertEqual(len(scopes), 1)
         scope = scopes[0]
 
-        # Scope should reference the Agent365 Observability permission
-        self.assertIn("Agent365.Observability", scope)
+        # Scope should request app-only tokens for the OBS resource.
+        self.assertTrue(scope.endswith("/.default"))
         # Endpoint should be the agent365 service
         self.assertIn("agent365", DEFAULT_ENDPOINT_URL)
 

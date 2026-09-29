@@ -258,16 +258,13 @@ def build_export_url(
         endpoint: Base endpoint URL or domain.
         agent_id: The agent identifier to include in the URL path.
         tenant_id: The tenant identifier to include in the URL path.
-        use_s2s_endpoint: Whether to use the S2S endpoint path format.
+        use_s2s_endpoint: Deprecated compatibility option. Ignored; export always uses
+            the S2S endpoint path format.
 
     Returns:
         The fully constructed export URL with path and query parameters.
     """
-    endpoint_path = (
-        f"/observabilityService/tenants/{tenant_id}/otlp/agents/{agent_id}/traces"
-        if use_s2s_endpoint
-        else f"/observability/tenants/{tenant_id}/otlp/agents/{agent_id}/traces"
-    )
+    endpoint_path = f"/observabilityService/tenants/{tenant_id}/otlp/agents/{agent_id}/traces"
 
     parsed = urlparse(endpoint)
     if parsed.scheme and "://" in endpoint:

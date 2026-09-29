@@ -5,6 +5,8 @@ from typing import Awaitable, Callable, Optional
 
 from .utils import DEFAULT_MAX_PAYLOAD_BYTES
 
+TokenResolver = Callable[[str, str], str | Awaitable[str | None] | None]
+
 
 class Agent365ExporterOptions:
     """
@@ -15,8 +17,8 @@ class Agent365ExporterOptions:
     def __init__(
         self,
         cluster_category: str = "prod",
-        token_resolver: Optional[Callable[[str, str], Awaitable[Optional[str]]]] = None,
-        use_s2s_endpoint: bool = False,
+        token_resolver: Optional[TokenResolver] = None,
+        use_s2s_endpoint: bool = True,
         max_queue_size: int = 2048,
         scheduled_delay_ms: int = 5000,
         exporter_timeout_ms: int = 30000,
@@ -26,8 +28,11 @@ class Agent365ExporterOptions:
         """
         Args:
             cluster_category: Cluster region argument. Defaults to 'prod'.
-            token_resolver: Async callable that resolves the auth token (REQUIRED).
-            use_s2s_endpoint: Use the S2S endpoint instead of standard endpoint.
+            token_resolver: Callable that resolves an app-only OBS token (REQUIRED when the
+                Agent 365 exporter is enabled). It is invoked for each export batch/identity
+                group, so implementations should cache and refresh tokens near expiry.
+            use_s2s_endpoint: Deprecated compatibility option. Ignored; export always uses
+                the S2S /observabilityService OTLP route, even when this is False.
             max_queue_size: Maximum queue size for the batch processor. Default is 2048.
             scheduled_delay_ms: Delay between export batches (ms). Default is 5000.
             exporter_timeout_ms: Timeout for the export operation (ms). Default is 30000.

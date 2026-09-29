@@ -133,7 +133,8 @@ class TestAgent365Exporter(unittest.TestCase):
 
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
             self.assertIn(
-                "/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces", url
+                "/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces",
+                url,
             )
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
@@ -255,9 +256,9 @@ class TestAgent365Exporter(unittest.TestCase):
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
 
-    def test_default_endpoint_path_when_s2s_disabled(self):
-        """Test 5: Test that default endpoint path is used when use_s2s_endpoint is False."""
-        # Arrange - Create exporter with S2S endpoint disabled (default behavior)
+    def test_s2s_endpoint_path_when_legacy_flag_disabled(self):
+        """Test 5: Test that S2S endpoint path is used when use_s2s_endpoint is False."""
+        # Arrange - Create exporter with deprecated S2S flag disabled
         default_exporter = _Agent365Exporter(
             token_resolver=self.mock_token_resolver, cluster_category="test", use_s2s_endpoint=False
         )
@@ -273,20 +274,109 @@ class TestAgent365Exporter(unittest.TestCase):
             self.assertEqual(result, SpanExportResult.SUCCESS)
             mock_post.assert_called_once()
 
-            # Verify the call arguments - should use default path with default endpoint
+            # Verify the call arguments - should still use S2S path with default endpoint
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
             self.assertIn(DEFAULT_ENDPOINT_URL, url)
             self.assertIn(
-                "/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces", url
-            )
-            self.assertNotIn(
                 "/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces",
                 url,
             )
+            self.assertNotIn("/observability/tenants/", url)
             self.assertEqual(headers["authorization"], "Bearer test_token_123")
             self.assertEqual(headers["content-type"], "application/json")
+
+    def test_omitted_false_true_legacy_flag_all_route_to_s2s(self):
+        """Omitted/False/True use_s2s_endpoint values are ignored; export always uses S2S."""
+        for use_s2s_endpoint in (None, False, True):
+            with self.subTest(use_s2s_endpoint=use_s2s_endpoint):
+                kwargs = {}
+                if use_s2s_endpoint is not None:
+                    kwargs["use_s2s_endpoint"] = use_s2s_endpoint
+                exporter = _Agent365Exporter(
+                    token_resolver=self.mock_token_resolver,
+                    cluster_category="test",
+                    **kwargs,
+                )
+                spans = [self._create_mock_span("legacy_flag_span")]
+
+                with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+                    result = exporter.export(spans)
+
+                    self.assertEqual(result, SpanExportResult.SUCCESS)
+                    url = mock_post.call_args[0][0]
+                    self.assertIn("/observabilityService/tenants/", url)
+                    self.assertNotIn("/observability/tenants/", url)
+
+    def test_empty_token_fails_without_sending_request(self):
+        """Empty app-only tokens fail the export batch without an HTTP request."""
+        for token in (None, "", " "):
+            with self.subTest(token=token):
+                resolver = Mock(return_value=token)
+                exporter = _Agent365Exporter(token_resolver=resolver, cluster_category="test")
+                spans = [self._create_mock_span("empty_token_span")]
+
+                with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+                    result = exporter.export(spans)
+
+                    self.assertEqual(result, SpanExportResult.FAILURE)
+                    resolver.assert_called_once_with("test-agent-456", "test-tenant-123")
+                    mock_post.assert_not_called()
+
+    def test_resolver_failure_fails_without_sending_request(self):
+        """Resolver acquisition failures fail export without delegated fallback or HTTP."""
+        resolver = Mock(side_effect=RuntimeError("app-only acquisition failed"))
+        exporter = _Agent365Exporter(token_resolver=resolver, cluster_category="test")
+        spans = [self._create_mock_span("resolver_failure_span")]
+
+        with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+            result = exporter.export(spans)
+
+            self.assertEqual(result, SpanExportResult.FAILURE)
+            resolver.assert_called_once_with("test-agent-456", "test-tenant-123")
+            mock_post.assert_not_called()
+
+    def test_async_resolver_is_awaited_for_sync_export(self):
+        """Async token resolvers are awaited when export runs outside an active event loop."""
+
+        async def resolver(agent_id, tenant_id):
+            return f"async-token-{agent_id}-{tenant_id}"
+
+        exporter = _Agent365Exporter(token_resolver=resolver, cluster_category="test")
+        spans = [self._create_mock_span("async_resolver_span")]
+
+        with patch.object(exporter, "_post_with_retries", return_value=True) as mock_post:
+            result = exporter.export(spans)
+
+            self.assertEqual(result, SpanExportResult.SUCCESS)
+            mock_post.assert_called_once()
+
+    def test_auth_not_found_errors_do_not_fallback_to_delegated_route(self):
+        """401/403/404 failures do not trigger a delegated route fallback."""
+        for status_code in (401, 403, 404):
+            with self.subTest(status_code=status_code):
+                exporter = _Agent365Exporter(
+                    token_resolver=self.mock_token_resolver,
+                    cluster_category="test",
+                    use_s2s_endpoint=False,
+                )
+                spans = [self._create_mock_span("auth_failure_span")]
+
+                with patch("requests.Session.post") as mock_post:
+                    mock_response = Mock()
+                    mock_response.status_code = status_code
+                    mock_response.text = "auth failure"
+                    mock_response.headers = {"x-ms-correlation-id": "corr"}
+                    mock_post.return_value = mock_response
+
+                    result = exporter.export(spans)
+
+                    self.assertEqual(result, SpanExportResult.FAILURE)
+                    mock_post.assert_called_once()
+                    url = mock_post.call_args[0][0]
+                    self.assertIn("/observabilityService/tenants/", url)
+                    self.assertNotIn("/observability/tenants/", url)
 
     @patch("microsoft_agents_a365.observability.core.exporters.agent365_exporter.logger")
     def test_export_logging(self, mock_logger):
@@ -329,11 +419,13 @@ class TestAgent365Exporter(unittest.TestCase):
                 unittest.mock.call.debug("Found 1 identity groups with 2 total spans to export"),
                 # Should log endpoint being used at DEBUG (default endpoint)
                 unittest.mock.call.debug(
-                    f"Exporting 2 spans to endpoint: {DEFAULT_ENDPOINT_URL}/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1 "
+                    f"Exporting 2 spans to endpoint: {DEFAULT_ENDPOINT_URL}/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1 "
                     "(tenant: test-tenant-123, agent: test-agent-456)"
                 ),
                 # Should log token resolution success at DEBUG
-                unittest.mock.call.debug("Token resolved successfully for agent test-agent-456"),
+                unittest.mock.call.debug(
+                    "App-only OBS token resolved successfully for agent test-agent-456"
+                ),
                 # Should log HTTP success at DEBUG
                 unittest.mock.call.debug(
                     "HTTP 200 success on attempt 1. "
@@ -400,7 +492,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = f"https://{override_domain}/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
+            expected_url = f"https://{override_domain}/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_uses_default_endpoint_when_no_override(self):
@@ -429,7 +521,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = f"{DEFAULT_ENDPOINT_URL}/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
+            expected_url = f"{DEFAULT_ENDPOINT_URL}/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_ignores_empty_domain_override(self):
@@ -483,7 +575,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = "https://override.example.com/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
+            expected_url = "https://override.example.com/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_uses_valid_url_override_with_http(self):
@@ -511,7 +603,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = "http://localhost:8080/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
+            expected_url = "http://localhost:8080/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_uses_valid_domain_override_with_port(self):
@@ -539,7 +631,7 @@ class TestAgent365Exporter(unittest.TestCase):
             args, kwargs = mock_post.call_args
             url, body, headers = args
 
-            expected_url = "https://example.com:8080/observability/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
+            expected_url = "https://example.com:8080/observabilityService/tenants/test-tenant-123/otlp/agents/test-agent-456/traces?api-version=1"
             self.assertEqual(url, expected_url)
 
     def test_export_ignores_invalid_domain_with_protocol(self):
