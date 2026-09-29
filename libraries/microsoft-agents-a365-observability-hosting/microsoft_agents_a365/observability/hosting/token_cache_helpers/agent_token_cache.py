@@ -1,56 +1,85 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""
-Token cache for observability tokens per (agentId, tenantId).
-"""
+"""App-only token cache for Agent 365 observability export."""
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import json
 import logging
+import time
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from inspect import isawaitable
 from threading import Lock
+from typing import cast
 
 from microsoft_agents.hosting.core.app.oauth.authorization import Authorization
 from microsoft_agents.hosting.core.turn_context import TurnContext
+from microsoft_agents_a365.runtime.environment_utils import get_observability_authentication_scope
 
 logger = logging.getLogger(__name__)
+
+ObservabilityTokenResolver = Callable[[str, str, Sequence[str]], str | Awaitable[str | None] | None]
 
 
 @dataclass
 class AgenticTokenStruct:
-    """Structure containing the token generation components."""
+    """Deprecated delegated OBS token generator shape.
+
+    OBS export is S2S-only. Instances of this type are accepted only for source
+    compatibility; the cache never calls ``authorization.exchange_token``.
+    """
 
     authorization: Authorization
-    """The user authorization object for token exchange."""
+    """The user authorization object from the removed delegated OBS flow."""
 
     turn_context: TurnContext
-    """The turn context for the current conversation."""
+    """The turn context from the removed delegated OBS flow."""
 
     auth_handler_name: str | None = "AGENTIC"
-    """The name of the authentication handler."""
+    """The name of the removed delegated authentication handler."""
 
 
 class AgenticTokenCache:
-    """
-    Caches observability tokens per (agentId, tenantId) using the provided
-    UserAuthorization and TurnContext.
+    """Caches app-only OBS tokens per ``(agent_id, tenant_id)``.
+
+    Call :meth:`refresh_observability_token` from the exporter's token resolver
+    to acquire or refresh an app-only token. The resolver receives the exporting
+    agent ID, tenant ID, and OBS ``/.default`` scopes. Delegated TurnContext /
+    Authorization shapes are logged once and ignored.
     """
 
     @dataclass
     class _Entry:
         """Internal entry structure for cache storage."""
 
-        agentic_token_struct: AgenticTokenStruct
-        """The token generation structure."""
+        scopes: tuple[str, ...]
+        token: str | None = None
+        expires_on_ms: float | None = None
+        acquired_on_ms: float | None = None
 
-        scopes: list[str]
-        """The observability scopes for token requests."""
+    _default_refresh_skew_ms = 60_000
+    _default_max_token_age_ms = 3_600_000
+    _max_exp_seconds = 86_400
+    _max_cache_size = 10_000
 
-    def __init__(self) -> None:
+    def __init__(self, observability_scopes: Sequence[str] | None = None) -> None:
         """Initialize the token cache."""
         self._map: dict[str, AgenticTokenCache._Entry] = {}
+        self._key_locks: dict[str, asyncio.Lock] = {}
         self._lock = Lock()
+        self._observability_scopes = (
+            None if observability_scopes is None else tuple(observability_scopes)
+        )
+        self._removed_overload_logged = False
+
+    @staticmethod
+    def make_key(agent_id: str, tenant_id: str) -> str:
+        """Create a cache key for an agent and tenant."""
+        return f"{agent_id}:{tenant_id}"
 
     def register_observability(
         self,
@@ -59,79 +88,229 @@ class AgenticTokenCache:
         token_generator: AgenticTokenStruct,
         observability_scopes: list[str],
     ) -> None:
-        """
-        Register observability for the specified agent and tenant.
+        """Deprecated no-op for the removed delegated OBS registration flow."""
+        self._log_removed_overload_once()
+
+    async def RefreshObservabilityToken(
+        self,
+        agent_id: str,
+        tenant_id: str,
+        token_resolver: ObservabilityTokenResolver | object,
+        *removed_overload_args: object,
+    ) -> str | None:
+        """Compatibility alias for :meth:`refresh_observability_token`."""
+        return await self.refresh_observability_token(
+            agent_id,
+            tenant_id,
+            token_resolver,
+            *removed_overload_args,
+        )
+
+    async def refresh_observability_token(
+        self,
+        agent_id: str,
+        tenant_id: str,
+        token_resolver: ObservabilityTokenResolver | object,
+        *removed_overload_args: object,
+    ) -> str | None:
+        """Refresh an app-only OBS token for the exporting agent identity.
 
         Args:
-            agent_id: The agent identifier.
-            tenant_id: The tenant identifier.
-            token_generator: The token generator structure.
-            observability_scopes: The observability scopes.
-
-        Raises:
-            ValueError: If agent_id or tenant_id is empty or None.
-            TypeError: If token_generator is None.
-        """
-        if not agent_id or not agent_id.strip():
-            raise ValueError("agent_id cannot be None or whitespace")
-
-        if not tenant_id or not tenant_id.strip():
-            raise ValueError("tenant_id cannot be None or whitespace")
-
-        if token_generator is None:
-            raise TypeError("token_generator cannot be None")
-
-        key = f"{agent_id}:{tenant_id}"
-
-        # First registration wins; subsequent calls ignored (idempotent)
-        with self._lock:
-            if key not in self._map:
-                self._map[key] = AgenticTokenCache._Entry(
-                    agentic_token_struct=token_generator, scopes=observability_scopes
-                )
-                logger.debug(f"Registered observability for {key}")
-            else:
-                logger.debug(f"Observability already registered for {key}, ignoring")
-
-    async def get_observability_token(self, agent_id: str, tenant_id: str) -> str | None:
-        """
-        Get the observability token for the specified agent and tenant.
-
-        Args:
-            agent_id: The agent identifier.
-            tenant_id: The tenant identifier.
+            agent_id: The exporting agent instance identifier.
+            tenant_id: The exporting tenant identifier.
+            token_resolver: App-only token resolver receiving ``(agent_id,
+                tenant_id, scopes)``.
+            removed_overload_args: Present only for the removed delegated
+                TurnContext/Authorization overload; ignored after a one-time log.
 
         Returns:
-            The observability token if available; otherwise, None.
+            The cached app-only OBS token, or ``None`` for the removed overload.
+
+        Raises:
+            ValueError: If agent or tenant IDs are empty, or no scopes are configured.
+            Exception: Propagates resolver failures after retry handling.
         """
-        key = f"{agent_id}:{tenant_id}"
+        if removed_overload_args or not callable(token_resolver):
+            self._log_removed_overload_once()
+            return None
 
-        logger.debug(f"Cache lookup for {key}")
+        if not agent_id or not agent_id.strip() or not tenant_id or not tenant_id.strip():
+            raise ValueError("[AgenticTokenCache] Agent and tenant IDs are required")
 
+        key = self.make_key(agent_id, tenant_id)
+        lock = self._get_key_lock(key)
+        async with lock:
+            entry = self._get_or_create_entry(key)
+            if entry.token is not None and not self._is_expired(entry):
+                return entry.token
+
+            resolver = cast(ObservabilityTokenResolver, token_resolver)
+            return await self._acquire_token(agent_id, tenant_id, entry, resolver)
+
+    def get_observability_token(self, agent_id: str, tenant_id: str) -> str | None:
+        """Get a non-expired cached app-only OBS token."""
+        key = self.make_key(agent_id, tenant_id)
         with self._lock:
             entry = self._map.get(key)
 
-        if entry is None:
-            logger.debug(f"Cache miss for {key}")
+        if entry is None or entry.token is None:
+            logger.debug("[AgenticTokenCache] No token cached for %s", key)
             return None
+        if self._is_expired(entry):
+            logger.debug("[AgenticTokenCache] Token expired for %s", key)
+            return None
+        return entry.token
 
-        logger.debug(f"Cache hit for {key}, exchanging token")
+    def invalidate_token(self, agent_id: str, tenant_id: str) -> None:
+        """Invalidate one cached token."""
+        key = self.make_key(agent_id, tenant_id)
+        with self._lock:
+            entry = self._map.get(key)
+            if entry is not None:
+                self._clear_token(entry)
 
-        try:
-            authorization = entry.agentic_token_struct.authorization
-            turn_context = entry.agentic_token_struct.turn_context
-            auth_handler_id = entry.agentic_token_struct.auth_handler_name
+    def invalidate_all(self) -> None:
+        """Invalidate all cached tokens."""
+        with self._lock:
+            self._map.clear()
 
-            # Exchange the turn token for an observability token
-            token = await authorization.exchange_token(
-                context=turn_context,
-                scopes=entry.scopes,
-                auth_handler_id=auth_handler_id,
+    def _get_or_create_entry(self, key: str) -> _Entry:
+        with self._lock:
+            entry = self._map.get(key)
+            if entry is not None:
+                if not entry.scopes:
+                    raise ValueError("[AgenticTokenCache] Entry has invalid scopes")
+                return entry
+
+            scopes = self._get_effective_scopes()
+            if not scopes:
+                raise ValueError("[AgenticTokenCache] No valid scopes")
+
+            if len(self._map) >= self._max_cache_size:
+                oldest_key = next(iter(self._map), None)
+                if oldest_key is not None:
+                    del self._map[oldest_key]
+
+            entry = AgenticTokenCache._Entry(scopes=scopes)
+            self._map[key] = entry
+            return entry
+
+    def _get_key_lock(self, key: str) -> asyncio.Lock:
+        with self._lock:
+            lock = self._key_locks.get(key)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._key_locks[key] = lock
+            return lock
+
+    def _get_effective_scopes(self) -> tuple[str, ...]:
+        scopes = self._observability_scopes
+        if scopes is None:
+            scopes = tuple(get_observability_authentication_scope())
+        return tuple(scope for scope in scopes if scope and scope.strip())
+
+    async def _acquire_token(
+        self,
+        agent_id: str,
+        tenant_id: str,
+        entry: _Entry,
+        resolver: ObservabilityTokenResolver,
+    ) -> str:
+        max_retries = 2
+        last_error: BaseException | None = None
+        for attempt in range(max_retries + 1):
+            logger.info(
+                "[AgenticTokenCache] Acquiring app-only token attempt %s/%s",
+                attempt + 1,
+                max_retries + 1,
             )
+            try:
+                result = resolver(agent_id, tenant_id, list(entry.scopes))
+                token = await cast(Awaitable[str | None], result) if isawaitable(result) else result
+                if token is None or not token.strip():
+                    raise RuntimeError(
+                        "[AgenticTokenCache] App-only token resolver returned no token"
+                    )
+                entry.token = token
+                entry.acquired_on_ms = time.time() * 1000
+                exp = self._decode_exp(token)
+                if exp is not None:
+                    entry.expires_on_ms = exp * 1000
+                else:
+                    entry.expires_on_ms = None
+                    logger.warning("[AgenticTokenCache] No exp claim, fallback TTL")
+                logger.info("[AgenticTokenCache] Token cached")
+                return token
+            except Exception as error:
+                last_error = error
+                if self._is_retriable_error(error) and attempt < max_retries:
+                    logger.warning(
+                        "[AgenticTokenCache] Retriable token acquisition failure attempt %s: %s",
+                        attempt + 1,
+                        error,
+                    )
+                    await asyncio.sleep(0.2 * (attempt + 1))
+                    continue
+                logger.error("[AgenticTokenCache] Token acquisition failed: %s", error)
+                self._clear_token(entry)
+                raise
 
-            logger.info(f"Successfully exchanged token for {key}")
-            return token
-        except Exception as e:
-            # Return None if token generation fails
-            logger.error(f"Token exchange failed for {key}: {type(e).__name__}")
+        self._clear_token(entry)
+        raise RuntimeError("[AgenticTokenCache] Token acquisition failed") from last_error
+
+    def _decode_exp(self, jwt: str) -> int | None:
+        try:
+            parts = jwt.split(".")
+            if len(parts) < 2:
+                return None
+            payload = parts[1]
+            padded = payload + "=" * ((4 - (len(payload) % 4)) % 4)
+            decoded = base64.urlsafe_b64decode(padded.encode("utf-8"))
+            claims = json.loads(decoded.decode("utf-8"))
+            if not isinstance(claims, dict):
+                return None
+            exp = claims.get("exp")
+            if not isinstance(exp, int | float):
+                return None
+            max_exp = int(time.time()) + self._max_exp_seconds
+            return min(int(exp), max_exp)
+        except Exception:
             return None
+
+    def _is_expired(self, entry: _Entry) -> bool:
+        now = time.time() * 1000
+        if entry.expires_on_ms is not None:
+            return now >= entry.expires_on_ms - self._default_refresh_skew_ms
+        if entry.acquired_on_ms is not None:
+            return now >= entry.acquired_on_ms + self._default_max_token_age_ms
+        return True
+
+    def _is_retriable_error(self, error: Exception) -> bool:
+        message = str(error).lower()
+        if "timeout" in message or "econnreset" in message or "network" in message:
+            return True
+
+        status = self._get_status(error)
+        return status in (408, 429) or (status is not None and 500 <= status < 600)
+
+    def _get_status(self, error: Exception) -> int | None:
+        for name in ("status", "status_code"):
+            value = getattr(error, name, None)
+            if isinstance(value, int):
+                return value
+        return None
+
+    def _clear_token(self, entry: _Entry) -> None:
+        entry.token = None
+        entry.expires_on_ms = None
+        entry.acquired_on_ms = None
+
+    def _log_removed_overload_once(self) -> None:
+        if self._removed_overload_logged:
+            return
+        self._removed_overload_logged = True
+        logger.error(
+            "[AgenticTokenCache] Delegated OBS token registration/refresh was removed and "
+            "does nothing; S2S OBS needs an app-only token. Call "
+            "refresh_observability_token(agent_id, tenant_id, token_resolver) instead."
+        )

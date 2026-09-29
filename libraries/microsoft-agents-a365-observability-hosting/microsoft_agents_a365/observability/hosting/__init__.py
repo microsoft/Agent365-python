@@ -14,6 +14,7 @@ from .middleware.output_logging_middleware import (
     A365_PARENT_TRACEPARENT_KEY,
     OutputLoggingMiddleware,
 )
+from .token_cache_helpers import AgenticTokenCache, AgenticTokenStruct, ObservabilityTokenResolver
 
 __all__ = [
     "BaggageMiddleware",
@@ -21,4 +22,7 @@ __all__ = [
     "A365_PARENT_TRACEPARENT_KEY",
     "ObservabilityHostingManager",
     "ObservabilityHostingOptions",
+    "AgenticTokenCache",
+    "AgenticTokenStruct",
+    "ObservabilityTokenResolver",
 ]
