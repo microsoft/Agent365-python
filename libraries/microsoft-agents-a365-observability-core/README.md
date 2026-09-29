@@ -35,7 +35,8 @@ agent identity. The resolver is invoked for each export batch and identity
 group, so it should cache the acquired token and refresh near expiry. Empty
 tokens or resolver failures fail that export batch without sending an HTTP
 request or retrying on a delegated route. If the Agent 365 exporter is enabled
-without a resolver, configuration fails instead of silently using another token.
+without a resolver, the existing `ConsoleSpanExporter` fallback is kept and
+nothing is sent to Agent 365.
 
 Resolvers should request the OBS resource `/.default` scope
 (`api://9b975845-388f-4429-889e-eab1ef63949c/.default`) and validate the token

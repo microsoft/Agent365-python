@@ -11,12 +11,12 @@ All notable changes to this package will be documented in this file.
   or fall back to `/observability`. Provide an app-only OBS token independently
   of your agent's workload auth; the S2S service rejects delegated `scp` tokens.
 - **OBS export requires the configured app-only resolver** — The exporter uses
-  only `token_resolver(agent_id, tenant_id)` for authentication. Missing
-  resolvers fail configuration when the Agent 365 exporter is enabled; empty
-  tokens or acquisition failures fail export without an HTTP request or
-  delegated fallback. The exporter invokes the resolver on every export
-  batch/identity group, so resolvers must cache the acquired token and refresh
-  only near expiry.
+  only `token_resolver(agent_id, tenant_id)` for Agent 365 authentication. If
+  the Agent 365 exporter is enabled without a resolver, the existing console
+  fallback is kept and nothing is sent to Agent 365. Empty tokens or acquisition
+  failures fail export without an HTTP request or delegated fallback. The
+  exporter invokes the resolver on every export batch/identity group, so
+  resolvers must cache the acquired token and refresh only near expiry.
 
 ### Migration
 

@@ -18,7 +18,7 @@ class Agent365ExporterOptions:
         self,
         cluster_category: str = "prod",
         token_resolver: Optional[TokenResolver] = None,
-        use_s2s_endpoint: bool = True,
+        use_s2s_endpoint: bool = False,
         max_queue_size: int = 2048,
         scheduled_delay_ms: int = 5000,
         exporter_timeout_ms: int = 30000,

@@ -14,7 +14,6 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from inspect import isawaitable
 from threading import Lock
-from typing import cast
 
 from microsoft_agents.hosting.core.app.oauth.authorization import Authorization
 from microsoft_agents.hosting.core.turn_context import TurnContext
@@ -74,7 +73,7 @@ class AgenticTokenCache:
         self._observability_scopes = (
             None if observability_scopes is None else tuple(observability_scopes)
         )
-        self._removed_overload_logged = False
+        self._removed_registration_logged = False
 
     @staticmethod
     def make_key(agent_id: str, tenant_id: str) -> str:
@@ -89,30 +88,14 @@ class AgenticTokenCache:
         observability_scopes: list[str],
     ) -> None:
         """Deprecated no-op for the removed delegated OBS registration flow."""
-        self._log_removed_overload_once()
-
-    async def RefreshObservabilityToken(
-        self,
-        agent_id: str,
-        tenant_id: str,
-        token_resolver: ObservabilityTokenResolver | object,
-        *removed_overload_args: object,
-    ) -> str | None:
-        """Compatibility alias for :meth:`refresh_observability_token`."""
-        return await self.refresh_observability_token(
-            agent_id,
-            tenant_id,
-            token_resolver,
-            *removed_overload_args,
-        )
+        self._log_removed_registration_once()
 
     async def refresh_observability_token(
         self,
         agent_id: str,
         tenant_id: str,
-        token_resolver: ObservabilityTokenResolver | object,
-        *removed_overload_args: object,
-    ) -> str | None:
+        token_resolver: ObservabilityTokenResolver,
+    ) -> str:
         """Refresh an app-only OBS token for the exporting agent identity.
 
         Args:
@@ -120,19 +103,17 @@ class AgenticTokenCache:
             tenant_id: The exporting tenant identifier.
             token_resolver: App-only token resolver receiving ``(agent_id,
                 tenant_id, scopes)``.
-            removed_overload_args: Present only for the removed delegated
-                TurnContext/Authorization overload; ignored after a one-time log.
 
         Returns:
-            The cached app-only OBS token, or ``None`` for the removed overload.
+            The cached app-only OBS token.
 
         Raises:
+            TypeError: If ``token_resolver`` is not callable.
             ValueError: If agent or tenant IDs are empty, or no scopes are configured.
             Exception: Propagates resolver failures after retry handling.
         """
-        if removed_overload_args or not callable(token_resolver):
-            self._log_removed_overload_once()
-            return None
+        if not callable(token_resolver):
+            raise TypeError("token_resolver must be callable")
 
         if not agent_id or not agent_id.strip() or not tenant_id or not tenant_id.strip():
             raise ValueError("[AgenticTokenCache] Agent and tenant IDs are required")
@@ -144,8 +125,7 @@ class AgenticTokenCache:
             if entry.token is not None and not self._is_expired(entry):
                 return entry.token
 
-            resolver = cast(ObservabilityTokenResolver, token_resolver)
-            return await self._acquire_token(agent_id, tenant_id, entry, resolver)
+            return await self._acquire_token(agent_id, tenant_id, entry, token_resolver)
 
     def get_observability_token(self, agent_id: str, tenant_id: str) -> str | None:
         """Get a non-expired cached app-only OBS token."""
@@ -226,7 +206,7 @@ class AgenticTokenCache:
             )
             try:
                 result = resolver(agent_id, tenant_id, list(entry.scopes))
-                token = await cast(Awaitable[str | None], result) if isawaitable(result) else result
+                token = await result if isawaitable(result) else result
                 if token is None or not token.strip():
                     raise RuntimeError(
                         "[AgenticTokenCache] App-only token resolver returned no token"
@@ -305,12 +285,12 @@ class AgenticTokenCache:
         entry.expires_on_ms = None
         entry.acquired_on_ms = None
 
-    def _log_removed_overload_once(self) -> None:
-        if self._removed_overload_logged:
+    def _log_removed_registration_once(self) -> None:
+        if self._removed_registration_logged:
             return
-        self._removed_overload_logged = True
+        self._removed_registration_logged = True
         logger.error(
-            "[AgenticTokenCache] Delegated OBS token registration/refresh was removed and "
-            "does nothing; S2S OBS needs an app-only token. Call "
+            "[AgenticTokenCache] Delegated OBS token registration was removed and does "
+            "nothing; S2S OBS needs an app-only token. Call "
             "refresh_observability_token(agent_id, tenant_id, token_resolver) instead."
         )

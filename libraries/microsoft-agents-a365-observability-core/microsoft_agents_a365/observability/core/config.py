@@ -174,13 +174,7 @@ class TelemetryManager:
                     endpoint=exporter_options.endpoint,
                 )
 
-        elif is_agent365_exporter_enabled():
-            if exporter_options.token_resolver is None:
-                raise ValueError(
-                    "Agent365Exporter requires an app-only OBS token_resolver when "
-                    "ENABLE_A365_OBSERVABILITY_EXPORTER is enabled. Delegated/context "
-                    "tokens are not used for OBS export."
-                )
+        elif is_agent365_exporter_enabled() and exporter_options.token_resolver is not None:
             exporter = _Agent365Exporter(
                 token_resolver=exporter_options.token_resolver,
                 cluster_category=exporter_options.cluster_category,
@@ -191,7 +185,8 @@ class TelemetryManager:
         else:
             exporter = ConsoleSpanExporter()
             self._logger.warning(
-                "is_agent365_exporter_enabled() not enabled. Falling back to console exporter."
+                "is_agent365_exporter_enabled() not enabled or token_resolver not set."
+                " Falling back to console exporter."
             )
 
         # Add span processors

@@ -4,7 +4,7 @@ This guide is for developers whose application **already** initializes OpenTelem
 
 ## The integration rule
 
-> **Initialize your existing OpenTelemetry stack first, then call Agent 365's `configure()`.** The SDK detects the existing `TracerProvider` and adds its processors to it. Your existing backend receives every span; the Agent 365 backend also receives spans when `ENABLE_A365_OBSERVABILITY_EXPORTER=true` and an app-only OBS `token_resolver` is provided (otherwise `configure()` falls back to `ConsoleSpanExporter`). If the Agent 365 exporter is enabled without a resolver, configuration fails.
+> **Initialize your existing OpenTelemetry stack first, then call Agent 365's `configure()`.** The SDK detects the existing `TracerProvider` and adds its processors to it. Your existing backend receives every span; the Agent 365 backend also receives spans when `ENABLE_A365_OBSERVABILITY_EXPORTER=true` and an app-only OBS `token_resolver` is provided (otherwise `configure()` falls back to `ConsoleSpanExporter`). If the Agent 365 exporter is enabled without a resolver, the console fallback is kept and nothing is sent to Agent 365.
 
 The detection happens in [`config.py`](../libraries/microsoft-agents-a365-observability-core/microsoft_agents_a365/observability/core/config.py): if a real (non-no-op) `TracerProvider` is already set (detected via a non-None `resource` attribute), `configure()` adds an `_EnrichingBatchSpanProcessor` (wrapping the configured exporter) and a custom `SpanProcessor` to that provider rather than creating a new one.
 

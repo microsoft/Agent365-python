@@ -83,22 +83,31 @@ class TestAgent365Configure(unittest.TestCase):
         )
         self.assertTrue(result, "configure() should return True with exporter_options")
 
-    def test_agent365_exporter_options_defaults_to_legacy_s2s_true(self):
-        """Deprecated use_s2s_endpoint option defaults to True but routing ignores the value."""
-        self.assertTrue(Agent365ExporterOptions().use_s2s_endpoint)
+    def test_agent365_exporter_options_keeps_legacy_s2s_false_default(self):
+        """Deprecated use_s2s_endpoint option keeps legacy False default but routing ignores it."""
+        self.assertFalse(Agent365ExporterOptions().use_s2s_endpoint)
 
     @patch("microsoft_agents_a365.observability.core.config.is_agent365_exporter_enabled")
-    def test_configure_fails_when_exporter_enabled_without_token_resolver(self, mock_is_enabled):
-        """Enabled Agent 365 exporter requires an explicit app-only OBS resolver."""
+    def test_configure_uses_console_when_exporter_enabled_without_token_resolver(
+        self, mock_is_enabled
+    ):
+        """Existing console fallback remains when exporter is enabled without a resolver."""
         mock_is_enabled.return_value = True
 
-        result = configure(
-            service_name="test-service",
-            service_namespace="test-namespace",
-            exporter_options=Agent365ExporterOptions(),
-        )
+        with patch(
+            "microsoft_agents_a365.observability.core.config._telemetry_manager._logger"
+        ) as mock_logger:
+            result = configure(
+                service_name="test-service",
+                service_namespace="test-namespace",
+                exporter_options=Agent365ExporterOptions(),
+            )
 
-        self.assertFalse(result, "configure() should fail without an app-only token resolver")
+        self.assertTrue(result, "configure() should retain console fallback without a resolver")
+        mock_logger.warning.assert_called_once_with(
+            "is_agent365_exporter_enabled() not enabled or token_resolver not set."
+            " Falling back to console exporter."
+        )
 
     @patch("microsoft_agents_a365.observability.core.config._Agent365Exporter")
     @patch("microsoft_agents_a365.observability.core.config._EnrichingBatchSpanProcessor")

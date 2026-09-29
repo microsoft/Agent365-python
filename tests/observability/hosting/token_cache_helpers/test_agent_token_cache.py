@@ -112,34 +112,6 @@ async def test_refresh_accepts_async_resolver(token_cache):
     )
 
 
-@pytest.mark.asyncio
-async def test_legacy_refresh_shape_logs_once_and_does_not_exchange(
-    token_cache, mock_authorization, mock_turn_context, caplog
-):
-    """Removed TurnContext/Authorization refresh shape is a safe no-op."""
-    with caplog.at_level("ERROR"):
-        result1 = await token_cache.RefreshObservabilityToken(
-            "agent",
-            "tenant",
-            mock_turn_context,
-            mock_authorization,
-            ["api://old-scope/.default"],
-            "agentic",
-        )
-        result2 = await token_cache.RefreshObservabilityToken(
-            "agent",
-            "tenant",
-            mock_turn_context,
-            mock_authorization,
-        )
-
-    assert result1 is None
-    assert result2 is None
-    mock_authorization.exchange_token.assert_not_called()
-    assert token_cache.get_observability_token("agent", "tenant") is None
-    assert sum("Delegated OBS token" in record.message for record in caplog.records) == 1
-
-
 def test_legacy_register_shape_logs_once_and_does_not_exchange(
     token_cache, mock_authorization, mock_turn_context, caplog
 ):
@@ -156,6 +128,13 @@ def test_legacy_register_shape_logs_once_and_does_not_exchange(
     mock_authorization.exchange_token.assert_not_called()
     assert token_cache.get_observability_token("agent", "tenant") is None
     assert sum("Delegated OBS token" in record.message for record in caplog.records) == 1
+
+
+@pytest.mark.asyncio
+async def test_refresh_rejects_non_callable_resolver(token_cache):
+    """refresh_observability_token requires a callable resolver."""
+    with pytest.raises(TypeError, match="token_resolver must be callable"):
+        await token_cache.refresh_observability_token("agent", "tenant", "not-callable")
 
 
 @pytest.mark.asyncio

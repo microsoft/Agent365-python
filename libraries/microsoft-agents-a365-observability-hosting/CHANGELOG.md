@@ -7,16 +7,14 @@ All notable changes to this package will be documented in this file.
 ### Breaking Changes
 
 - **Hosting OBS token cache requires an app-only resolver** —
-  `refresh_observability_token(agent_id, tenant_id, token_resolver)` (and the
-  compatibility alias `RefreshObservabilityToken`) replaces delegated
-  TurnContext/Authorization token exchange for OBS export. The resolver receives
-  the configured OBS scopes and must acquire a token for the exporting agent
+  `refresh_observability_token(agent_id, tenant_id, token_resolver)` acquires
+  and caches app-only OBS tokens for export. The resolver receives the
+  configured OBS scopes and must acquire a token for the exporting agent
   identity, not its blueprint or the workload's user. Acquisition failures
   propagate to the caller; empty tokens fail refresh and clear stale cache state.
-- **Delegated OBS registration/refresh shapes are no-ops** —
-  `register_observability(...)` and untyped refresh calls with TurnContext /
-  Authorization arguments log one error and return no token. They never call
-  `Authorization.exchange_token` and never acquire a delegated OBS token.
+- **Delegated OBS registration is a no-op** — `register_observability(...)`
+  logs one error and stores no token. It never calls `Authorization.exchange_token`
+  and never acquires a delegated OBS token.
 
 ### Migration
 

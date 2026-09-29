@@ -13,11 +13,10 @@ pip install microsoft-agents-a365-observability-hosting
 Agent 365 observability export is S2S-only. Use
 `AgenticTokenCache.refresh_observability_token(agent_id, tenant_id, token_resolver)`
 from the exporter token resolver to acquire and cache an app-only OBS token for
-the exporting agent identity. `RefreshObservabilityToken(...)` is also available
-as a compatibility alias.
+the exporting agent identity.
 
 ```python
-from microsoft_agents_a365.observability.hosting import AgenticTokenCache
+from microsoft_agents_a365.observability.hosting.token_cache_helpers import AgenticTokenCache
 
 cache = AgenticTokenCache()
 
@@ -39,10 +38,19 @@ blueprint assertion or a delegated workload token. The cache retries transient
 acquisition failures, isolates entries by `(agent_id, tenant_id)`, respects JWT
 expiry with refresh skew, and uses a fallback TTL for opaque tokens.
 
-The previous delegated registration/refresh shapes using `TurnContext` and
-`Authorization.exchange_token` are removed for OBS export. They are accepted only
-as no-op compatibility shapes: the cache logs once, returns `None`, and never
-calls `exchange_token`.
+If you use an async exporter resolver, `_Agent365Exporter` runs it with
+`asyncio.run` on the BatchSpanProcessor worker thread. Create async clients
+inside that resolver; do not reuse `aiohttp` or `azure.identity.aio` clients
+bound to your app's event loop. Also, `force_flush()` and `shutdown()` called
+from inside a running event loop cannot await an async resolver, so that export
+fails with a logged error; call them with `await asyncio.to_thread(...)`. A
+synchronous, thread-safe cached resolver avoids both constraints and is the
+pattern used by the Agent365-Samples Python samples.
+
+The previous delegated registration shape using `TurnContext` and
+`Authorization.exchange_token` is removed for OBS export. `register_observability(...)`
+is accepted only as a no-op compatibility shape: the cache logs once, stores no
+token, and never calls `exchange_token`.
 
 Token resolvers should validate returned tokens before caching: reject any `scp`
 claim and any `idtyp` other than `app`; when `idtyp` is absent, accept only a
