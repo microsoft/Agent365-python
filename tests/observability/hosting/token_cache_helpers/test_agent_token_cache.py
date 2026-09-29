@@ -323,6 +323,50 @@ async def test_invalidate_one_then_all(token_cache):
 
 
 @pytest.mark.asyncio
+async def test_invalidate_token_is_not_undone_by_in_flight_refresh(token_cache):
+    """A refresh that completes after invalidate_token() does not repopulate the cache."""
+    release = asyncio.Event()
+
+    async def slow_resolver(agent_id: str, tenant_id: str, scopes: list[str]) -> str:
+        await release.wait()
+        return "token-acquired-before-invalidation"
+
+    in_flight = asyncio.create_task(
+        token_cache.refresh_observability_token("agent", "tenant", slow_resolver)
+    )
+    await asyncio.sleep(0)
+    token_cache.invalidate_token("agent", "tenant")
+    release.set()
+
+    assert await in_flight == "token-acquired-before-invalidation"
+    assert await token_cache.get_observability_token("agent", "tenant") is None
+
+    fresh = MagicMock(return_value="token-acquired-after-invalidation")
+    refreshed = await token_cache.refresh_observability_token("agent", "tenant", fresh)
+    assert refreshed == "token-acquired-after-invalidation"
+    fresh.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_refresh_returns_the_cached_token_it_checked(token_cache):
+    """A concurrent invalidation between the usability check and the return never yields None."""
+    token = make_jwt(300)
+    await token_cache.refresh_observability_token("agent", "tenant", lambda *_: token)
+    check_expiry = token_cache._is_expired
+
+    def invalidate_during_check(entry: AgenticTokenCache._Entry) -> bool:
+        expired = check_expiry(entry)
+        token_cache.invalidate_token("agent", "tenant")
+        return expired
+
+    token_cache._is_expired = invalidate_during_check
+    resolver = MagicMock(return_value="unused")
+
+    assert await token_cache.refresh_observability_token("agent", "tenant", resolver) == token
+    resolver.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_cache_evicts_oldest_entry_when_capacity_is_reached(token_cache):
     """Cache size is bounded and evicts the oldest key."""
     token_cache._max_cache_size = 2

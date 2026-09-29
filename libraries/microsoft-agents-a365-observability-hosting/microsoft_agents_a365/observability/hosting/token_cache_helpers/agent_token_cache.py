@@ -123,8 +123,9 @@ class AgenticTokenCache:
         key = self._make_key(agent_id, tenant_id)
         entry = self._get_or_create_entry(key)
         async with entry.lock:
-            if entry.token is not None and not self._is_expired(entry):
-                return entry.token
+            token = entry.token
+            if token is not None and not self._is_expired(entry):
+                return token
 
             return await self._acquire_token(agent_id, tenant_id, entry, token_resolver)
 
@@ -147,12 +148,16 @@ class AgenticTokenCache:
         return entry.token
 
     def invalidate_token(self, agent_id: str, tenant_id: str) -> None:
-        """Invalidate one cached token."""
+        """Invalidate one cached token.
+
+        The entry is removed, so a refresh already in flight for this identity
+        cannot repopulate the cache.
+        """
         key = self._make_key(agent_id, tenant_id)
         with self._lock:
-            entry = self._map.get(key)
-            if entry is not None:
-                self._clear_token(entry)
+            entry = self._map.pop(key, None)
+        if entry is not None:
+            self._clear_token(entry)
 
     def invalidate_all(self) -> None:
         """Invalidate all cached tokens."""
