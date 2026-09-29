@@ -21,7 +21,7 @@ from microsoft_agents_a365.runtime.environment_utils import get_observability_au
 
 logger = logging.getLogger(__name__)
 
-ObservabilityTokenResolver = Callable[[str, str, Sequence[str]], str | Awaitable[str | None] | None]
+ObservabilityTokenResolver = Callable[[str, str, list[str]], str | Awaitable[str | None] | None]
 
 
 @dataclass
@@ -271,6 +271,9 @@ class AgenticTokenCache:
         return True
 
     def _is_retriable_error(self, error: Exception) -> bool:
+        if isinstance(error, (TimeoutError, ConnectionError)):
+            return True
+
         message = str(error).lower()
         if "timeout" in message or "econnreset" in message or "network" in message:
             return True

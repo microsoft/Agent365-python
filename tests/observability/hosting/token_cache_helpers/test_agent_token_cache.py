@@ -208,6 +208,22 @@ async def test_refresh_retries_transient_failure_then_caches(token_cache, monkey
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("error", [TimeoutError(), ConnectionResetError()])
+async def test_refresh_retries_standard_transient_exceptions(token_cache, monkeypatch, error):
+    """Bare timeout and connection-reset errors are retried even without a message."""
+    token = make_jwt(300)
+    resolver = MagicMock(side_effect=[error, token])
+
+    async def no_sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", no_sleep)
+
+    assert await token_cache.refresh_observability_token("agent", "tenant", resolver) == token
+    assert resolver.call_count == 2
+
+
+@pytest.mark.asyncio
 async def test_refresh_deduplicates_concurrent_same_identity_acquisition(token_cache):
     """Concurrent refreshes for the same key share the first acquired token."""
     token = make_jwt(300)
