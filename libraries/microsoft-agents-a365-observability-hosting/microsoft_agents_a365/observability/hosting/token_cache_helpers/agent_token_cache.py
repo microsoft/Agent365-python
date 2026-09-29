@@ -169,8 +169,9 @@ class AgenticTokenCache:
             if not scopes:
                 raise ValueError("[AgenticTokenCache] No valid scopes")
 
-            if len(self._map) >= self._max_cache_size:
-                # Evict the oldest idle entry; an entry with a refresh in flight keeps its lock.
+            # Evict the oldest idle entries until there is room. Entries with a refresh in flight keep
+            # their lock, so the cache can briefly exceed its bound; the next insertion trims it back.
+            while len(self._map) >= self._max_cache_size:
                 idle_key = next(
                     (
                         existing_key
@@ -179,8 +180,9 @@ class AgenticTokenCache:
                     ),
                     None,
                 )
-                if idle_key is not None:
-                    del self._map[idle_key]
+                if idle_key is None:
+                    break
+                del self._map[idle_key]
 
             entry = AgenticTokenCache._Entry(scopes=scopes)
             self._map[key] = entry
@@ -289,9 +291,10 @@ class AgenticTokenCache:
         entry.acquired_on_ms = None
 
     def _log_removed_registration_once(self) -> None:
-        if self._removed_registration_logged:
-            return
-        self._removed_registration_logged = True
+        with self._lock:
+            if self._removed_registration_logged:
+                return
+            self._removed_registration_logged = True
         logger.error(
             "[AgenticTokenCache] Delegated OBS token registration was removed and does "
             "nothing; S2S OBS needs an app-only token. Call "

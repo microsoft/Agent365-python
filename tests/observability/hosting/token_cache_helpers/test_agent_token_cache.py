@@ -344,8 +344,8 @@ async def test_identity_churn_keeps_every_per_identity_registry_bounded(token_ca
 
 
 @pytest.mark.asyncio
-async def test_eviction_keeps_entry_with_refresh_in_flight(token_cache):
-    """Capacity eviction skips an identity whose refresh is still running."""
+async def test_eviction_keeps_in_flight_entry_then_trims_overflow(token_cache):
+    """Eviction skips a refresh that is still running; the next insertion restores the bound."""
     token_cache._max_cache_size = 1
     release = asyncio.Event()
 
@@ -365,3 +365,6 @@ async def test_eviction_keeps_entry_with_refresh_in_flight(token_cache):
     assert fast == "token-for-fast"
     assert await in_flight == "token-for-slow"
     assert await token_cache.get_observability_token("slow", "tenant") == "token-for-slow"
+
+    await token_cache.refresh_observability_token("next", "tenant", lambda *_: "token-for-next")
+    assert len(token_cache._map) == 1
