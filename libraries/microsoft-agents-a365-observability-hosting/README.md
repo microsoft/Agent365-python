@@ -38,13 +38,20 @@ acquisition failures, isolates entries by `(agent_id, tenant_id)`, respects JWT
 expiry with refresh skew, and uses a fallback TTL for opaque tokens.
 
 If you use an async exporter resolver, `_Agent365Exporter` runs it with
-`asyncio.run` on the BatchSpanProcessor worker thread. Create async clients
-inside that resolver; do not reuse `aiohttp` or `azure.identity.aio` clients
-bound to your app's event loop. Also, `force_flush()` and `shutdown()` called
-from inside a running event loop cannot await an async resolver, so that export
-fails with a logged error; call them with `await asyncio.to_thread(...)`. A
-synchronous, thread-safe cached resolver avoids both constraints and is the
-pattern used by the Agent365-Samples Python samples.
+`asyncio.run` on the thread that performs the export:
+
+- Scheduled batch exports and the final export during `shutdown()` run on the
+  BatchSpanProcessor worker thread. `shutdown()` still blocks its caller until
+  that export finishes.
+- `force_flush()` exports on the calling thread. If you call it from inside a
+  running event loop, the async resolver can't be awaited and that export
+  fails with a logged error.
+
+Create async clients inside the resolver; don't reuse `aiohttp` or
+`azure.identity.aio` clients bound to your app's event loop. From async code,
+call `force_flush()` and `shutdown()` with `await asyncio.to_thread(...)`. A
+synchronous, thread-safe cached resolver avoids these event-loop restrictions
+and is the pattern the Agent365-Samples Python samples use.
 Call `refresh_observability_token` only from the exporter's `token_resolver`;
 its per-key locks are `asyncio.Lock`s, so do not also refresh the same cache
 instance from your app's own event loop or threads.
