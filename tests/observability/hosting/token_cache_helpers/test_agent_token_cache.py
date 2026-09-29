@@ -253,7 +253,7 @@ async def test_opaque_token_uses_fresh_fallback_ttl(token_cache):
     await token_cache.refresh_observability_token("agent", "tenant", lambda *_: "opaque-token")
 
     assert await token_cache.get_observability_token("agent", "tenant") == "opaque-token"
-    entry = token_cache._map[AgenticTokenCache.make_key("agent", "tenant")]
+    entry = token_cache._map[AgenticTokenCache._make_key("agent", "tenant")]
     entry.acquired_on_ms = (time.time() * 1000) - token_cache._default_max_token_age_ms - 1
     assert await token_cache.get_observability_token("agent", "tenant") is None
 
@@ -307,3 +307,61 @@ async def test_cache_evicts_oldest_entry_when_capacity_is_reached(token_cache):
     assert await token_cache.get_observability_token("one", "tenant") is None
     assert await token_cache.get_observability_token("two", "tenant") == token
     assert await token_cache.get_observability_token("three", "tenant") == token
+
+
+@pytest.mark.asyncio
+async def test_separator_bearing_ids_do_not_share_a_cache_entry(token_cache):
+    """IDs that contain a separator character never alias another identity."""
+    first = MagicMock(return_value="token-for-first")
+    second = MagicMock(return_value="token-for-second")
+
+    assert await token_cache.refresh_observability_token("a:b", "c", first) == "token-for-first"
+    assert await token_cache.refresh_observability_token("a", "b:c", second) == "token-for-second"
+
+    second.assert_called_once()
+    assert await token_cache.get_observability_token("a:b", "c") == "token-for-first"
+    assert await token_cache.get_observability_token("a", "b:c") == "token-for-second"
+
+
+@pytest.mark.asyncio
+async def test_identity_churn_keeps_every_per_identity_registry_bounded(token_cache):
+    """Refresh locks live and die with cache entries, so identity churn stays bounded."""
+    token_cache._max_cache_size = 2
+    token = make_jwt(300)
+    for agent_id in ("one", "two", "three", "four"):
+        await token_cache.refresh_observability_token(agent_id, "tenant", lambda *_: token)
+
+    registries = {
+        name: len(value) for name, value in vars(token_cache).items() if isinstance(value, dict)
+    }
+    assert registries == {"_map": 2}
+
+    token_cache.invalidate_all()
+    registries = {
+        name: len(value) for name, value in vars(token_cache).items() if isinstance(value, dict)
+    }
+    assert registries == {"_map": 0}
+
+
+@pytest.mark.asyncio
+async def test_eviction_keeps_entry_with_refresh_in_flight(token_cache):
+    """Capacity eviction skips an identity whose refresh is still running."""
+    token_cache._max_cache_size = 1
+    release = asyncio.Event()
+
+    async def slow_resolver(agent_id: str, tenant_id: str, scopes: list[str]) -> str:
+        await release.wait()
+        return "token-for-slow"
+
+    in_flight = asyncio.create_task(
+        token_cache.refresh_observability_token("slow", "tenant", slow_resolver)
+    )
+    await asyncio.sleep(0)
+    fast = await token_cache.refresh_observability_token(
+        "fast", "tenant", lambda *_: "token-for-fast"
+    )
+
+    release.set()
+    assert fast == "token-for-fast"
+    assert await in_flight == "token-for-slow"
+    assert await token_cache.get_observability_token("slow", "tenant") == "token-for-slow"

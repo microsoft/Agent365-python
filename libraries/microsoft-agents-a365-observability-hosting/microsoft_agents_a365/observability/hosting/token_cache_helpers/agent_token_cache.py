@@ -11,7 +11,7 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from inspect import isawaitable
 from threading import Lock
 
@@ -59,6 +59,7 @@ class AgenticTokenCache:
         token: str | None = None
         expires_on_ms: float | None = None
         acquired_on_ms: float | None = None
+        lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
 
     _default_refresh_skew_ms = 60_000
     _default_max_token_age_ms = 3_600_000
@@ -67,8 +68,7 @@ class AgenticTokenCache:
 
     def __init__(self, observability_scopes: Sequence[str] | None = None) -> None:
         """Initialize the token cache."""
-        self._map: dict[str, AgenticTokenCache._Entry] = {}
-        self._key_locks: dict[str, asyncio.Lock] = {}
+        self._map: dict[tuple[str, str], AgenticTokenCache._Entry] = {}
         self._lock = Lock()
         self._observability_scopes = (
             None if observability_scopes is None else tuple(observability_scopes)
@@ -76,9 +76,9 @@ class AgenticTokenCache:
         self._removed_registration_logged = False
 
     @staticmethod
-    def make_key(agent_id: str, tenant_id: str) -> str:
-        """Create a cache key for an agent and tenant."""
-        return f"{agent_id}:{tenant_id}"
+    def _make_key(agent_id: str, tenant_id: str) -> tuple[str, str]:
+        # A tuple key keeps identities apart even when an ID contains a separator character.
+        return (agent_id, tenant_id)
 
     def register_observability(
         self,
@@ -118,10 +118,9 @@ class AgenticTokenCache:
         if not agent_id or not agent_id.strip() or not tenant_id or not tenant_id.strip():
             raise ValueError("[AgenticTokenCache] Agent and tenant IDs are required")
 
-        key = self.make_key(agent_id, tenant_id)
-        lock = self._get_key_lock(key)
-        async with lock:
-            entry = self._get_or_create_entry(key)
+        key = self._make_key(agent_id, tenant_id)
+        entry = self._get_or_create_entry(key)
+        async with entry.lock:
             if entry.token is not None and not self._is_expired(entry):
                 return entry.token
 
@@ -133,7 +132,7 @@ class AgenticTokenCache:
         This method is a pure cache read. It never acquires a token and never
         calls delegated token exchange.
         """
-        key = self.make_key(agent_id, tenant_id)
+        key = self._make_key(agent_id, tenant_id)
         with self._lock:
             entry = self._map.get(key)
 
@@ -147,7 +146,7 @@ class AgenticTokenCache:
 
     def invalidate_token(self, agent_id: str, tenant_id: str) -> None:
         """Invalidate one cached token."""
-        key = self.make_key(agent_id, tenant_id)
+        key = self._make_key(agent_id, tenant_id)
         with self._lock:
             entry = self._map.get(key)
             if entry is not None:
@@ -158,7 +157,7 @@ class AgenticTokenCache:
         with self._lock:
             self._map.clear()
 
-    def _get_or_create_entry(self, key: str) -> _Entry:
+    def _get_or_create_entry(self, key: tuple[str, str]) -> _Entry:
         with self._lock:
             entry = self._map.get(key)
             if entry is not None:
@@ -171,21 +170,21 @@ class AgenticTokenCache:
                 raise ValueError("[AgenticTokenCache] No valid scopes")
 
             if len(self._map) >= self._max_cache_size:
-                oldest_key = next(iter(self._map), None)
-                if oldest_key is not None:
-                    del self._map[oldest_key]
+                # Evict the oldest idle entry; an entry with a refresh in flight keeps its lock.
+                idle_key = next(
+                    (
+                        existing_key
+                        for existing_key, existing in self._map.items()
+                        if not existing.lock.locked()
+                    ),
+                    None,
+                )
+                if idle_key is not None:
+                    del self._map[idle_key]
 
             entry = AgenticTokenCache._Entry(scopes=scopes)
             self._map[key] = entry
             return entry
-
-    def _get_key_lock(self, key: str) -> asyncio.Lock:
-        with self._lock:
-            lock = self._key_locks.get(key)
-            if lock is None:
-                lock = asyncio.Lock()
-                self._key_locks[key] = lock
-            return lock
 
     def _get_effective_scopes(self) -> tuple[str, ...]:
         scopes = self._observability_scopes
