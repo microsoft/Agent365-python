@@ -68,6 +68,8 @@ class AgenticTokenCache:
 
     def __init__(self, observability_scopes: Sequence[str] | None = None) -> None:
         """Initialize the token cache."""
+        if isinstance(observability_scopes, str):
+            observability_scopes = (observability_scopes,)
         self._map: dict[tuple[str, str], AgenticTokenCache._Entry] = {}
         self._lock = Lock()
         self._observability_scopes = (

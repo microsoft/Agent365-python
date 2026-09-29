@@ -98,6 +98,17 @@ async def test_refresh_uses_custom_app_only_scopes():
 
 
 @pytest.mark.asyncio
+async def test_single_scope_string_is_not_split_into_characters():
+    """A bare scope string is treated as one scope."""
+    token_cache = AgenticTokenCache(observability_scopes="api://custom-obs/.default")
+    resolver = MagicMock(return_value=make_jwt(300))
+
+    await token_cache.refresh_observability_token("agent", "tenant", resolver)
+
+    resolver.assert_called_once_with("agent", "tenant", ["api://custom-obs/.default"])
+
+
+@pytest.mark.asyncio
 async def test_refresh_accepts_async_resolver(token_cache):
     """Async app-only resolvers are awaited by the hosting cache."""
     token = make_jwt(300)
