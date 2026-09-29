@@ -17,6 +17,34 @@ pip install microsoft-agents-a365-observability-core
 
 For usage examples and detailed documentation, see the [Observability documentation](https://learn.microsoft.com/microsoft-agent-365/developer/observability?tabs=python) on Microsoft Learn.
 
+### Agent 365 OBS export authentication
+
+When `ENABLE_A365_OBSERVABILITY_EXPORTER` is enabled, exports always use the
+S2S OTLP route:
+
+```text
+/observabilityService/tenants/{tenantId}/otlp/agents/{agentId}/traces?api-version=1
+```
+
+The deprecated `use_s2s_endpoint` option is ignored, even when set to `False`;
+domain overrides change only the host. The exporter never falls back to
+`/observability` and never reads delegated request-context tokens.
+
+Provide an app-only OBS `token_resolver(agent_id, tenant_id)` for the exporting
+agent identity. The resolver is invoked for each export batch and identity
+group, so it should cache the acquired token and refresh near expiry. Empty
+tokens or resolver failures fail that export batch without sending an HTTP
+request or retrying on a delegated route. If the Agent 365 exporter is enabled
+without a resolver, configuration fails instead of silently using another token.
+
+Resolvers should request the OBS resource `/.default` scope
+(`api://9b975845-388f-4429-889e-eab1ef63949c/.default`) and validate the token
+before returning it: reject any `scp` claim and any `idtyp` other than `app`;
+when `idtyp` is absent, accept only a non-empty `roles` array or a non-empty
+`oid` equal to `sub`; also verify `aud` is the OBS resource and the token is not
+expired. Workload authentication for MCP, Microsoft Graph, and other OBO calls
+is separate and unchanged.
+
 ## Support
 
 For issues, questions, or feedback:
@@ -33,4 +61,3 @@ For issues, questions, or feedback:
 Copyright (c) Microsoft Corporation. All rights reserved.
 
 Licensed under the MIT License - see the [LICENSE](../../LICENSE.md) file for details.
-

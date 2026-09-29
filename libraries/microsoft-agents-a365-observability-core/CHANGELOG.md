@@ -2,6 +2,33 @@
 
 All notable changes to this package will be documented in this file.
 
+## [Unreleased]
+
+### Breaking Changes
+
+- **OBS exports always use `/observabilityService`** — The `use_s2s_endpoint`
+  option is deprecated and ignored, even when `False`. Exports no longer select
+  or fall back to `/observability`. Provide an app-only OBS token independently
+  of your agent's workload auth; the S2S service rejects delegated `scp` tokens.
+- **OBS export requires the configured app-only resolver** — The exporter uses
+  only `token_resolver(agent_id, tenant_id)` for authentication. Missing
+  resolvers fail configuration when the Agent 365 exporter is enabled; empty
+  tokens or acquisition failures fail export without an HTTP request or
+  delegated fallback. The exporter invokes the resolver on every export
+  batch/identity group, so resolvers must cache the acquired token and refresh
+  only near expiry.
+
+### Migration
+
+- Request the OBS resource `/.default` scope
+  (`api://9b975845-388f-4429-889e-eab1ef63949c/.default`) for the exporting
+  agent identity. Do not use delegated `Agent365.Observability.OtelWrite` tokens
+  for OBS export.
+- Validate resolver tokens before returning them: reject any `scp` claim and any
+  `idtyp` other than `app`; when `idtyp` is absent, accept only a non-empty
+  `roles` array or a non-empty `oid` equal to `sub`; verify `aud` is the OBS
+  resource and the token is not expired.
+
 ## [0.3.0]
 
 ### Breaking Changes

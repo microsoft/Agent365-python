@@ -167,7 +167,13 @@ from microsoft_agents_a365.runtime import get_observability_authentication_scope
 
 # Get authentication scope for observability
 scope = get_observability_authentication_scope()
+# Returns ["api://9b975845-388f-4429-889e-eab1ef63949c/.default"]
 ```
+
+Observability export is S2S-only. This helper returns the OBS resource
+`/.default` scope for app-only token acquisition by the exporting agent identity;
+it must not be used to acquire delegated `Agent365.Observability.OtelWrite`
+tokens for OBS export.
 
 ## Type Definitions
 

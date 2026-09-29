@@ -106,7 +106,7 @@ from microsoft_agents_a365.observability.core import (
 configure(
     service_name="my-agent",
     service_namespace="my-namespace",
-    token_resolver=lambda agent_id, tenant_id: get_auth_token(),
+    token_resolver=lambda agent_id, tenant_id: get_app_only_obs_token(agent_id, tenant_id),
     cluster_category="prod"
 )
 
@@ -388,8 +388,8 @@ BatchSpanProcessor                       ← Accumulate spans
     ▼
 Agent365Exporter.export()                ← Send to backend
     ├── Partition by (tenant_id, agent_id)
-    ├── Resolve endpoint via PowerPlatformApiDiscovery
-    └── POST to /maven/agent365/agents/{agentId}/traces
+    ├── Resolve app-only OBS token via token_resolver(agent_id, tenant_id)
+    └── POST to /observabilityService/tenants/{tenantId}/otlp/agents/{agentId}/traces
 ```
 
 ### MCP Tool Discovery Flow
@@ -434,7 +434,7 @@ from microsoft_agents_a365.observability.core import configure
 configure(
     service_name="my-agent",
     service_namespace="my-namespace",
-    token_resolver=lambda agent_id, tenant_id: get_token(),
+    token_resolver=lambda agent_id, tenant_id: get_app_only_obs_token(agent_id, tenant_id),
     cluster_category="prod",  # or "ppe", "test"
     # Advanced options via exporter_options parameter:
     # max_queue_size=2048,

@@ -44,7 +44,7 @@ from microsoft_agents_a365.observability.core import configure
 configure(
     service_name="my-agent",
     service_namespace="my-namespace",
-    token_resolver=lambda agent_id, tenant_id: get_token(),
+    token_resolver=lambda agent_id, tenant_id: get_app_only_obs_token(agent_id, tenant_id),
     cluster_category="prod"
 )
 ```
@@ -219,11 +219,26 @@ This ensures that context values set via `BaggageBuilder` are recorded as span a
 **Export flow:**
 1. Partition spans by `(tenant_id, agent_id)` tuple
 2. For each partition:
-   - Resolve endpoint via `PowerPlatformApiDiscovery`
-   - Resolve auth token via `token_resolver(agent_id, tenant_id)`
+   - Resolve endpoint host via the configured domain override or production endpoint
+   - Build the S2S OTLP URL `/observabilityService/tenants/{tenant_id}/otlp/agents/{agent_id}/traces?api-version=1`
+   - Resolve an app-only OBS token via `token_resolver(agent_id, tenant_id)`
    - Build OTLP-like JSON payload
-   - POST to `/maven/agent365/agents/{agentId}/traces`
+   - POST to the S2S OTLP route
 3. Retry transient failures (408, 429, 5xx) up to 3 times with exponential backoff
+
+The exporter always uses the S2S `/observabilityService` route. The
+`use_s2s_endpoint` option is deprecated and ignored, including when `False`.
+There is no delegated `/observability` fallback for batch export, request export,
+401/403/404 responses, missing tokens, or token acquisition failures.
+
+`token_resolver` must return an app-only OBS token for the exporting agent and
+tenant. It is invoked on every export batch/identity group, so resolvers should
+cache and refresh tokens near expiry. Resolvers should request the OBS resource
+`/.default` scope (`api://9b975845-388f-4429-889e-eab1ef63949c/.default`) and
+validate the token before returning it: reject any `scp` claim and any `idtyp`
+other than `app`; when `idtyp` is absent, accept only a non-empty `roles` array
+or a non-empty `oid` equal to `sub`; verify `aud` is the OBS resource and the
+token is not expired.
 
 **Configuration via `Agent365ExporterOptions`:**
 ```python
@@ -232,7 +247,7 @@ from microsoft_agents_a365.observability.core.exporters import Agent365ExporterO
 options = Agent365ExporterOptions(
     cluster_category="prod",
     token_resolver=my_token_resolver,
-    use_s2s_endpoint=False,
+    use_s2s_endpoint=False,  # Deprecated and ignored; export still uses S2S.
     max_queue_size=2048,
     scheduled_delay_ms=5000,
     exporter_timeout_ms=30000,
