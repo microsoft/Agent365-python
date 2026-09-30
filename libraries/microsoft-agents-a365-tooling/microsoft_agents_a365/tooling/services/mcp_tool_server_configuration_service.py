@@ -158,6 +158,13 @@ class McpToolServerConfigurationService:
             servers = await self._load_servers_from_gateway(
                 agentic_app_id, auth_token, options, turn_context
             )
+            # Connection-readiness gating is the responsibility of the
+            # framework-specific tooling extensions (e.g.
+            # ``microsoft-agents-a365-tooling-extensions-agentframework``).
+            # Core simply parses and returns the per-server connection
+            # metadata (``connectivity_status``, ``all_connections_url``,
+            # ``missing_connections_url``) on each ``MCPServerConfig`` and
+            # never gates or raises on it.
             if (
                 authorization is not None
                 and auth_handler_name is not None
@@ -500,7 +507,8 @@ class McpToolServerConfigurationService:
                           ``activity.id``. A new UUID is generated when not provided.
 
         Returns:
-            List[MCPServerConfig]: List of MCP server configurations from tooling gateway.
+            List[MCPServerConfig]: Parsed MCP server configurations, each carrying its
+            per-server connection metadata.
 
         Raises:
             Exception: If there's an error communicating with the tooling gateway.
@@ -515,11 +523,11 @@ class McpToolServerConfigurationService:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(config_endpoint, headers=headers) as response:
                     if response.status == 200:
-                        mcp_servers = await self._parse_gateway_response(response)
+                        servers = await self._parse_gateway_response(response)
                         self._logger.info(
-                            f"Retrieved {len(mcp_servers)} MCP tool servers from tooling gateway"
+                            f"Retrieved {len(servers)} MCP tool servers from tooling gateway"
                         )
-                        return mcp_servers
+                        return servers
                     else:
                         raise Exception(f"HTTP {response.status}: {await response.text()}")
 
@@ -643,24 +651,30 @@ class McpToolServerConfigurationService:
         Parses the response from the tooling gateway.
 
         Supports two response shapes:
-        - Wrapped: ``{"mcpServers": [...]}``
+        - Wrapped: ``{"mcpServers": [...], "connectivityStatus": ..., ...}``
         - Raw array: ``[...]`` (legacy V1 gateway format)
+
+        Per-server connection metadata (``connectivityStatus``, ``allConnectionsUrl``,
+        ``missingConnectionsUrl``) is parsed onto each ``MCPServerConfig`` by
+        ``_parse_server_config``. Response-level (aggregate) fields are ignored — gating
+        is the responsibility of the framework-specific tooling extensions.
 
         Args:
             response: HTTP response from the gateway.
 
         Returns:
-            List of parsed MCP server configurations.
+            List[MCPServerConfig]: parsed MCP server configurations.
         """
         config_data = await response.json(content_type=None)
 
         server_elements: Optional[List[object]] = None
+
         if isinstance(config_data, list):
-            # Raw array format (legacy V1 gateway returns bare array)
+            # Raw array format (legacy V1 gateway returns bare array).
             self._logger.debug("Gateway returned raw array response")
             server_elements = config_data
         elif isinstance(config_data, dict) and isinstance(config_data.get("mcpServers"), list):
-            # Wrapped format: {"mcpServers": [...]}
+            # Wrapped format: {"mcpServers": [...], ...}
             self._logger.debug("Gateway returned wrapped mcpServers response")
             server_elements = config_data["mcpServers"]
         else:
@@ -725,6 +739,20 @@ class McpToolServerConfigurationService:
             publisher_raw = server_element.get("publisher")
             publisher = str(publisher_raw) if publisher_raw is not None else None
 
+            id_raw = server_element.get("id")
+            server_id = str(id_raw) if id_raw is not None else None
+
+            all_conn_raw = server_element.get("allConnectionsUrl")
+            all_connections_url = str(all_conn_raw) if all_conn_raw is not None else None
+
+            missing_conn_raw = server_element.get("missingConnectionsUrl")
+            missing_connections_url = (
+                str(missing_conn_raw) if missing_conn_raw is not None else None
+            )
+
+            status_raw = server_element.get("connectivityStatus")
+            connectivity_status = str(status_raw) if status_raw is not None else None
+
             return MCPServerConfig(
                 mcp_server_name=mcp_server_name,
                 mcp_server_unique_name=mcp_server_unique_name,
@@ -732,6 +760,10 @@ class McpToolServerConfigurationService:
                 audience=audience,
                 scope=scope,
                 publisher=publisher,
+                id=server_id,
+                all_connections_url=all_connections_url,
+                missing_connections_url=missing_connections_url,
+                connectivity_status=connectivity_status,
             )
 
         except Exception as exc:

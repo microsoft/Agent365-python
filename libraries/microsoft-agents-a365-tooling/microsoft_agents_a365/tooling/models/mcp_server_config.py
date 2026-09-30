@@ -37,6 +37,19 @@ class MCPServerConfig:
     #: Publisher identifier for the MCP server.
     publisher: Optional[str] = None
 
+    #: Unique identifier (GUID) of the MCP server from the gateway, if provided.
+    id: Optional[str] = None
+
+    #: Per-server URL to view/manage all connections for this server's connector.
+    all_connections_url: Optional[str] = None
+
+    #: Per-server URL to set up the connections this server is missing.
+    missing_connections_url: Optional[str] = None
+
+    #: Per-server connectivity status reported by the gateway ("Ready" or "Pending").
+    #: None when the source predates the field (dev manifest / legacy raw-array gateway).
+    connectivity_status: Optional[str] = None
+
     def __post_init__(self):
         """Validate the configuration after initialization."""
         if not self.mcp_server_name:
