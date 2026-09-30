@@ -17,11 +17,10 @@ The SDK supports production deployment across Microsoft 365, Teams, Copilot Stud
 
 ```
 Agent365-python/
-├── libraries/                              # Core packages (13 total)
+├── libraries/                              # Core packages (12 total)
 │   ├── microsoft-agents-a365-notifications/
 │   ├── microsoft-agents-a365-observability-core/
 │   ├── microsoft-agents-a365-observability-extensions-agentframework/
-│   ├── microsoft-agents-a365-observability-extensions-langchain/
 │   ├── microsoft-agents-a365-observability-extensions-openai/
 │   ├── microsoft-agents-a365-observability-extensions-semantickernel/
 │   ├── microsoft-agents-a365-observability-hosting/
@@ -129,7 +128,6 @@ Framework-specific instrumentations that integrate with the observability core:
 | Package | Purpose | Design Doc |
 |---------|---------|------------|
 | `extensions-openai` | Instrument OpenAI SDK client calls | [design.md](../libraries/microsoft-agents-a365-observability-extensions-openai/docs/design.md) |
-| `extensions-langchain` | LangChain callback integration | [design.md](../libraries/microsoft-agents-a365-observability-extensions-langchain/docs/design.md) |
 | `extensions-agentframework` | Microsoft Agents SDK integration | [design.md](../libraries/microsoft-agents-a365-observability-extensions-agentframework/docs/design.md) |
 | `extensions-semantickernel` | Semantic Kernel instrumentation | [design.md](../libraries/microsoft-agents-a365-observability-extensions-semantickernel/docs/design.md) |
 | `hosting` | Hosting-specific observability utilities | — |
@@ -461,7 +459,6 @@ tests/
 │   │   └── test_baggage_builder.py             # Context propagation tests
 │   └── extensions/
 │       ├── openai/
-│       ├── langchain/
 │       └── agentframework/
 ├── runtime/
 │   ├── test_power_platform_api_discovery.py

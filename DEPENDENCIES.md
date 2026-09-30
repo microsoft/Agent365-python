@@ -7,7 +7,6 @@ graph LR
     %% Package Nodes
     microsoft_agents_a365_notifications["microsoft-agents-a365-notifications"]
     microsoft_agents_a365_observability_core["microsoft-agents-a365-observability-core"]
-    microsoft_agents_a365_observability_extensions_langchain["microsoft-agents-a365-observability-extensions-langchain"]
     microsoft_agents_a365_observability_extensions_openai["microsoft-agents-a365-observability-extensions-openai"]
     microsoft_agents_a365_observability_extensions_semantic_kernel["microsoft-agents-a365-observability-extensions-semantic-kernel"]
     microsoft_agents_a365_observability_extensions_agent_framework["microsoft-agents-a365-observability-extensions-agent-framework"]
@@ -20,7 +19,6 @@ graph LR
 
     %% Dependencies
     microsoft_agents_a365_observability_core --> microsoft_agents_a365_runtime
-    microsoft_agents_a365_observability_extensions_langchain --> microsoft_agents_a365_observability_core
     microsoft_agents_a365_observability_extensions_openai --> microsoft_agents_a365_observability_core
     microsoft_agents_a365_observability_extensions_semantic_kernel --> microsoft_agents_a365_observability_core
     microsoft_agents_a365_observability_extensions_agent_framework --> microsoft_agents_a365_observability_core
@@ -37,7 +35,7 @@ graph LR
     classDef observability fill:#c8e6c9,stroke:#2e7d32,color:#142a14,stroke-width:2px
     class microsoft_agents_a365_observability_core observability
     classDef observability_extensions fill:#e8f5e9,stroke:#66bb6a,color:#1f3d1f,stroke-width:2px
-    class microsoft_agents_a365_observability_extensions_langchain,microsoft_agents_a365_observability_extensions_openai,microsoft_agents_a365_observability_extensions_semantic_kernel,microsoft_agents_a365_observability_extensions_agent_framework observability_extensions
+    class microsoft_agents_a365_observability_extensions_openai,microsoft_agents_a365_observability_extensions_semantic_kernel,microsoft_agents_a365_observability_extensions_agent_framework observability_extensions
     classDef tooling fill:#ffe0b2,stroke:#e65100,color:#331a00,stroke-width:2px
     class microsoft_agents_a365_tooling tooling
     classDef tooling_extensions fill:#fff3e0,stroke:#fb8c00,color:#4d2600,stroke-width:2px

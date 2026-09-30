@@ -77,7 +77,6 @@ The best way to consume this SDK is via our PyPI packages found here: [pypi.org]
 - **libraries/microsoft-agents-a365-notifications**: Microsoft Agent 365 Notifications SDK - Agent notification services and models
 - **libraries/microsoft-agents-a365-observability-core**: Microsoft Agent 365 Observability Core - Core observability functionality
 - **libraries/microsoft-agents-a365-observability-extensions-agentframework**: Agent Framework observability extensions
-- **libraries/microsoft-agents-a365-observability-extensions-langchain**: LangChain observability extensions
 - **libraries/microsoft-agents-a365-observability-extensions-openai**: OpenAI observability extensions
 - **libraries/microsoft-agents-a365-observability-extensions-semantickernel**: Semantic Kernel observability extensions
 - **libraries/microsoft-agents-a365-runtime**: Microsoft Agent 365 Runtime - Core runtime utilities and extensions

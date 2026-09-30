@@ -124,7 +124,6 @@ libraries/
 └── Framework Extensions (integrate with specific AI frameworks)
     ├── Observability Extensions
     │   ├── *-observability-extensions-openai
-    │   ├── *-observability-extensions-langchain
     │   ├── *-observability-extensions-semantickernel
     │   └── *-observability-extensions-agentframework
     │
