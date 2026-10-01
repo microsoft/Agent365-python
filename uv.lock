@@ -2961,6 +2961,7 @@ dependencies = [
     { name = "microsoft-agents-activity" },
     { name = "microsoft-agents-hosting-core" },
     { name = "pydantic" },
+    { name = "pyjwt" },
     { name = "typing-extensions" },
 ]
 
@@ -2984,6 +2985,7 @@ requires-dist = [
     { name = "microsoft-agents-hosting-core" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pydantic" },
+    { name = "pyjwt" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
@@ -3093,7 +3095,9 @@ provides-extras = ["dev", "test"]
 name = "microsoft-agents-a365-observability-extensions-langchain"
 source = { editable = "libraries/microsoft-agents-a365-observability-extensions-langchain" }
 dependencies = [
+    { name = "anyio" },
     { name = "langchain-core" },
+    { name = "langsmith" },
     { name = "microsoft-agents-a365-observability-core" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-instrumentation" },
@@ -3116,8 +3120,10 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio" },
     { name = "black", marker = "extra == 'dev'" },
     { name = "langchain-core" },
+    { name = "langsmith" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "opentelemetry-api" },
@@ -3136,11 +3142,14 @@ provides-extras = ["dev", "test"]
 name = "microsoft-agents-a365-observability-extensions-openai"
 source = { editable = "libraries/microsoft-agents-a365-observability-extensions-openai" }
 dependencies = [
+    { name = "anyio" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-observability-core" },
     { name = "openai-agents" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-instrumentation" },
     { name = "opentelemetry-sdk" },
+    { name = "python-multipart" },
 ]
 
 [package.optional-dependencies]
@@ -3158,7 +3167,9 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio" },
     { name = "black", marker = "extra == 'dev'" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "openai-agents" },
@@ -3169,6 +3180,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "python-multipart" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
@@ -3177,10 +3189,13 @@ provides-extras = ["dev", "test"]
 name = "microsoft-agents-a365-observability-extensions-semantic-kernel"
 source = { editable = "libraries/microsoft-agents-a365-observability-extensions-semantickernel" }
 dependencies = [
+    { name = "anyio" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-observability-core" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-instrumentation" },
     { name = "opentelemetry-sdk" },
+    { name = "python-multipart" },
     { name = "semantic-kernel" },
 ]
 
@@ -3199,7 +3214,9 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio" },
     { name = "black", marker = "extra == 'dev'" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-observability-core", editable = "libraries/microsoft-agents-a365-observability-core" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "opentelemetry-api" },
@@ -3209,6 +3226,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "python-multipart" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "semantic-kernel" },
 ]
@@ -3271,6 +3289,7 @@ source = { editable = "libraries/microsoft-agents-a365-tooling" }
 dependencies = [
     { name = "microsoft-agents-hosting-core" },
     { name = "pydantic" },
+    { name = "pyjwt" },
     { name = "typing-extensions" },
 ]
 
@@ -3289,6 +3308,7 @@ requires-dist = [
     { name = "microsoft-agents-hosting-core" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pydantic" },
+    { name = "pyjwt" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },
@@ -3301,10 +3321,14 @@ name = "microsoft-agents-a365-tooling-extensions-agentframework"
 source = { editable = "libraries/microsoft-agents-a365-tooling-extensions-agentframework" }
 dependencies = [
     { name = "agent-framework" },
+    { name = "anyio" },
     { name = "azure-identity" },
     { name = "httpx" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-tooling" },
     { name = "microsoft-agents-hosting-core" },
+    { name = "pyasn1" },
+    { name = "python-multipart" },
     { name = "typing-extensions" },
 ]
 
@@ -3324,16 +3348,20 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "agent-framework" },
+    { name = "anyio" },
     { name = "azure-identity" },
     { name = "black", marker = "extra == 'dev'" },
     { name = "httpx" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
     { name = "microsoft-agents-hosting-core" },
     { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pyasn1" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "python-multipart" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "typing-extensions" },
 ]
@@ -3382,9 +3410,13 @@ provides-extras = ["dev", "test"]
 name = "microsoft-agents-a365-tooling-extensions-googleadk"
 source = { editable = "libraries/microsoft-agents-a365-tooling-extensions-googleadk" }
 dependencies = [
+    { name = "anyio" },
     { name = "google-adk" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-tooling" },
     { name = "microsoft-agents-hosting-core" },
+    { name = "pyasn1" },
+    { name = "python-multipart" },
 ]
 
 [package.optional-dependencies]
@@ -3402,15 +3434,19 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio" },
     { name = "black", marker = "extra == 'dev'" },
     { name = "google-adk" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
     { name = "microsoft-agents-hosting-core" },
     { name = "mypy", marker = "extra == 'dev'" },
+    { name = "pyasn1" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "python-multipart" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
@@ -3419,9 +3455,12 @@ provides-extras = ["dev", "test"]
 name = "microsoft-agents-a365-tooling-extensions-openai"
 source = { editable = "libraries/microsoft-agents-a365-tooling-extensions-openai" }
 dependencies = [
+    { name = "anyio" },
     { name = "asyncio-throttle" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-tooling" },
     { name = "openai-agents" },
+    { name = "python-multipart" },
 ]
 
 [package.optional-dependencies]
@@ -3439,8 +3478,10 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio" },
     { name = "asyncio-throttle" },
     { name = "black", marker = "extra == 'dev'" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "openai-agents" },
@@ -3448,6 +3489,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "python-multipart" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "test"]
@@ -3457,7 +3499,10 @@ name = "microsoft-agents-a365-tooling-extensions-semantickernel"
 source = { editable = "libraries/microsoft-agents-a365-tooling-extensions-semantickernel" }
 dependencies = [
     { name = "aiohttp" },
+    { name = "anyio" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-tooling" },
+    { name = "python-multipart" },
     { name = "semantic-kernel" },
 ]
 
@@ -3477,13 +3522,16 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
+    { name = "anyio" },
     { name = "black", marker = "extra == 'dev'" },
+    { name = "mcp" },
     { name = "microsoft-agents-a365-tooling", editable = "libraries/microsoft-agents-a365-tooling" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "python-multipart" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "semantic-kernel" },
 ]

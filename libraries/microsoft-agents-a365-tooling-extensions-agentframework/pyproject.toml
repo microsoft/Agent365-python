@@ -29,6 +29,11 @@ dependencies = [
     "azure-identity",
     "typing-extensions",
     "httpx",
+    # Publish security floors for the framework's transitive dependencies.
+    "mcp",
+    "anyio",
+    "python-multipart",
+    "pyasn1",
 ]
 
 [project.urls]

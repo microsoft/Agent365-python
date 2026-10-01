@@ -71,6 +71,8 @@ override-dependencies = [
 # Centralized version constraints for all external dependencies
 # Individual package pyproject.toml files declare dependencies by name only (no version)
 # uv applies these constraints during dependency resolution
+# Security-critical transitive dependencies must also be declared by affected libraries
+# so the build backend includes their minimum versions in published wheel metadata.
 constraint-dependencies = [
     # --- Observability (OpenTelemetry) ---
     "opentelemetry-api >= 1.36.0",
