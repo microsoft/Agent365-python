@@ -26,6 +26,10 @@ dependencies = [
     "microsoft-agents-a365-tooling",
     "semantic-kernel",
     "aiohttp",
+    # Publish security floors for the framework's transitive dependencies.
+    "mcp",
+    "anyio",
+    "python-multipart",
 ]
 
 [project.urls]

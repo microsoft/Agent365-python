@@ -30,6 +30,10 @@ dependencies = [
     "opentelemetry-api",
     "opentelemetry-sdk",
     "opentelemetry-instrumentation",
+    # Publish security floors for the framework's transitive dependencies.
+    "mcp",
+    "anyio",
+    "python-multipart",
 ]
 
 [project.urls]

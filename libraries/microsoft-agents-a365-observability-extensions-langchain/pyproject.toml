@@ -31,6 +31,9 @@ dependencies = [
     "opentelemetry-sdk",
     "opentelemetry-instrumentation",
     "wrapt",
+    # Publish security floors for LangChain's transitive dependencies.
+    "langsmith",
+    "anyio",
 ]
 
 [project.urls]

@@ -30,6 +30,8 @@ dependencies = [
     "microsoft-agents-activity",
     "microsoft-agents-hosting-core",
     "pydantic",
+    # Publish the security floor for the hosting SDK's transitive dependency.
+    "PyJWT",
 ]
 
 [project.urls]
