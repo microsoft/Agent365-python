@@ -108,6 +108,16 @@ User-Agent: Agent365SDK/0.1.0 (...)
 
 The gateway returns the same JSON structure, but `mcpServerUniqueName` contains the full endpoint URL.
 
+### Connection metadata (per-server)
+
+The core service parses each server's connection metadata — `connectivityStatus`,
+`allConnectionsUrl`, and `missingConnectionsUrl` — onto the returned `MCPServerConfig`
+objects, but it does **not** gate on them. Connection-readiness gating is the
+responsibility of the framework-specific tooling extensions (e.g.
+`microsoft-agents-a365-tooling-extensions-agentframework`), which decide how to surface a
+`Pending` server and raise/handle the appropriate error. See the relevant extension's
+design document for details.
+
 ### MCPServerConfig ([models/mcp_server_config.py](../microsoft_agents_a365/tooling/models/mcp_server_config.py))
 
 Data class representing an MCP server configuration:
