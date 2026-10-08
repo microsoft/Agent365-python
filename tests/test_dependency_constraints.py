@@ -23,6 +23,7 @@ INTERNAL_PACKAGES = {
     "microsoft-agents-a365-tooling",
     "microsoft-agents-a365-tooling-extensions-openai",
     "microsoft-agents-a365-tooling-extensions-agentframework",
+    "microsoft-agents-a365-tooling-extensions-agenthooks",
     "microsoft-agents-a365-tooling-extensions-semantickernel",
     "microsoft-agents-a365-tooling-extensions-azureaifoundry",
     "microsoft-agents-a365-observability-core",
