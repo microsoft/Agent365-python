@@ -294,11 +294,15 @@ if result is not None and not result.allowed:
 `agent-hooks/0.1`, the timestamp is UTC, a missing or negative `sequence` is numbered after the highest sequence seen in
 the session, `agent.framework` is lowercased to `[a-z0-9_-]` (default `agent365`), `target` equals the point's field,
 `tool_call` and `tool_result` keep only spec members (non-object tool arguments become `{"input": ...}`), and loosely
-filled optional fields (`extensions`, `model`, `tools`, `messages`, `actor`) are repaired or dropped. `tenant.id` is
+filled optional fields (`extensions`, `model`, `tools`, `messages`, `actor`, `request_id`, `trace`) are repaired or
+dropped; `tool_call.content_hash` and `tool_result.duration_ms` are kept when they meet the spec. `tenant.id` is
 always the agent's tenant, which the token is issued for and Defender requires; `agent.id`, `actor`, `request_id` and
-`model.id` are filled from `DefenderRtpAgentContext` when the host did not set them. Every string value except the
-protocol fields (`spec`, `interception_point`, `timestamp`) is cut to at most `max_content_characters` characters,
-ending with a `...[truncated N chars]` marker when it fits. Each call sends a unique `x-ms-correlation-id`. The
+`model.id` are filled from `DefenderRtpAgentContext` when the host did not set them. The envelope (spec, timestamp,
+sequence, agent, session, tenant, actor, request, model, trace, and roles, tool names and ids) is never cut, so the
+request validates and correlates whatever the limit. Content is cut to fit (see **Long content**), and every string
+and key is sent as valid Unicode: split surrogate pairs are rejoined and lone surrogates become U+FFFD, since a lone
+surrogate cannot be encoded and would otherwise keep the request from being sent. NaN and infinities are sent as
+text. The copy is built from the context without copying it whole. Each call sends a unique `x-ms-correlation-id`. The
 endpoint must be an absolute HTTPS URL, and redirects are not followed (a 3xx follows the fail mode); the client keeps
 a private copy of its options, so later changes to the caller's object do not reach it.
 
@@ -320,11 +324,22 @@ with `error` and `http_status`) and is allowed, or blocked when `A365_DEFENDER_R
 Defender's failed validation rules (`diagnostics.validationErrors`) in `error`. A `transform` verdict blocks, because
 this SDK version does not apply it.
 
-**Long content:** when the content under decision (`target`: the input, a tool call's arguments, a tool result, or the
-output) is longer than `max_content_characters`, Defender evaluates a truncated copy and the result has
-`truncated=True`. A block stays a block; an allow does not cover the rest of the content, so `allowed` follows the fail
-mode, `error` says so, and `verified` is false. Raising the limit is the remedy for long-content agents; chunked
-evaluation is a follow-up.
+**Long content:** each content string is cut to at most `max_content_characters` characters, ending with a
+`...[truncated N chars]` marker when it fits, and all content in one request shares a budget of four times that
+(each string, key, number and kept-whole name counts its length, every other value one), so the request and the time
+to prepare it stay bounded. The content under decision (`target`: the input, a tool call's arguments, a tool result,
+or the output) is sent twice, as the point's field and as `target`, so it may use half of the budget. The rest goes, in
+order, to the call's arguments at `post_tool_call`, tool declarations (the called tool's first, so a short budget never
+drops it), the most recent messages, extensions, and any other member; what does not fit is dropped. Containers nested
+deeper than 32 levels are cut too. When the content under decision is cut, Defender evaluates a truncated copy and the
+result has `truncated=True`. A block (`deny` or `transform`) stays a block; an allow does not cover the rest of the
+content, so `allowed` follows the fail mode, `error` says so, and `verified` is false. Raising the limit is the remedy
+for long-content agents; chunked evaluation is a follow-up.
+
+**Unexpected shapes:** every optional node is shape-checked before it is read: a context member (for example a string
+`model` or `a365` extension), a verdict member (`transform`, `warnings`, `result_labels`), a `400` body's
+`diagnostics`, a token's payload and the token endpoint's response. One of an unexpected shape is ignored, so it never
+turns Defender's verdict into an unavailable result.
 
 ## File Structure
 
@@ -366,7 +381,7 @@ microsoft_agents_a365/tooling/
 | `A365_DEFENDER_RTP_FAIL_MODE` | Outcome when no verdict is obtained | `open` (default), `closed` |
 | `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | Per-call timeout for token acquisition and evaluation | Positive integer; default `10000` |
 | `A365_DEFENDER_RTP_AUTHENTICATION_SCOPE` | Token scope | Default `api://86a21212-634e-4553-b3d6-e477e4c9d9ec/.default` |
-| `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | Maximum characters per string value sent | Positive integer; default `20000` |
+| `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | Maximum characters per content string; all content in a request shares four times that | Positive integer; default `20000` |
 
 ## Error Handling
 

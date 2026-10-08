@@ -324,14 +324,28 @@ async def test_does_not_call_defender_for_points_it_does_not_evaluate() -> None:
 
 
 @pytest.mark.asyncio
-async def test_allows_without_a_call_when_no_identity_is_resolved() -> None:
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_follows_the_fail_mode_when_no_identity_is_resolved(fail_closed: bool) -> None:
     builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s-6")
 
-    async with harness(lambda _: json_response({"decision": "deny"}), resolve_nothing=True) as h:
+    async with harness(
+        lambda _: json_response({"decision": "allow"}),
+        fail_closed=fail_closed,
+        resolve_nothing=True,
+    ) as h:
         record = await h.emitter.emit_unchecked(builder.input(content="hello"))
 
-    assert record.proceeds is True
     assert h.endpoint.bodies == []
+    (evaluation,) = h.evaluations
+    assert evaluation.evaluated is False
+    assert evaluation.error == "no agent identity was resolved"
+    assert record.proceeds is not fail_closed
+    if fail_closed:
+        assert record.verdict.reason == "runtime_error:defender_unverified"
+    else:
+        (warning,) = record.verdict.warnings
+        assert warning.reason == "defender:unverified"
+        assert warning.message == "no agent identity was resolved"
 
 
 @pytest.mark.asyncio
@@ -608,6 +622,27 @@ async def test_a_defender_deny_of_truncated_content_blocks_even_when_failing_ope
     assert record.verdict.reason == "defender:block:prevention_blocked"
 
 
+def transform_everything(_body: JsonObject) -> FakeResponse:
+    return json_response({
+        "decision": "transform",
+        "transform": {"path": "/target", "value": "[redacted]"},
+    })
+
+
+@pytest.mark.asyncio
+async def test_a_defender_transform_of_truncated_content_blocks_even_when_failing_open() -> None:
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    async with harness(transform_everything) as h:
+        record = await h.emitter.emit_unchecked(builder.input(content=PADDING + "secret"))
+
+    assert record.proceeds is False
+    assert record.verdict.reason == "defender:block"
+    (evaluation,) = h.evaluations
+    assert evaluation.truncated is True
+    assert evaluation.verified is True
+
+
 @pytest.mark.asyncio
 async def test_content_within_the_limit_is_allowed_without_warnings() -> None:
     builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
@@ -617,6 +652,21 @@ async def test_content_within_the_limit_is_allowed_without_warnings() -> None:
 
     assert record.proceeds is True
     assert record.verdict.warnings == ()
+
+
+@pytest.mark.asyncio
+async def test_a_lone_surrogate_in_emitted_content_never_fails_open() -> None:
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    async with harness(deny_block_me) as h:
+        record = await h.emitter.emit_unchecked(
+            builder.pre_tool_call(call_id="call-1", name="Run", args={"text": "\ud800BLOCK_ME"})
+        )
+
+    # agent-hooks may reject the context itself; when it passes it on, Defender evaluates the
+    # normalized text. Either way the default fail-open mode does not allow it.
+    assert record.proceeds is False
+    assert all(evaluation.evaluated for evaluation in h.evaluations)
 
 
 def test_maps_an_allow_of_a_truncated_copy_to_an_unverified_verdict() -> None:

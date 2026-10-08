@@ -72,7 +72,7 @@ class DefenderRtpTokenResolvers:
             assertion = await (
                 get_assertion(tenant_id, agent_id) if takes_tenant else get_assertion(agent_id)
             )
-            if not assertion:
+            if not isinstance(assertion, str) or not assertion:
                 raise RuntimeError("The agent connection returned no agent identity assertion.")
 
             form = {

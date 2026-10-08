@@ -51,10 +51,12 @@ class DefenderRtpOptions:
         fail_closed: When true, an evaluation that returns no verdict blocks
             (``A365_DEFENDER_RTP_FAIL_MODE=closed``); otherwise it is allowed and reported as
             not evaluated.
-        max_content_characters: Maximum characters per string value sent to Defender
-            (``A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS``). When the content under decision is
-            longer, Defender evaluates a truncated copy; its deny still blocks, but its allow
-            follows the fail mode.
+        max_content_characters: Maximum characters per content string sent to Defender
+            (``A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS``); all content in one request shares a
+            budget of four times that, of which the content under decision (sent twice) may use
+            half. The envelope (ids, names, roles) is not cut. When the content under decision
+            does not fit, Defender evaluates a truncated copy; its deny still blocks, but its
+            allow follows the fail mode.
     """
 
     DEFENDER_API_APP_ID: ClassVar[str] = DEFENDER_API_APP_ID

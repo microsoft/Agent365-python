@@ -58,11 +58,11 @@ class A365DefenderInterceptor:
     clamped, keeping the context's session, sequence and tool call ids), and Defender's verdict
     decides: ``deny`` blocks the action. Other points are allowed without a call.
 
-    When no verdict is obtained (transport, authentication or validation failure, or an error
-    from the call resolver or the token resolver), the verdict follows
-    :attr:`DefenderRtpOptions.fail_closed`: allow with a ``defender:unverified`` warning, or
-    deny with reason ``runtime_error:defender_unverified``, which is never reported as a
-    detection.
+    When no verdict is obtained (transport, authentication or validation failure, no agent
+    identity resolved, or an error from the call resolver or the token resolver), the verdict
+    follows :attr:`DefenderRtpOptions.fail_closed`: allow with a ``defender:unverified``
+    warning, or deny with reason ``runtime_error:defender_unverified``, which is never reported
+    as a detection.
     """
 
     NAME: Final[str] = "defender"
@@ -79,8 +79,10 @@ class A365DefenderInterceptor:
         Args:
             client: The Defender client.
             resolve_call: Returns the agent identity and token resolver for a context, for
-                example from the current turn; ``None`` allows the context without a call. It
-                is called only for the points Defender evaluates while Defender RTP is enabled.
+                example from the current turn. It is called only for the points Defender
+                evaluates while Defender RTP is enabled. ``None`` (no agent identity, for
+                example an activity without an agentic instance or tenant id) follows the fail
+                mode, like an unavailable Defender.
             on_evaluated: Receives each evaluation, for logging and telemetry (for example the
                 correlation id). An exception it raises is logged and does not change the
                 verdict.
@@ -114,21 +116,22 @@ class A365DefenderInterceptor:
             return Verdict.allow()
 
         result: DefenderRtpEvaluationResult | None
+        point_name = point if isinstance(point, str) else ""
         try:
             resolved = self._resolve_call(context)
             call = await resolved if inspect.isawaitable(resolved) else resolved
             if call is None:
-                return Verdict.allow()
-
-            result = await self._client.evaluate_hook_context(
-                context, call.agent, call.token_resolver
-            )
+                # No agent identity (for example an activity without an agentic instance or
+                # tenant id) means no verdict can be obtained, never an allow.
+                result = self._client.unavailable(point_name, "no agent identity was resolved")
+            else:
+                result = await self._client.evaluate_hook_context(
+                    context, call.agent, call.token_resolver
+                )
         except Exception as error:
             # An invalid context or identity, or a failing call resolver, is never a verdict:
             # it follows the fail mode.
-            result = self._client.unavailable(
-                point if isinstance(point, str) else "", f"{type(error).__name__}: {error}"
-            )
+            result = self._client.unavailable(point_name, f"{type(error).__name__}: {error}")
 
         if result is None:
             return Verdict.allow()

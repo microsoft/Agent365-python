@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import copy
 import json
 import time
@@ -514,6 +515,455 @@ async def test_long_context_outside_the_content_under_decision_does_not_affect_t
     assert result.allowed is True
 
 
+# ─── encoding and the content budget ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("text", "sent"),
+    [
+        (json.loads('"\\ud800BLOCK_ME"'), "\ufffdBLOCK_ME"),
+        ("BLOCK_ME\udfff", "BLOCK_ME\ufffd"),
+        ("\ud83d" + "\ude00BLOCK_ME", "\U0001f600BLOCK_ME"),
+    ],
+    ids=["lone high surrogate", "lone low surrogate", "split pair"],
+)
+async def test_a_surrogate_does_not_keep_the_content_from_defender(text: str, sent: str) -> None:
+    client, session = create(deny_block_me)
+
+    result = await client.evaluate_hook_context(input_context(text), AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert body["input"]["content"] == sent
+    assert result is not None
+    assert result.evaluated is True
+    assert result.allowed is False
+
+
+@pytest.mark.asyncio
+async def test_keys_that_become_equal_are_both_sent() -> None:
+    client, session = create(deny_block_me)
+    args = {chr(0xD800): "benign", chr(0xDC00): "BLOCK_ME"}
+    context = tool_context("pre_tool_call", tool_call={"id": "c-1", "name": "Run", "args": args})
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["tool_call"]["args"] == {"\ufffd": "benign", "\ufffd~1": "BLOCK_ME"}
+    assert result is not None and result.allowed is False
+
+
+@pytest.mark.asyncio
+async def test_sends_non_finite_numbers_as_text() -> None:
+    client, session = create(deny_block_me)
+    value = [float("nan"), float("inf"), float("-inf"), "BLOCK_ME"]
+    context = tool_context(
+        "post_tool_call",
+        tool_call={"id": "c-1", "name": "Query", "args": {}},
+        tool_result={"value": value, "is_error": False},
+    )
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert body["target"] == ["NaN", "Infinity", "-Infinity", "BLOCK_ME"]
+    assert result is not None and result.allowed is False
+
+
+@pytest.mark.asyncio
+async def test_a_large_tool_result_is_cut_to_the_content_budget() -> None:
+    client, session = create()
+    value = [{"title": f"result {i}", "snippet": "x" * 150} for i in range(100_000)]
+    context = tool_context(
+        "post_tool_call",
+        tool_call={"id": "c-1", "name": "Search", "args": {"query": "release notes"}},
+        tool_result={"value": value, "is_error": False},
+    )
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert len(json.dumps(body)) < 250_000, "within twice the budget, as target repeats it"
+    assert 0 < len(body["target"]) < 1000
+    assert body["target"][0] == value[0]
+    assert result is not None
+    assert result.truncated is True
+    assert result.verified is False
+    assert result.error == TRUNCATED_ERROR
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_content_under_decision_beyond_the_budget_follows_the_fail_mode(
+    fail_closed: bool,
+) -> None:
+    client, session = create(fail_closed=fail_closed)
+    args = {f"part{i}": "p" * 20000 for i in range(5)}
+    context = tool_context("pre_tool_call", tool_call={"id": "c-1", "name": "Upload", "args": args})
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["target"]["part0"] == args["part0"]
+    assert "part4" not in body["target"]
+    assert result is not None
+    assert result.truncated is True
+    assert result.allowed is not fail_closed
+
+
+@pytest.mark.asyncio
+async def test_the_content_under_decision_may_use_half_of_the_budget() -> None:
+    # A budget of 4 x 100; the content under decision is sent twice, so it may use 200.
+    client, session = create(max_content_characters=100)
+    args = {"a": "x" * 100, "b": "y" * 100, "c": "z" * 100}
+    context = tool_context("pre_tool_call", tool_call={"id": "c-1", "name": "Run", "args": args})
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    target = body["target"]
+    assert target["a"] == args["a"]
+    assert target["b"].startswith("y") and len(target["b"]) == 97
+    assert "c" not in target
+    assert result is not None and result.truncated is True
+
+
+@pytest.mark.asyncio
+async def test_the_rest_goes_to_arguments_then_tools_with_the_called_tool_first() -> None:
+    # A budget of 4 x 100; the 50-character result is sent twice and leaves 300.
+    client, session = create(max_content_characters=100)
+    context = tool_context(
+        "post_tool_call",
+        tool_call={"id": "c-1", "name": "Search", "args": {"q": "a" * 100}},
+        tool_result={"value": "r" * 50, "is_error": False},
+        tools=[
+            {"name": "Other", "description": "o" * 100},
+            {"name": "Search", "description": "s" * 100},
+        ],
+        messages=[{"role": "user", "content": "hi"}],
+        extensions={"a365": {"note": "n"}},
+    )
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["target"] == "r" * 50
+    assert body["tool_call"]["args"] == {"q": "a" * 100}
+    called, other = body["tools"]
+    assert called == {"name": "Search", "description": "s" * 100}
+    assert other["name"] == "Other"
+    assert 0 < len(other["description"]) < 100
+    assert "messages" not in body
+    assert "extensions" not in body
+    assert result is not None and result.truncated is False
+
+
+@pytest.mark.asyncio
+async def test_keeps_the_newest_messages() -> None:
+    # The 20000-character input is sent twice and leaves 40000 of the 80000 budget.
+    client, session = create()
+    content = "c" * 20000
+    messages = [{"role": "user", "content": f"{i:02d}" + "m" * 19998} for i in range(10)]
+    context = input_context(content)
+    context["messages"] = messages
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["input"]["content"] == content
+    older, newest = body["messages"]
+    assert newest == messages[9], "the newest message is kept whole"
+    assert older["content"].startswith("08") and len(older["content"]) < 20000
+    assert result is not None
+    assert result.truncated is False
+    assert result.verified is True
+
+
+@pytest.mark.asyncio
+async def test_extensions_and_then_other_members_share_what_is_left() -> None:
+    # A budget of 4 x 100; the 100-character input is sent twice and leaves 200.
+    client, session = create(max_content_characters=100)
+    content = "BLOCK_ME".ljust(100, ".")
+    context = input_context(content)
+    context["messages"] = [{"role": "user", "content": "m" * 20}]
+    context["extensions"] = {"a365": {"note": "e" * 50}}
+    context["custom"] = "c" * 60
+    context["more"] = "x" * 100
+    context["last"] = "l"
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["input"]["content"] == content
+    assert body["messages"] == context["messages"]
+    assert body["extensions"] == context["extensions"]
+    assert body["custom"] == context["custom"]
+    assert 0 < len(body["more"]) < 100
+    assert "last" not in body
+    assert result is not None and result.truncated is False
+
+
+@pytest.mark.asyncio
+async def test_drops_tool_members_at_a_point_where_they_are_not_the_content() -> None:
+    client, session = create()
+    context = input_context("hello")
+    context["tool_call"] = {"id": "c-1", "name": "Search", "args": {}, "provider": "x"}
+    context["tool_result"] = {"value": "ok", "is_error": False}
+    context["output"] = {"content": "an earlier reply"}
+
+    await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert "tool_call" not in body
+    assert "tool_result" not in body
+    assert "output" not in body
+
+
+def nested(depth: int, leaf: object) -> object:
+    node = leaf
+    for _ in range(depth):
+        node = [node]
+    return node
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_deep_nesting_is_cut_rather_than_failing(fail_closed: bool) -> None:
+    client, session = create(deny_block_me, fail_closed=fail_closed)
+    context = tool_context(
+        "post_tool_call",
+        tool_call={"id": "c-1", "name": "Fetch", "args": {}},
+        tool_result={"value": nested(5000, "BLOCK_ME"), "is_error": False},
+    )
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    assert len(session.bodies) == 1
+    assert result is not None
+    assert result.evaluated is True
+    assert result.truncated is True
+    assert result.allowed is not fail_closed
+
+
+VALID_HASH = "sha256:" + "0123456789abcdef" * 4
+
+
+@pytest.mark.asyncio
+async def test_keeps_a_valid_content_hash_and_duration() -> None:
+    client, session = create()
+    context = tool_context(
+        "post_tool_call",
+        tool_call={"id": "c-1", "name": "Search", "args": {}, "content_hash": VALID_HASH},
+        tool_result={"value": "ok", "is_error": False, "duration_ms": 12.5},
+    )
+
+    await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["tool_call"]["content_hash"] == VALID_HASH
+    assert body["tool_result"] == {"value": "ok", "is_error": False, "duration_ms": 12.5}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("content_hash", "duration"),
+    [("md5:abc", -1), ("sha256:" + "0123456789ABCDEF" * 4, True), (7, float("nan"))],
+)
+async def test_drops_an_invalid_content_hash_and_duration(
+    content_hash: object, duration: object
+) -> None:
+    client, session = create()
+    context = tool_context(
+        "post_tool_call",
+        tool_call={"id": "c-1", "name": "Search", "args": {}, "content_hash": content_hash},
+        tool_result={"value": "ok", "is_error": False, "duration_ms": duration},
+    )
+
+    await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert "content_hash" not in body["tool_call"]
+    assert "duration_ms" not in body["tool_result"]
+
+
+# ─── members of an unexpected shape ──────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("member", "value"),
+    [
+        ("model", "gpt-4o"),
+        ("model", ["gpt-4o"]),
+        ("model", {"id": 5}),
+        ("actor", "user-object-id"),
+        ("tenant", "contoso"),
+        ("trace", "0af7651916cd43dd8448eb211c80319c"),
+        ("request_id", 7),
+        ("agent", "SampleAgent"),
+        ("tools", "Search"),
+        ("tools", {"name": "Search"}),
+        ("tools", ["Search", 5, {"name": 5}, {"description": "no name"}]),
+        ("messages", "hello"),
+        ("messages", [{"role": 5, "content": "hello"}]),
+        ("extensions", "a365"),
+        ("extensions", ["a365"]),
+        ("extensions", {"a365": "tool"}),
+        ("extensions", {"a365": {"tool": "Search"}}),
+        ("extensions", {"a365": {"tool": {"description": 5}}}),
+        ("tool_result", "a result"),
+        ("tool_call", {"id": 5, "name": "Search", "args": "query", "content_hash": 5}),
+    ],
+)
+async def test_ignores_members_of_an_unexpected_shape(member: str, value: object) -> None:
+    client, session = create()
+    context = tool_context(
+        "post_tool_call",
+        tool_call={"id": "c-1", "name": "Search", "args": {}},
+        tool_result={"value": "ok", "is_error": False},
+    )
+    context[member] = value
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["tools"][0]["name"] == "Search"
+    assert result is not None and result.evaluated is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("session_node", ["conversation", ["conversation"], {"id": 5}])
+async def test_a_session_of_an_unexpected_shape_has_no_session_id(session_node: object) -> None:
+    client, endpoint = create()
+    context = input_context("hello")
+    context["session"] = session_node
+
+    with pytest.raises(ValueError, match="session.id is required"):
+        await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    assert endpoint.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "verdict",
+    [
+        {"transform": "rewrite"},
+        {"transform": ["rewrite"]},
+        {"transform": {"path": 5}},
+        {"warnings": {"reason": "w"}},
+        {"warnings": ["w", 5, {"reason": 5}]},
+        {"result_labels": "Label"},
+        {"result_labels": [5, "", None]},
+        {"reason": {"code": "x"}},
+    ],
+)
+async def test_keeps_a_deny_whose_optional_members_have_an_unexpected_shape(
+    verdict: JsonObject,
+) -> None:
+    client, _ = create(
+        lambda _: json_response({"decision": "deny", "message": "Blocked.", **verdict})
+    )
+
+    result = await client.evaluate_hook_context(
+        input_context("hello"), AGENT, TokenSource().resolve
+    )
+
+    assert result is not None
+    assert result.evaluated is True
+    assert result.allowed is False
+    assert result.block_reason == "Blocked."
+    assert result.verdict is not None
+    assert result.verdict.transform_path is None
+    assert all(isinstance(label, str) and label for label in result.verdict.result_labels)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transform", ["rewrite", ["rewrite"], {"path": 5}, None])
+async def test_a_transform_of_an_unexpected_shape_still_blocks(transform: object) -> None:
+    client, _ = create(lambda _: json_response({"decision": "transform", "transform": transform}))
+
+    result = await client.evaluate_hook_context(
+        input_context("hello"), AGENT, TokenSource().resolve
+    )
+
+    assert result is not None
+    assert result.evaluated is True
+    assert result.allowed is False
+    assert result.block_reason is not None and "rewrite" in result.block_reason
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error_body",
+    [
+        {"diagnostics": ["rule"]},
+        {"diagnostics": "not json"},
+        {"diagnostics": {"validationErrors": {"message": "rule"}}},
+        {"diagnostics": {"validationErrors": ["rule", 5, {"message": 5}]}},
+        {"detail": 5, "title": ["t"]},
+        ["not", "an", "object"],
+    ],
+)
+async def test_reports_a_400_whose_body_has_an_unexpected_shape(error_body: object) -> None:
+    client, _ = create(lambda _: json_response(error_body, status=400))
+
+    result = await client.evaluate_hook_context(
+        input_context("hello"), AGENT, TokenSource().resolve
+    )
+
+    assert result is not None
+    assert result.evaluated is False
+    assert result.error == "http 400"
+
+
+def unsigned_token(payload: bytes) -> str:
+    encoded = base64.urlsafe_b64encode(payload).rstrip(b"=").decode()
+    return f"eyJhbGciOiJub25lIn0.{encoded}.signature"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "token",
+    [
+        "not-a-jwt",
+        "header.not*base64.signature",
+        unsigned_token(b"not json"),
+        unsigned_token(b"[1, 2]"),
+        unsigned_token(b'{"exp": "soon"}'),
+        unsigned_token(b'{"exp": true}'),
+        unsigned_token(b'{"exp": 1e400}'),
+        unsigned_token(b'{"exp": ' + b"9" * 400 + b"}"),
+    ],
+)
+async def test_uses_but_does_not_cache_a_token_whose_payload_has_an_unexpected_shape(
+    token: str,
+) -> None:
+    client, session = create()
+    tokens = TokenSource(token)
+
+    for _ in range(2):
+        result = await client.evaluate_hook_context(input_context("hello"), AGENT, tokens.resolve)
+        assert result is not None and result.evaluated is True
+
+    assert len(tokens.requests) == 2, "not cached"
+    assert all(
+        call.authorization is not None and call.authorization.endswith(token)
+        for call in session.calls
+    )
+
+
 @pytest.mark.parametrize("max_characters", [1, 5, 21, 22, 23, 24, 40, 100, 20000])
 @pytest.mark.parametrize("length", [1, 5, 22, 23, 24, 41, 99, 100, 101, 1000, 25000])
 def test_truncation_never_exceeds_the_maximum(max_characters: int, length: int) -> None:
@@ -533,28 +983,98 @@ def test_truncation_never_exceeds_the_maximum(max_characters: int, length: int) 
         assert clamped == value[:max_characters], "no room for the marker: a hard cut"
 
 
+LONG = "x" * 45
+CLAMPED = "x" * 17 + "...[truncated 28 chars]"
+
+
 @pytest.mark.asyncio
-async def test_clamps_every_string_value_sent() -> None:
+@pytest.mark.parametrize(
+    ("member", "value", "expected"),
+    [
+        (
+            "messages",
+            [{"role": "user", "content": [{"type": "text", "text": LONG}]}],
+            [{"role": "user", "content": [{"type": "text", "text": CLAMPED}]}],
+        ),
+        (
+            "tools",
+            [{"name": "Search", "description": LONG, "schema": {"title": "t"}}],
+            [{"name": "Search", "description": CLAMPED, "schema": {"title": "t"}}],
+        ),
+        (
+            "tools",
+            [{"name": "Search", "schema": {"title": LONG}}],
+            [{"name": "Search", "schema": {"title": CLAMPED}}],
+        ),
+        (
+            "extensions",
+            {"a365": {"note": LONG, "items": [7]}},
+            {"a365": {"note": CLAMPED, "items": [7]}},
+        ),
+        ("custom", {"notes": [LONG]}, {"notes": [CLAMPED]}),
+    ],
+    ids=["messages", "tool description", "tool schema", "extensions", "other member"],
+)
+async def test_clamps_every_content_string(member: str, value: object, expected: object) -> None:
     client, session = create(max_content_characters=40)
-    long = "x" * 45
-    clamped = "x" * 17 + "...[truncated 28 chars]"
     context = input_context("hello")
-    context["agent"] = {"id": AGENT_ID, "framework": "agent365", "name": long}
-    context["messages"] = [{"role": "user", "content": [{"type": "text", "text": long}]}]
-    context["tools"] = [{"name": "Search", "description": long, "schema": {"title": long}}]
-    context["extensions"] = {"a365": {"note": long, "items": [long, 7]}}
+    context[member] = value
 
     await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
 
     (body,) = session.bodies
     assert contract_errors(body) == []
-    assert body["agent"]["name"] == clamped
-    assert body["messages"] == [{"role": "user", "content": [{"type": "text", "text": clamped}]}]
-    assert body["tools"] == [
-        {"name": "Search", "description": clamped, "schema": {"title": clamped}}
-    ]
-    assert body["extensions"] == {"a365": {"note": clamped, "items": [clamped, 7]}}
+    assert body[member] == expected
     assert body["timestamp"] == "2026-10-07T10:00:00.000Z", "protocol fields are not clamped"
+
+
+@pytest.mark.asyncio
+async def test_a_low_limit_keeps_the_envelope_whole() -> None:
+    client, session = create(max_content_characters=1)
+    framework = "a_framework_name_longer_than_the_limit"
+    context = input_context("hello")
+    context["agent"] = {"id": AGENT_ID, "framework": framework, "name": LONG, "version": "1.0"}
+    context["session"] = {"id": "conversation:activity", "turn": 2}
+    context["tenant"] = {"id": TENANT_ID, "name": "Contoso"}
+    context["actor"] = {"id": "user-object-id", "kind": "human"}
+    context["model"] = {"id": "gpt-4o"}
+    context["request_id"] = "request-1"
+    context["trace"] = {
+        "trace_id": "0af7651916cd43dd8448eb211c80319c",
+        "span_id": "b7ad6b7169203331",
+    }
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["agent"] == {"id": AGENT_ID, "framework": framework, "name": LONG, "version": "1.0"}
+    assert body["session"] == {"id": "conversation:activity", "turn": 2}
+    assert body["tenant"] == {"id": TENANT_ID, "name": "Contoso"}
+    assert body["actor"] == {"id": "user-object-id", "kind": "human"}
+    assert body["model"] == {"id": "gpt-4o"}
+    assert body["request_id"] == "request-1"
+    assert body["trace"] == context["trace"]
+    assert body["input"] == {"content": "h", "role": "user"}
+    assert result is not None and result.truncated is True
+
+
+@pytest.mark.asyncio
+async def test_a_low_limit_keeps_the_tool_call_envelope_whole() -> None:
+    client, session = create(max_content_characters=1)
+    context = tool_context(
+        "pre_tool_call",
+        tool_call={"id": "call-1", "name": "FetchPage", "args": {"url": "https://example.test"}},
+        tools=[{"name": "FetchPage", "description": "Fetches a page."}],
+    )
+
+    await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["tool_call"]["id"] == "call-1"
+    assert body["tool_call"]["name"] == "FetchPage"
+    assert body["tools"][0]["name"] == "FetchPage"
 
 
 @pytest.mark.asyncio
@@ -607,7 +1127,7 @@ async def test_rejects_a_context_without_a_session_id() -> None:
 async def test_rejects_a_context_that_is_not_json() -> None:
     client, session = create()
     context = input_context("hello")
-    context["input"] = {"content": {"value": float("nan")}, "role": "user"}
+    context["input"] = {"content": {"value": b"\x00\x01"}, "role": "user"}
 
     with pytest.raises(ValueError, match="not JSON"):
         await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)

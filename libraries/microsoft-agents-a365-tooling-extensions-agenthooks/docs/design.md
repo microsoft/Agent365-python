@@ -11,7 +11,8 @@ through `DefenderRtpClient` (from `microsoft-agents-a365-tooling`) and returns D
 
 The Defender client lives in the core tooling package and has no agent-hooks dependency. agent-hooks ships a native
 core for only some platforms (no musl), so only agents that opt in to this extension take it on. Defender receives a
-fitted copy of each context (normalized to its request validation and clamped); the host's context is not modified.
+fitted copy of each context (normalized to its request validation and fitted to a size budget); the host's context is
+not modified.
 
 ## Key Components
 
@@ -37,7 +38,7 @@ record = await emitter.emit_unchecked(builder.input(content=user_message))
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `client` | `DefenderRtpClient` | The Defender client |
-| `resolve_call` | `Callable[[AgentContext], A365DefenderCall \| None \| Awaitable[...]]` | The agent identity and token resolver for a context; `None` allows without a call. Called only for the points Defender evaluates while enabled |
+| `resolve_call` | `Callable[[AgentContext], A365DefenderCall \| None \| Awaitable[...]]` | The agent identity and token resolver for a context. Called only for the points Defender evaluates while enabled; `None` (no agent identity) follows the fail mode |
 | `on_evaluated` | `Callable[[DefenderRtpEvaluationResult], None] \| None` | Receives each evaluation (logging, telemetry); its exceptions are logged and never change the verdict |
 
 `to_verdict(result)` maps a `DefenderRtpEvaluationResult` to an agent-hooks `Verdict`:
@@ -48,9 +49,10 @@ record = await emitter.emit_unchecked(builder.input(content=user_message))
 - not evaluated, or an allow of a truncated copy (content over the limit, `verified` false): `allow` with a
   `defender:unverified` warning (fail open), or `deny` with reason `runtime_error:defender_unverified` (fail closed)
 
-An exception from the call resolver, the token resolver or the client (an invalid context or identity) is never a
-verdict: the interceptor turns it into `DefenderRtpClient.unavailable(...)`, which follows the fail mode, rather than
-letting the emitter record a host error.
+An exception from the call resolver, the token resolver or the client (an invalid context or identity), or a call
+resolver that returns `None`, is never a verdict: the interceptor turns it into `DefenderRtpClient.unavailable(...)`,
+which follows the fail mode and reaches `on_evaluated`, rather than letting the emitter record a host error or
+allowing the context unevaluated.
 
 ### create_protection_emitter / add_a365_defender
 
@@ -70,10 +72,11 @@ Host (agent-hooks emitter)
        │  AgentContext at input / pre_tool_call / post_tool_call / output
        ▼
 A365DefenderInterceptor.intercept()
-       │  resolve_call(context) → A365DefenderCall(agent, token_resolver)
+       │  resolve_call(context) → A365DefenderCall(agent, token_resolver)   (None: unavailable, fail mode)
        ▼
 DefenderRtpClient.evaluate_hook_context()          (microsoft-agents-a365-tooling)
-       ├── fit a copy of the context to Defender's validation (normalize; clamp every string; agent's tenant; fill agent, actor)
+       ├── fit a copy of the context to Defender's validation (normalize; envelope whole; content within the budget,
+       │   the content under decision first; valid Unicode; agent's tenant; fill agent, actor)
        ├── token: cached, or token_resolver → agent identity app-only token (one deadline with the POST)
        └── POST endpoint (HTTPS), x-ms-correlation-id: <guid>
        ▼

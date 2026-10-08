@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import copy
 import dataclasses
 import functools
 import inspect
@@ -15,6 +14,7 @@ import json
 import logging
 import math
 import re
+import sys
 import time
 import uuid
 from collections.abc import Callable, Mapping
@@ -50,8 +50,39 @@ _EVALUATED_POINTS: Final[frozenset[str]] = frozenset(
     {"input", "pre_tool_call", "post_tool_call", "output"}
 )
 _ACTOR_KINDS: Final[frozenset[str]] = frozenset({"human", "service", "agent"})
-# Fixed-format fields the client sets itself; every other string value is clamped.
-_PROTOCOL_FIELDS: Final[frozenset[str]] = frozenset({"spec", "interception_point", "timestamp"})
+# Envelope members and members with dedicated handling; any other member of the context is
+# content.
+_KNOWN_MEMBERS: Final[frozenset[str]] = frozenset(
+    {
+        "spec",
+        "interception_point",
+        "timestamp",
+        "sequence",
+        "request_id",
+        "session",
+        "agent",
+        "tenant",
+        "actor",
+        "model",
+        "trace",
+        "input",
+        "output",
+        "target",
+        "tool_call",
+        "tool_result",
+        "messages",
+        "tools",
+        "extensions",
+    }
+)
+# A fitted copy carries at most this many times max_content_characters of content in all.
+_CONTENT_BUDGET_FACTOR: Final[int] = 4
+# Containers nested deeper are cut, well within the nesting a JSON parser accepts.
+_MAX_DEPTH: Final[int] = 32
+_UNBOUNDED: Final[int] = sys.maxsize
+_OMITTED: Final[object] = object()
+_CONTENT_HASH = re.compile(r"sha256:[0-9a-f]{64}")
+_SURROGATES = re.compile("[\ud800-\udfff]")
 _EXTENSION_KEY = re.compile(r"[a-z][a-z0-9_]*")
 _INVALID_FRAMEWORK_CHARACTERS = re.compile(r"[^a-z0-9_-]+")
 _WHITESPACE = re.compile(r"\s+")
@@ -154,11 +185,15 @@ class DefenderRtpClient:
     ) -> DefenderRtpEvaluationResult | None:
         """Evaluate an agent-hooks context with Defender. The context is not modified.
 
-        Defender receives a fitted copy: normalized to its request validation, with every string
-        value except the protocol fields clamped to
-        :attr:`DefenderRtpOptions.max_content_characters`. Token acquisition and the request
-        share one deadline, :attr:`DefenderRtpOptions.timeout_seconds`, so the fail mode applies
-        within that time.
+        Defender receives a fitted copy, normalized to its request validation: the envelope
+        (agent, session, tenant, actor, ids, roles and names) is kept whole, each content string
+        is clamped to :attr:`DefenderRtpOptions.max_content_characters`, all content shares a
+        budget of four times that (the content under decision, which is sent twice, may use
+        half of it), and every string is valid Unicode. When the content under decision does
+        not fit, Defender evaluates the cut copy: its deny still blocks, but its allow follows
+        the fail mode (``truncated``).
+        Token acquisition and the request share one deadline,
+        :attr:`DefenderRtpOptions.timeout_seconds`, so the fail mode applies within that time.
 
         Args:
             context: The agent-hooks/0.1 context emitted by the host.
@@ -280,135 +315,211 @@ class DefenderRtpClient:
     def _prepare(
         self, context: Mapping[str, object], agent: DefenderRtpAgentContext
     ) -> tuple[JsonObject, bool]:
-        """A fitted copy of the context that meets Defender's request validation.
+        """A fitted copy of the context that meets Defender's request validation and size limits.
 
         ``target`` equals the point's field, ``tool_call`` and ``tool_result`` carry only spec
-        members, the timestamp is UTC, loosely filled optional fields are repaired or dropped,
-        and every string value except the protocol fields is clamped.
+        members, the timestamp is UTC, and loosely filled optional fields are repaired or
+        dropped; a member of an unexpected shape is ignored. The envelope (the agent,
+        session, tenant, actor, request, model and trace, and roles, tool names and ids) is not
+        clamped, so the request validates and correlates whatever the limit. Each content string
+        is cut to ``max_content_characters``, and all content shares a budget of
+        ``_CONTENT_BUDGET_FACTOR`` times that. The content under decision is sent twice (as the
+        point's field and as ``target``), so it may use half of the budget; the rest goes, in
+        order, to the call's arguments at ``post_tool_call``, tool declarations (the called
+        tool's first), the most recent messages, extensions, and any other member. Every string
+        is valid Unicode. The copy is built from the context without copying it whole; the
+        context is not modified.
 
         Returns:
             The copy, and whether the content under decision (``target``, which equals the
-            point's field) was truncated.
+            point's field) was cut to fit.
         """
-        hook: JsonObject = copy.deepcopy(dict(context))
-        hook["spec"] = self.AGENT_HOOKS_SPEC
-        hook["timestamp"] = self._utc_timestamp(hook.get("timestamp"))
-
-        agent_node = hook.get("agent")
+        point = _read_string(context.get("interception_point"))
+        agent_node = context.get("agent")
         agent_id = _require_string(
             _first_non_empty(
                 agent.agent_object_id, _read_string(_get(agent_node, "id")), agent.agent_id
             ),
             "agent.id",
         )
-        session_id = _require_string(_read_string(_get(hook.get("session"), "id")), "session.id")
-        sequence = hook.get("sequence")
+        session = context.get("session")
+        prepared_session = _copy_envelope(session) if isinstance(session, dict) else {}
+        session_id = _require_string(_read_string(prepared_session.get("id")), "session.id")
+        sequence = context.get("sequence")
         if isinstance(sequence, int) and _is_non_negative_integer(sequence):
             self._observe_sequence(session_id, sequence)
         else:
-            hook["sequence"] = self._next_sequence(session_id)
+            sequence = self._next_sequence(session_id)
 
         prepared_agent: JsonObject = {
-            "id": agent_id,
+            "id": _normalize(agent_id),
             "framework": _sanitize_framework(
                 _first_non_empty(_read_string(_get(agent_node, "framework")), agent.framework)
             ),
         }
         name = _first_non_empty(_read_string(_get(agent_node, "name")), agent.agent_name)
         if name is not None:
-            prepared_agent["name"] = name
+            prepared_agent["name"] = _normalize(name)
 
         version = _read_string(_get(agent_node, "version"))
         if version:
-            prepared_agent["version"] = version
-
-        hook["agent"] = prepared_agent
+            prepared_agent["version"] = _normalize(version)
 
         # The token is issued in the agent's tenant, and Defender requires tenant.id to equal
         # the token's tid, so the agent's tenant is authoritative: a different host value would
         # only be rejected, and a rejection follows the fail mode.
-        tenant = hook.get("tenant")
-        prepared_tenant: JsonObject = tenant if isinstance(tenant, dict) else {}
+        tenant = context.get("tenant")
+        prepared_tenant = _copy_envelope(tenant) if isinstance(tenant, dict) else {}
         host_tenant_id = _read_string(prepared_tenant.get("id"))
         if host_tenant_id and host_tenant_id != agent.tenant_id:
             logger.warning(
                 "Defender RTP: the context's tenant.id is not the agent's tenant; sending the "
                 "agent's tenant, which the token is issued for."
             )
-        prepared_tenant["id"] = agent.tenant_id
-        hook["tenant"] = prepared_tenant
+        prepared_tenant["id"] = _normalize(agent.tenant_id)
 
-        if hook.get("actor") is None and agent.user_id:
-            hook["actor"] = {
+        hook: JsonObject = {
+            "spec": self.AGENT_HOOKS_SPEC,
+            "interception_point": point,
+            "timestamp": self._utc_timestamp(context.get("timestamp")),
+            "sequence": sequence,
+            "agent": prepared_agent,
+            "session": prepared_session,
+            "tenant": prepared_tenant,
+        }
+
+        actor = context.get("actor")
+        if actor is None and agent.user_id:
+            actor = {
                 "id": agent.user_id,
                 "kind": agent.actor_kind if agent.actor_kind is not None else "human",
             }
 
-        if hook.get("request_id") is None and agent.request_id:
-            hook["request_id"] = agent.request_id
+        if isinstance(actor, dict):
+            prepared_actor: JsonObject = {}
+            actor_id = _read_string(actor.get("id"))
+            if actor_id:
+                prepared_actor["id"] = _normalize(actor_id)
 
-        if hook.get("model") is None and agent.model_name:
-            hook["model"] = {"id": agent.model_name}
+            kind = _read_string(actor.get("kind"))
+            if kind in _ACTOR_KINDS:
+                prepared_actor["kind"] = kind
 
-        _drop_invalid_optional_fields(hook)
+            hook["actor"] = prepared_actor
 
-        point = _read_string(hook.get("interception_point"))
+        request_id = context.get("request_id")
+        if request_id is None:
+            request_id = agent.request_id or None
+
+        if isinstance(request_id, str):
+            hook["request_id"] = _normalize(request_id)
+
+        model = context.get("model")
+        if model is None and agent.model_name:
+            model = {"id": agent.model_name}
+
+        model_id = _read_string(_get(model, "id"))
+        if model_id:
+            hook["model"] = {"id": _normalize(model_id)}
+
+        trace = context.get("trace")
+        if isinstance(trace, dict):
+            hook["trace"] = _copy_envelope(trace)
+
+        max_characters = self._options.max_content_characters
+        budget = max_characters * _CONTENT_BUDGET_FACTOR
+        # The content under decision is sent twice, as the point's field and as target, so it
+        # may use half of the budget.
+        decision = _Fitter(max_characters, budget // 2)
+        tool_call = context.get("tool_call")
+        tool_name: str | None = None
+        called: JsonObject | None = None
         if point == "input":
-            input_node = hook.get("input")
+            input_node = context.get("input")
             role = _read_string(_get(input_node, "role"))
-            content = _get(input_node, "content")
+            content, truncated = decision.fit(_content_of(input_node), "")
             prepared_input: JsonObject = {
-                "content": "" if content is None else content,
+                "content": content,
                 "role": role if role in ("system", "external") else "user",
             }
             hook["input"] = prepared_input
-            hook["target"] = copy.deepcopy(prepared_input)
+            hook["target"] = prepared_input
         elif point == "output":
-            content = _get(hook.get("output"), "content")
-            prepared_output: JsonObject = {"content": "" if content is None else content}
+            content, truncated = decision.fit(_content_of(context.get("output")), "")
+            prepared_output: JsonObject = {"content": content}
             hook["output"] = prepared_output
-            hook["target"] = copy.deepcopy(prepared_output)
-        elif point in ("pre_tool_call", "post_tool_call"):
-            tool_call = hook.get("tool_call")
+            hook["target"] = prepared_output
+        else:
             tool_name = _require_string(_read_string(_get(tool_call, "name")), "tool_call.name")
-            args = _to_arguments(_get(tool_call, "args"))
-            hook["tool_call"] = {
-                "id": _first_non_empty(_read_string(_get(tool_call, "id")))
-                or self._generated_tool_call_id(),
-                "name": tool_name,
-                "args": args,
+            called = {
+                "id": _normalize(
+                    _first_non_empty(_read_string(_get(tool_call, "id")))
+                    or self._generated_tool_call_id()
+                ),
+                "name": _normalize(tool_name),
+                "args": {},
             }
+            content_hash = _get(tool_call, "content_hash")
+            if isinstance(content_hash, str) and _CONTENT_HASH.fullmatch(content_hash):
+                called["content_hash"] = content_hash
 
+            hook["tool_call"] = called
             if point == "pre_tool_call":
-                hook["target"] = copy.deepcopy(args)
+                args, truncated = decision.fit(_to_arguments(_get(tool_call, "args")), {})
+                called["args"] = args
+                hook["target"] = args
             else:
-                tool_result = hook.get("tool_result")
-                value = _get(tool_result, "value")
-                hook["tool_result"] = {
+                tool_result = context.get("tool_result")
+                value, truncated = decision.fit(_get(tool_result, "value"), None)
+                prepared_result: JsonObject = {
                     "value": value,
                     "is_error": _get(tool_result, "is_error") is True,
                 }
-                hook["target"] = copy.deepcopy(value)
+                duration = _get(tool_result, "duration_ms")
+                if _is_duration(duration):
+                    prepared_result["duration_ms"] = duration
 
-            tools = hook.get("tools")
-            if not isinstance(tools, list) or not tools:
-                hook["tools"] = [_tool_from_extensions(hook, tool_name)]
+                hook["tool_result"] = prepared_result
+                hook["target"] = value
 
-        # One pass, so a clamped value is never clamped again and target still equals the
-        # point's field.
-        max_characters = self._options.max_content_characters
-        truncated = _has_string_longer_than(hook.get("target"), max_characters)
-        fitted = {
-            key: value if key in _PROTOCOL_FIELDS else _clamp(value, max_characters)
-            for key, value in hook.items()
-        }
-        return fitted, truncated
+        # The rest of the context shares what the content under decision leaves. What is cut
+        # here does not change the authority of the verdict.
+        fitter = _Fitter(max_characters, budget - 2 * decision.used)
+        if point == "post_tool_call" and called is not None:
+            # Defender decided on the arguments at pre_tool_call; here they are context.
+            called["args"], _ = fitter.fit(_to_arguments(_get(tool_call, "args")), {})
+
+        tools = _fit_tools(fitter, context.get("tools"), tool_name, context.get("extensions"))
+        if tools:
+            hook["tools"] = tools
+
+        messages = _fit_messages(fitter, context.get("messages"))
+        if messages:
+            hook["messages"] = messages
+
+        extensions = context.get("extensions")
+        if isinstance(extensions, dict):
+            prepared_extensions: JsonObject = {}
+            for key, extension in extensions.items():
+                if _is_extension_key(key) and not fitter.fit_member(
+                    prepared_extensions, key, extension
+                ):
+                    break
+
+            if prepared_extensions:
+                hook["extensions"] = prepared_extensions
+
+        for key, member in context.items():
+            if key not in _KNOWN_MEMBERS and not fitter.fit_member(hook, key, member):
+                break
+
+        return hook, truncated
 
     # ---- transport -----------------------------------------------------------------------
 
     async def _post(
         self,
-        body: str,
+        body: bytes,
         point: str,
         session_id: str | None,
         access_token: str,
@@ -438,7 +549,7 @@ class DefenderRtpClient:
                     # target that never passed the HTTPS check; a 3xx follows the fail mode.
                     async with session.post(
                         endpoint,
-                        data=body.encode("utf-8"),
+                        data=body,
                         headers=headers,
                         allow_redirects=False,
                     ) as response:
@@ -703,90 +814,237 @@ def _log_failed_refresh(refresh: asyncio.Future[str]) -> None:
         )
 
 
-def _drop_invalid_optional_fields(hook: JsonObject) -> None:
-    """Repair or drop optional fields a host may fill loosely but Defender validates strictly.
+class _Fitter:
+    """Copies JSON content into the request within a per-string limit and a shared budget.
 
-    A 400 would leave the call unverified: extension namespaces, ``model.id``, tool
-    declarations, messages, actor.
+    A string is cut to ``max_characters`` (truncation marker included) and to the budget left.
+    Each string, key, number and kept-whole name costs its length in characters and every
+    other value one; once the budget is spent nothing more is copied, so the copy and the time
+    to build it stay bounded whatever the host passes. Strings and keys are made valid
+    Unicode, non-finite numbers become text, and containers nested deeper than ``_MAX_DEPTH``
+    are cut, so the copy always serializes.
     """
-    if "extensions" in hook:
-        extensions = hook["extensions"]
-        if isinstance(extensions, dict):
-            for key in [k for k in extensions if not _is_extension_key(k)]:
-                del extensions[key]
 
-            if not extensions:
-                del hook["extensions"]
-        else:
-            del hook["extensions"]
+    def __init__(self, max_characters: int, budget: int) -> None:
+        self._max_characters = max_characters
+        self._budget = max(0, budget)
+        self._remaining = self._budget
+        self._cut = False
 
-    if "model" in hook:
-        model_id = _read_string(_get(hook["model"], "id"))
-        if model_id:
-            hook["model"] = {"id": model_id}
-        else:
-            del hook["model"]
+    @property
+    def used(self) -> int:
+        """The characters of the budget spent so far."""
+        return self._budget - self._remaining
 
-    if "tools" in hook:
-        tools = hook["tools"]
-        declarations: list[object] = []
-        for tool in tools if isinstance(tools, list) else []:
-            tool_name = _read_string(_get(tool, "name"))
-            if not tool_name:
-                continue
+    def fit(self, node: object, default: object = _OMITTED) -> tuple[object, bool]:
+        """A fitted copy of ``node`` (``default`` when none of it fits), and whether it was cut."""
+        self._cut = False
+        fitted = self._fit(node, 0)
+        if fitted is _OMITTED:
+            return default, True
 
-            declaration: JsonObject = {"name": tool_name}
-            description = _read_string(_get(tool, "description"))
-            if description is not None:
-                declaration["description"] = description
+        return fitted, self._cut
 
-            schema = _get(tool, "schema")
-            if isinstance(schema, dict):
-                declaration["schema"] = copy.deepcopy(schema)
+    def fit_member(self, owner: JsonObject, key: object, value: object) -> bool:
+        """Copy one member into ``owner``; False when it does not fit."""
+        self._cut = False
+        return self._member(owner, key, value, 0)
 
-            declarations.append(declaration)
+    def reserve(self, text: str) -> bool:
+        """Spend the budget on ``text`` that is kept whole, such as a tool name or a role;
+        False when it does not fit."""
+        characters = max(1, len(text))
+        if characters >= self._remaining:
+            return False
 
-        if declarations:
-            hook["tools"] = declarations
-        else:
-            del hook["tools"]
+        self._remaining -= characters
+        return True
 
-    if "messages" in hook:
-        messages = hook["messages"]
-        valid = isinstance(messages, list) and all(
-            isinstance(message, dict)
-            and bool(_read_string(message.get("role")))
-            and "content" in message
-            for message in messages
+    def _member(self, owner: JsonObject, key: object, value: object, depth: int) -> bool:
+        text = _key_text(key)
+        # Normalizing never lengthens a key, so an oversized one is rejected before it is read.
+        if len(text) >= self._remaining:
+            self._cut = True
+            return False
+
+        name = _unique_key(owner, _normalize(text))
+        if len(name) >= self._remaining:
+            self._cut = True
+            return False
+
+        self._remaining -= len(name)
+        fitted = self._fit(value, depth)
+        if fitted is _OMITTED:
+            return False
+
+        owner[name] = fitted
+        return True
+
+    def _fit(self, node: object, depth: int) -> object:
+        if isinstance(node, str):
+            return self._string(node)
+
+        if self._remaining <= 0:
+            self._cut = True
+            return _OMITTED
+
+        if node is None or isinstance(node, bool):
+            self._remaining -= 1
+            return node
+
+        if isinstance(node, int | float):
+            if isinstance(node, float) and not math.isfinite(node):
+                # NaN and the infinities are not JSON; as text the request is still sent.
+                return self._string(
+                    "NaN" if math.isnan(node) else ("Infinity" if node > 0 else "-Infinity")
+                )
+
+            text = _number_text(node)
+            if len(text) > self._remaining:
+                self._cut = True
+                return _OMITTED
+
+            self._remaining -= len(text)
+            return node
+
+        if isinstance(node, dict | list | tuple):
+            if depth >= _MAX_DEPTH:
+                self._cut = True
+                return _OMITTED
+
+            self._remaining -= 1
+            if isinstance(node, dict):
+                members: JsonObject = {}
+                for key, value in node.items():
+                    if not self._member(members, key, value, depth + 1):
+                        break
+
+                return members
+
+            items: list[object] = []
+            for item in node:
+                fitted = self._fit(item, depth + 1)
+                if fitted is _OMITTED:
+                    break
+
+                items.append(fitted)
+
+            return items
+
+        raise ValueError(
+            f"The agent-hooks context is not JSON: a {type(node).__name__} is not serializable."
         )
-        if not valid:
-            del hook["messages"]
 
-    if "actor" in hook:
-        actor = hook["actor"]
-        if isinstance(actor, dict):
-            prepared: JsonObject = {}
-            actor_id = _read_string(actor.get("id"))
-            if actor_id:
-                prepared["id"] = actor_id
+    def _string(self, value: str) -> object:
+        limit = min(self._max_characters, self._remaining)
+        if limit <= 0:
+            self._cut = True
+            return _OMITTED
 
-            kind = _read_string(actor.get("kind"))
-            if kind in _ACTOR_KINDS:
-                prepared["kind"] = kind
+        if len(value) > limit:
+            self._cut = True
+            value = _truncate(value, limit)
 
-            hook["actor"] = prepared
-        else:
-            del hook["actor"]
+        text = _normalize(value)
+        self._remaining -= max(1, len(text))
+        return text
 
 
-def _tool_from_extensions(hook: JsonObject, tool_name: str) -> JsonObject:
-    declaration: JsonObject = {"name": tool_name}
-    extension = _get(hook.get("extensions"), _A365_EXTENSION)
-    description = _read_string(_get(_get(extension, "tool"), "description"))
-    if description:
-        declaration["description"] = description
+def _fit_tools(
+    fitter: _Fitter, tools: object, tool_name: str | None, extensions: object
+) -> list[object]:
+    """Tool declarations with their spec members, within the budget.
 
-    return declaration
+    The called tool's declaration comes first, so a short budget never drops it. At a tool
+    point without declarations, the called tool is declared from the ``a365`` extension.
+    """
+    ordered = tools if isinstance(tools, list) else []
+    if tool_name is not None:
+        index = next(
+            (
+                position
+                for position, tool in enumerate(ordered)
+                if _read_string(_get(tool, "name")) == tool_name
+            ),
+            None,
+        )
+        if index is not None:
+            ordered = [ordered[index], *ordered[:index], *ordered[index + 1 :]]
+
+    declarations: list[object] = []
+    for tool in ordered:
+        name = _read_string(_get(tool, "name"))
+        if not name:
+            continue
+
+        if not fitter.reserve(name):
+            break
+
+        declaration: JsonObject = {"name": _normalize(name)}
+        description = _get(tool, "description")
+        if isinstance(description, str):
+            fitter.fit_member(declaration, "description", description)
+
+        schema = _get(tool, "schema")
+        if isinstance(schema, dict):
+            fitter.fit_member(declaration, "schema", schema)
+
+        declarations.append(declaration)
+
+    if not declarations and tool_name is not None:
+        declaration = {"name": _normalize(tool_name)}
+        # An extension namespace may hold any JSON value, so each level's shape is checked.
+        description = _read_string(
+            _get(_get(_get(extensions, _A365_EXTENSION), "tool"), "description")
+        )
+        if description:
+            fitter.fit_member(declaration, "description", description)
+
+        declarations.append(declaration)
+
+    return declarations
+
+
+def _fit_messages(fitter: _Fitter, messages: object) -> list[object]:
+    """The most recent messages that fit, in their order; none when any is malformed."""
+    if not isinstance(messages, list) or not all(
+        isinstance(message, dict)
+        and bool(_read_string(message.get("role")))
+        and "content" in message
+        for message in messages
+    ):
+        return []
+
+    fitted: list[object] = []
+    for message in reversed(messages):
+        role = message["role"]
+        if not fitter.reserve(role):
+            break
+
+        prepared: JsonObject = {"role": _normalize(role)}
+        if not fitter.fit_member(prepared, "content", message["content"]):
+            break
+
+        for key, value in message.items():
+            if key not in ("role", "content") and not fitter.fit_member(prepared, key, value):
+                break
+
+        fitted.append(prepared)
+
+    fitted.reverse()
+    return fitted
+
+
+def _copy_envelope(node: Mapping[str, object]) -> JsonObject:
+    """A copy of an envelope object such as the session: not clamped or counted against the
+    content budget, with every string valid Unicode."""
+    fitted, _ = _Fitter(_UNBOUNDED, _UNBOUNDED).fit(node, {})
+    return fitted if isinstance(fitted, dict) else {}
+
+
+def _content_of(node: object) -> object:
+    content = _get(node, "content")
+    return "" if content is None else content
 
 
 def _to_arguments(args: object) -> object:
@@ -903,11 +1161,14 @@ def _parse_timestamp(value: object) -> datetime | None:
         return None
 
 
-def _serialize(hook: JsonObject) -> str:
+def _serialize(hook: JsonObject) -> bytes:
     try:
-        return json.dumps(hook, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        text = json.dumps(hook, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     except (TypeError, ValueError) as error:
         raise ValueError(f"The agent-hooks context is not JSON: {error}") from error
+
+    # The fitted copy's strings are valid Unicode; "replace" only guards the encoding itself.
+    return text.encode("utf-8", "replace")
 
 
 def _sanitize_framework(framework: str | None) -> str:
@@ -915,33 +1176,66 @@ def _sanitize_framework(framework: str | None) -> str:
     return value or _DEFAULT_FRAMEWORK
 
 
-def _clamp(node: object, max_characters: int) -> object:
-    if node is None:
-        return None
+def _normalize(text: str) -> str:
+    """``text`` as valid Unicode: split surrogate pairs rejoined, lone surrogates replaced.
 
-    if isinstance(node, str):
-        return _truncate(node, max_characters)
+    A lone surrogate cannot be encoded as UTF-8; left in, it would keep the request from being
+    sent, and the fail mode, not Defender, would decide.
+    """
+    if text.isascii() or _SURROGATES.search(text) is None:
+        return text
 
-    if isinstance(node, list | tuple):
-        return [_clamp(item, max_characters) for item in node]
-
-    if isinstance(node, dict):
-        return {key: _clamp(value, max_characters) for key, value in node.items()}
-
-    return copy.deepcopy(node)
+    return text.encode("utf-16-le", "surrogatepass").decode("utf-16-le", "replace")
 
 
-def _has_string_longer_than(node: object, max_characters: int) -> bool:
-    if isinstance(node, str):
-        return len(node) > max_characters
+def _key_text(key: object) -> str:
+    """The text JSON writes for a key."""
+    if isinstance(key, str):
+        return key
 
-    if isinstance(node, list | tuple):
-        return any(_has_string_longer_than(item, max_characters) for item in node)
+    if key is None or isinstance(key, bool):
+        return "null" if key is None else ("true" if key else "false")
 
-    if isinstance(node, dict):
-        return any(_has_string_longer_than(value, max_characters) for value in node.values())
+    if isinstance(key, int):
+        return int.__repr__(key)
 
-    return False
+    if isinstance(key, float):
+        return float.__repr__(key)
+
+    raise ValueError(
+        f"The agent-hooks context is not JSON: a {type(key).__name__} key is not serializable."
+    )
+
+
+def _unique_key(owner: JsonObject, name: str) -> str:
+    """``name``, suffixed when an earlier key became equal to it (for example after a lone
+    surrogate was replaced), so no member is lost."""
+    if name not in owner:
+        return name
+
+    suffix = 1
+    while f"{name}~{suffix}" in owner:
+        suffix += 1
+
+    return f"{name}~{suffix}"
+
+
+def _number_text(number: int | float) -> str:
+    """The text JSON writes for a finite number."""
+    try:
+        return int.__repr__(number) if isinstance(number, int) else float.__repr__(number)
+    except ValueError as error:
+        raise ValueError(f"The agent-hooks context is not JSON: {error}") from error
+
+
+def _is_duration(value: object) -> bool:
+    if isinstance(value, bool):
+        return False
+
+    if isinstance(value, int):
+        return 0 <= value < 2**63
+
+    return isinstance(value, float) and math.isfinite(value) and value >= 0
 
 
 def _truncate(value: str, max_characters: int) -> str:

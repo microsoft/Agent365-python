@@ -30,13 +30,13 @@ TOKEN_URL = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
 class FakeAgenticConnection:
     """Stands in for an MSAL connection: returns the agent identity's FMI assertion."""
 
-    def __init__(self, assertion: str | None = "agent-identity-assertion") -> None:
+    def __init__(self, assertion: object = "agent-identity-assertion") -> None:
         self.assertion = assertion
         self.requests: list[tuple[str, str]] = []
 
     async def get_agentic_application_token(
         self, tenant_id: str, agent_app_instance_id: str
-    ) -> str | None:
+    ) -> object:
         self.requests.append((tenant_id, agent_app_instance_id))
         return self.assertion
 
@@ -157,7 +157,10 @@ async def test_raises_without_the_response_body_when_the_token_request_fails() -
     [
         json_response({"token_type": "Bearer"}),
         json_response({"access_token": ""}),
+        json_response({"access_token": 5}),
+        json_response({"access_token": ["defender-token"]}),
         json_response(["not", "an", "object"]),
+        json_response(None),
         text_response("<html>not json</html>"),
     ],
 )
@@ -172,10 +175,13 @@ async def test_raises_when_the_token_response_has_no_access_token(response: Fake
 
 
 @pytest.mark.asyncio
-async def test_raises_without_a_token_request_when_the_connection_returns_no_assertion() -> None:
+@pytest.mark.parametrize("assertion", [None, "", 5, {"token": "agent-identity-assertion"}])
+async def test_raises_without_a_token_request_when_the_connection_returns_no_assertion(
+    assertion: object,
+) -> None:
     session = FakeTokenSession()
     resolve = DefenderRtpTokenResolvers.from_agentic_connection(
-        FakeAgenticConnection(assertion=None),  # type: ignore[arg-type]
+        FakeAgenticConnection(assertion=assertion),  # type: ignore[arg-type]
         session,  # type: ignore[arg-type]
     )
 

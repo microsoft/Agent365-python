@@ -10,8 +10,8 @@ control contract (AGENT-HOOKS-0.1), using the Python package
 `A365DefenderInterceptor` is an agent-hooks interceptor for Microsoft Defender for AI. For each context
 the host emits at the four points Defender evaluates, the prevention endpoint
 (`POST .../v1/protection/evaluate`) receives a fitted copy of the context: normalized to Defender's
-request validation and clamped, keeping the context's session, sequence and tool call ids. The host's
-context is not modified. Defender's verdict decides:
+request validation and fitted to a size budget (see [Long content](#verdicts)), keeping the context's
+session, sequence and tool call ids. The host's context is not modified. Defender's verdict decides:
 
 | agent-hooks point | When | On `deny` |
 |---|---|---|
@@ -126,11 +126,12 @@ if not record.proceeds:
     ...  # blocked: record.verdict.message
 ```
 
-The call resolver may also be async, and returning `None` allows the context without a call (for
-example for a turn that has no agent identity). It runs only for the four points Defender evaluates
-while Defender RTP is enabled, and an exception from it, or from the token resolver, follows the fail
-mode instead of failing the emission. `emitter.emit(...)` raises `agent_hooks.InterceptionBlocked`
-instead of returning a record that does not proceed.
+The call resolver may also be async. It runs only for the four points Defender evaluates while
+Defender RTP is enabled. Returning `None` (for example for a turn that has no agent identity) follows the
+fail mode, like an unavailable Defender: no call is made, and `on_evaluated` receives the not-evaluated
+result. An exception from the call resolver, or from the token resolver, also follows the fail mode
+instead of failing the emission. `emitter.emit(...)` raises `agent_hooks.InterceptionBlocked` instead of
+returning a record that does not proceed.
 
 `create_protection_emitter` returns an enforce-mode emitter with the `parallel/strictest` profile (an
 action proceeds only when every interceptor allows it) and a per-interceptor timeout of the Defender
@@ -158,12 +159,23 @@ add_a365_defender(emitter, interceptor)
 | no verdict, fail open (default) | `allow` with a `defender:unverified` warning carrying the error |
 | no verdict, fail closed | `deny`, reason `runtime_error:defender_unverified`, never reported as a detection |
 
-**Long content.** When the content under decision (the user's message, a tool call's arguments, a tool
-result, or the reply) is longer than `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS`, Defender evaluates a
-truncated copy, so its verdict can't cover the rest. A Defender `deny` still blocks, but an `allow`
-follows the fail mode (`DefenderRtpEvaluationResult.truncated` is true): fail open allows with a
-`defender:unverified` warning, and fail closed blocks. Raise `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS`
-for agents that handle long content; evaluating long content in chunks is a follow-up.
+**Long content.** Each content string sent is cut to `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` (default
+20000), and all content in one request shares a budget of four times that, so the request and the time to
+prepare it stay bounded. The content under decision (the user's message, a tool call's arguments, a tool
+result, or the reply) is sent twice, as the point's field and as `target`, so it may use half of the
+budget. The rest goes, in order, to the call's arguments at `post_tool_call`, tool declarations (the called
+tool's first), the most recent messages, extensions, and any other member. The envelope (agent, session,
+tenant, actor, ids, names and roles) is never cut. When the content under decision doesn't fit, Defender
+evaluates a truncated copy, so its verdict can't cover the rest. A Defender `deny` (or `transform`) still
+blocks, but an `allow` follows the fail mode (`DefenderRtpEvaluationResult.truncated` is true): fail open
+allows with a `defender:unverified` warning, and fail closed blocks. Raise
+`A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` for agents that handle long content; evaluating long content in
+chunks is a follow-up.
+
+Strings are always sent as valid Unicode (a lone surrogate becomes U+FFFD, so it can't keep the request
+from being sent), NaN and infinities are sent as text, and nesting deeper than 32 levels is cut like long
+content. A context member, verdict member or error body of an unexpected shape is ignored rather than
+failing the evaluation.
 
 ## Configuration
 
@@ -174,7 +186,7 @@ for agents that handle long content; evaluating long content in chunks is a foll
 | `A365_DEFENDER_RTP_FAIL_MODE` | `closed` blocks when no verdict is obtained; default is open |
 | `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | one deadline for token acquisition and the call (default 10000) |
 | `A365_DEFENDER_RTP_AUTHENTICATION_SCOPE` | overrides the Defender API scope |
-| `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | clamps every string value sent (default 20000); content under decision beyond it follows the fail mode unless Defender denies |
+| `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | cuts each content string (default 20000); all content in a request shares four times that. Content under decision beyond it follows the fail mode unless Defender denies |
 
 Every call sends a unique `x-ms-correlation-id`, returned as `DefenderRtpEvaluationResult.correlation_id`;
 Defender logs each evaluation under it. A `400` reports the failed validation rule in `error`. A timeout,
