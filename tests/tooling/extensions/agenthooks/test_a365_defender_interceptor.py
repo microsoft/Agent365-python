@@ -7,6 +7,9 @@ fake prevention endpoint."""
 from __future__ import annotations
 
 import asyncio
+import logging
+import threading
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -93,7 +96,12 @@ async def harness(
             evaluations.append,
         ),
     )
-    yield Harness(emitter, endpoint, client, evaluations)
+    try:
+        yield Harness(emitter, endpoint, client, evaluations)
+    finally:
+        # The evaluation callback runs on a worker thread; wait for every one before the test
+        # reads what they recorded.
+        await asyncio.get_running_loop().shutdown_default_executor()
 
 
 def allow(_body: JsonObject) -> FakeResponse:
@@ -300,7 +308,7 @@ async def test_follows_the_fail_mode_when_the_identity_is_invalid() -> None:
     assert record.verdict.reason == "runtime_error:defender_unverified"
     assert h.endpoint.bodies == []
     (evaluation,) = h.evaluations
-    assert evaluation.error is not None and evaluation.error.startswith("ValueError:")
+    assert evaluation.error == "evaluation failed (ValueError)"
 
 
 @pytest.mark.asyncio
@@ -428,6 +436,64 @@ async def test_a_failing_evaluation_callback_does_not_change_the_verdict() -> No
 
 
 @pytest.mark.asyncio
+async def test_a_slow_evaluation_callback_does_not_hold_up_or_change_the_verdict() -> None:
+    release = threading.Event()
+    seen: list[DefenderRtpEvaluationResult] = []
+
+    def slow_callback(result: DefenderRtpEvaluationResult) -> None:
+        release.wait(5)
+        seen.append(result)
+
+    options = DefenderRtpOptions(enabled=True, endpoint=ENDPOINT)
+    agent = DefenderRtpAgentContext(agent_id=AGENT_ID, tenant_id=TENANT_ID)
+    emitter = add_a365_defender(
+        create_protection_emitter(interceptor_timeout_seconds=0.5),
+        A365DefenderInterceptor(
+            DefenderRtpClient(options, FakeDefenderSession(allow)),  # type: ignore[arg-type]
+            lambda _context: A365DefenderCall(agent, TokenSource().resolve),
+            slow_callback,
+        ),
+    )
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    started = time.perf_counter()
+    try:
+        record = await emitter.emit_unchecked(builder.input(content="hello"))
+        elapsed = time.perf_counter() - started
+    finally:
+        release.set()
+        await asyncio.get_running_loop().shutdown_default_executor()
+
+    assert record.proceeds is True
+    assert record.verdict.reason is None, "not an interceptor timeout"
+    assert elapsed < 0.5
+    (evaluation,) = seen
+    assert evaluation.evaluated is True and evaluation.allowed is True
+
+
+@pytest.mark.asyncio
+async def test_a_defender_warning_in_the_reserved_namespace_does_not_turn_an_allow_into_a_deny() -> (
+    None
+):
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+    warnings = [
+        {"reason": "host_error:upstream", "message": "Reserved."},
+        {"reason": " ", "message": "Blank."},
+        {"reason": "prevention_annotated", "message": "Suspicious."},
+    ]
+
+    async with harness(lambda _: json_response({"decision": "allow", "warnings": warnings})) as h:
+        record = await h.emitter.emit_unchecked(builder.input(content="hello"))
+
+    assert record.proceeds is True
+    assert [(w.reason, w.message) for w in record.verdict.warnings] == [
+        ("defender:warning", "Reserved."),
+        ("defender:warning", "Blank."),
+        ("prevention_annotated", "Suspicious."),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_a_defender_timeout_fails_open_before_the_emitter_times_out() -> None:
     async def hanging(_body: JsonObject) -> FakeResponse:
         await asyncio.sleep(30)
@@ -524,24 +590,27 @@ async def test_does_not_resolve_the_call_when_disabled() -> None:
 @pytest.mark.parametrize("is_async", [False, True])
 @pytest.mark.parametrize("fail_closed", [False, True])
 async def test_a_failing_call_resolver_follows_the_fail_mode(
-    is_async: bool, fail_closed: bool
+    is_async: bool, fail_closed: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
     def failing(_context: AgentContext) -> A365DefenderCall | None:
-        raise RuntimeError("no turn context")
+        raise RuntimeError("no turn context; password=hunter2")
 
     async def failing_async(_context: AgentContext) -> A365DefenderCall | None:
-        raise RuntimeError("no turn context")
+        raise RuntimeError("no turn context; password=hunter2")
 
     emitter, session = emitter_with(failing_async if is_async else failing, fail_closed=fail_closed)
     builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
 
-    record = await emitter.emit_unchecked(builder.input(content="hello"))
+    with caplog.at_level(logging.WARNING):
+        record = await emitter.emit_unchecked(builder.input(content="hello"))
 
     assert session.calls == []
     assert not (record.verdict.reason or "").startswith("host_error:")
     (warning,) = record.verdict.warnings
     assert warning.reason == "defender:unverified"
-    assert warning.message == "RuntimeError: no turn context"
+    assert warning.message == "evaluation failed (RuntimeError)", "only the type reaches the record"
+    assert "hunter2" not in repr(record)
+    assert any("hunter2" in (entry.exc_text or "") for entry in caplog.records), "it is logged"
     if fail_closed:
         assert record.proceeds is False
         assert record.verdict.reason == "runtime_error:defender_unverified"

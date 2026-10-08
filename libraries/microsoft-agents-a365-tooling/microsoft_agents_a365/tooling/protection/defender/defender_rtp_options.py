@@ -83,8 +83,9 @@ class DefenderRtpOptions:
             The configured options.
 
         Raises:
-            ValueError: If the endpoint is not an absolute URL, or the timeout or the maximum
-                content characters is not a positive integer of at most 2147483647.
+            ValueError: If the endpoint is not an absolute URL, the fail mode is neither ``open``
+                nor ``closed``, or the timeout or the maximum content characters is not a
+                positive integer of at most 2147483647.
         """
         variables = os.environ if environ is None else environ
 
@@ -98,7 +99,7 @@ class DefenderRtpOptions:
         enabled = read(ENABLE_VARIABLE)
         options = cls(
             enabled=enabled is not None and enabled.lower() in ("true", "1", "yes"),
-            fail_closed=(read(FAIL_MODE_VARIABLE) or "").lower() == "closed",
+            fail_closed=_parse_fail_mode(read(FAIL_MODE_VARIABLE)),
         )
 
         endpoint = read(ENDPOINT_VARIABLE)
@@ -172,6 +173,18 @@ def is_https_url(value: str) -> bool:
     """Whether ``value`` is an absolute HTTPS URL, so tokens never travel in plaintext."""
     parsed = urlparse(value)
     return parsed.scheme.lower() == "https" and bool(parsed.netloc)
+
+
+def _parse_fail_mode(value: str | None) -> bool:
+    """Whether the fail mode is closed. Unset means open; any value but ``open`` or ``closed``
+    is rejected, so a typo cannot silently turn blocking off."""
+    if value is None or value.lower() == "open":
+        return False
+
+    if value.lower() == "closed":
+        return True
+
+    raise ValueError(f'{FAIL_MODE_VARIABLE} must be "open" or "closed".')
 
 
 def _parse_positive(value: str, name: str) -> int:

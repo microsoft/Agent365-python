@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextvars
 import inspect
 import logging
 import re
@@ -25,6 +27,8 @@ from microsoft_agents_a365.tooling.protection.defender import (
 logger = logging.getLogger(__name__)
 
 _INVALID_REASON_CHARACTERS = re.compile(r"[^A-Za-z0-9_.-]")
+# agent-hooks reserves this namespace for host failures, in warning reasons too.
+_RESERVED_REASON_PREFIX: Final[str] = "host_error:"
 _FAIL_CLOSED_MESSAGE: Final[str] = (
     "Security validation is unavailable and this agent is configured to fail closed."
 )
@@ -84,8 +88,10 @@ class A365DefenderInterceptor:
                 example an activity without an agentic instance or tenant id) follows the fail
                 mode, like an unavailable Defender.
             on_evaluated: Receives each evaluation, for logging and telemetry (for example the
-                correlation id). An exception it raises is logged and does not change the
-                verdict.
+                correlation id). It runs on a worker thread once the verdict is decided, outside
+                the emitter's interceptor timeout, so neither an exception it raises (which is
+                logged) nor the time it takes changes the verdict; callbacks for concurrent
+                evaluations may run concurrently.
         """
         if client is None:
             raise TypeError("client is required.")
@@ -129,20 +135,39 @@ class A365DefenderInterceptor:
                     context, call.agent, call.token_resolver
                 )
         except Exception as error:
-            # An invalid context or identity, or a failing call resolver, is never a verdict:
-            # it follows the fail mode.
-            result = self._client.unavailable(point_name, f"{type(error).__name__}: {error}")
+            # A failure to resolve the identity or to evaluate is never a verdict: it follows the
+            # fail mode. Only the exception's type reaches the result, and so the verdict and the
+            # interception record, since its message can carry credentials or content; the
+            # exception itself goes to the log.
+            logger.warning(
+                "The Defender evaluation failed at %s; the fail mode applies.",
+                point_name,
+                exc_info=error,
+            )
+            result = self._client.unavailable(
+                point_name, f"evaluation failed ({type(error).__name__})"
+            )
 
         if result is None:
             return Verdict.allow()
 
+        # The verdict is decided before the callback sees the result, and the callback runs on a
+        # worker thread, off the emitter's timed interception, so neither what it does nor how
+        # long it takes changes the verdict.
+        verdict = self.to_verdict(result)
         if self._on_evaluated is not None:
             try:
-                self._on_evaluated(result)
+                asyncio.get_running_loop().run_in_executor(
+                    None,
+                    contextvars.copy_context().run,
+                    _notify_evaluated,
+                    self._on_evaluated,
+                    result,
+                )
             except Exception:
-                logger.exception("The Defender on_evaluated callback failed.")
+                logger.exception("The Defender evaluation callback could not be scheduled.")
 
-        return self.to_verdict(result)
+        return verdict
 
     @staticmethod
     def to_verdict(result: DefenderRtpEvaluationResult) -> Verdict:
@@ -158,7 +183,7 @@ class A365DefenderInterceptor:
         verdict = result.verdict
         labels = verdict.result_labels if verdict is not None else ()
         defender_warnings = tuple(
-            HookWarning(reason=warning.reason or f"{name}:warning", message=warning.message or "")
+            HookWarning(reason=_warning_reason(warning.reason), message=warning.message or "")
             for warning in (verdict.warnings if verdict is not None else ())
         )
         if result.verified:
@@ -200,4 +225,32 @@ class A365DefenderInterceptor:
             reason=f"runtime_error:{name}_unverified",
             message=result.block_reason or _FAIL_CLOSED_MESSAGE,
             warnings=unverified,
+        )
+
+
+def _warning_reason(reason: str | None) -> str:
+    """Defender's warning reason, or the interceptor's own when it is empty or in the
+    ``host_error:`` namespace, which agent-hooks reserves for host failures: the emitter rejects
+    a verdict that uses it, which would turn Defender's allow into a host error that denies
+    whatever the fail mode."""
+    if not reason or not reason.strip() or reason.startswith(_RESERVED_REASON_PREFIX):
+        return f"{A365DefenderInterceptor.NAME}:warning"
+
+    return reason
+
+
+def _notify_evaluated(
+    on_evaluated: Callable[[DefenderRtpEvaluationResult], None],
+    result: DefenderRtpEvaluationResult,
+) -> None:
+    """Hand an evaluation to the host's callback. It is for logging and telemetry, so its
+    failure is logged and never changes the verdict."""
+    try:
+        on_evaluated(result)
+    except Exception:
+        logger.exception(
+            "The Defender evaluation callback failed at %s; the verdict is unchanged. "
+            "x-ms-correlation-id=%s",
+            result.interception_point,
+            result.correlation_id,
         )

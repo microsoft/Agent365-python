@@ -302,8 +302,10 @@ filled optional fields (`extensions`, `model`, `tools`, `messages`, `actor`, `re
 dropped; `tool_call.content_hash` and `tool_result.duration_ms` are kept when they meet the spec. `tenant.id` is
 always the agent's tenant, which the token is issued for and Defender requires; `agent.id`, `actor`, `request_id` and
 `model.id` are filled from `DefenderRtpAgentContext` when the host did not set them. The envelope (spec, timestamp,
-sequence, agent, session, tenant, actor, request, model, trace, and roles, tool names and ids) is never cut, so the
-request validates and correlates whatever the limit. Content is cut to fit (see **Long content**), and every string
+sequence, agent, session, tenant, actor, request, model, trace, and roles, tool names and ids) is built from its spec
+fields alone (`session` keeps `id`, a UTC `started_at` and a non-negative `turn`; `tenant` its `name`; `trace`
+`trace_id` and `span_id`), so nothing else a host puts in an envelope object escapes the content budget, and it is
+never cut, so the request validates and correlates whatever the limit. Content is cut to fit (see **Long content**), and every string
 and key is sent as valid Unicode: split surrogate pairs are rejoined and lone surrogates become U+FFFD, since a lone
 surrogate cannot be encoded and would otherwise keep the request from being sent. NaN and infinities are sent as
 text. The copy is built from the context without copying it whole. Each call sends a unique `x-ms-correlation-id`. The
@@ -337,22 +339,23 @@ content in one request shares a budget of four times that
 (each string, key, number and kept-whole name counts its length, every other value one), so the request and the time
 to prepare it stay bounded. The content under decision (`target`: the input, a tool call's arguments, a tool result,
 or the output) is sent twice, as the point's field and as `target`, so it may use half of the budget. The rest goes, in
-order, to the call's arguments at `post_tool_call`, tool declarations, the most recent messages, extensions, and any
-other member; what does not fit is dropped. Message histories (newest first), extension namespaces and the tool
-declarations after the called tool's are read only as far as the budget reaches, so a long one costs no more than
-what is sent. Containers nested deeper than 32 levels are cut too. When the content under decision is cut, Defender
+order, to the called tool's declaration (below), the call's arguments at `post_tool_call` (which Defender decided on at
+`pre_tool_call`, so cutting them is not a truncation), the other tool declarations, the most recent messages,
+extensions, and any other member; what does not fit is dropped. Message histories (newest first), extension namespaces
+and the tool declarations other than the called tool's are read only as far as the budget reaches, so a long one costs
+no more than what is sent. Containers nested deeper than 32 levels are cut too. When the content under decision is cut, Defender
 evaluates a truncated copy and the result has `truncated=True`. A block (`deny` or `transform`) stays a block; an
 allow does not cover the rest of the content, so `allowed` follows the fail mode, `error` says so, and `verified` is
 false. Raising the limit is the remedy for long-content agents; chunked evaluation is a follow-up.
 
 **The called tool's declaration:** at `pre_tool_call` and `post_tool_call`, Defender's verdict also depends on how the
 called tool is declared. Its declaration is searched for by name among the first 10,000 entries of `tools` and copied
-first, before any other, with its name whole; the other declarations then fill what is left of the budget in the host's
-order. The result has `truncated=True` too, and an allow follows the fail mode, when the called tool's description or
-schema had to be cut, or when `tools` is longer than the entries searched and the called tool is not among them (each
-with its own `error`). A list searched in full that does not declare the called tool is not a truncation. Without any
-declaration, the called tool is declared from the `a365` extension's `tool.description`, which counts as its
-description.
+first, with its name whole, ahead of the call's arguments at `post_tool_call` and of the other declarations, which then
+fill what is left of the budget in the host's order. The result has `truncated=True` too, and an allow follows the fail
+mode, when the called tool's description or schema had to be cut, or when `tools` is longer than the entries searched
+and the called tool is not among them (each with its own `error`). A list searched in full that does not declare the
+called tool is not a truncation. When none of the entries searched declares a tool, the called tool is declared from
+the `a365` extension's `tool.description`, which counts as its description.
 
 **Unexpected shapes:** every optional node is shape-checked before it is read: a context member (for example a string
 `model` or `a365` extension), a verdict member (`transform`, `warnings`, `result_labels`), a `400` body's
@@ -396,7 +399,7 @@ microsoft_agents_a365/tooling/
 | `MCP_BASE_URL` | Base URL for MCP servers (dev mode) | URL string |
 | `ENABLE_A365_DEFENDER_RTP` | Enables Defender real-time protection | `true`, `1`, `yes`; default off |
 | `A365_DEFENDER_RTP_ENDPOINT` | Defender prevention endpoint; required when enabled | `https://<host>/v1/protection/evaluate` |
-| `A365_DEFENDER_RTP_FAIL_MODE` | Outcome when no verdict is obtained | `open` (default), `closed` |
+| `A365_DEFENDER_RTP_FAIL_MODE` | Outcome when no verdict is obtained | `open` (default), `closed`; any other value is rejected |
 | `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | Per-call timeout for token acquisition and evaluation | Positive integer up to `2147483647`; default `10000` |
 | `A365_DEFENDER_RTP_AUTHENTICATION_SCOPE` | Token scope | Default `api://86a21212-634e-4553-b3d6-e477e4c9d9ec/.default` |
 | `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | Maximum characters per content string; all content in a request shares four times that | Positive integer up to `2147483647`; default `20000` |

@@ -78,11 +78,29 @@ def test_parses_the_enable_flag(value: str, enabled: bool) -> None:
     assert options.enabled is enabled
 
 
-@pytest.mark.parametrize("value", ["open", "OPEN", "", "anything-else"])
-def test_fails_open_unless_the_fail_mode_is_closed(value: str) -> None:
+@pytest.mark.parametrize(
+    ("value", "fail_closed"),
+    [
+        ("open", False),
+        ("OPEN", False),
+        (" Open ", False),
+        ("", False),
+        ("   ", False),
+        ("closed", True),
+        ("CLOSED", True),
+        (" Closed ", True),
+    ],
+)
+def test_reads_the_fail_mode(value: str, fail_closed: bool) -> None:
     options = DefenderRtpOptions.from_environment({"A365_DEFENDER_RTP_FAIL_MODE": value})
 
-    assert options.fail_closed is False
+    assert options.fail_closed is fail_closed
+
+
+@pytest.mark.parametrize("value", ["clsoed", "anything-else", "false", "0", "deny"])
+def test_rejects_a_fail_mode_that_is_neither_open_nor_closed(value: str) -> None:
+    with pytest.raises(ValueError, match='A365_DEFENDER_RTP_FAIL_MODE must be "open" or "closed"'):
+        DefenderRtpOptions.from_environment({"A365_DEFENDER_RTP_FAIL_MODE": value})
 
 
 @pytest.mark.parametrize(

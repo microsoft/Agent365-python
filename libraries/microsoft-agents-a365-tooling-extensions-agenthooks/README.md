@@ -130,8 +130,11 @@ The call resolver may also be async. It runs only for the four points Defender e
 Defender RTP is enabled. Returning `None` (for example for a turn that has no agent identity) follows the
 fail mode, like an unavailable Defender: no call is made, and `on_evaluated` receives the not-evaluated
 result. An exception from the call resolver, or from the token resolver, also follows the fail mode
-instead of failing the emission. `emitter.emit(...)` raises `agent_hooks.InterceptionBlocked` instead of
-returning a record that does not proceed.
+instead of failing the emission. Only the exception's type reaches the verdict and the interception record
+(`evaluation failed (<type>)`), since its message can carry credentials or content; the exception itself is
+logged. `on_evaluated` runs on a worker thread once the verdict is decided, outside the emitter's
+interceptor timeout, so a slow or failing callback can't change the verdict. `emitter.emit(...)` raises
+`agent_hooks.InterceptionBlocked` instead of returning a record that does not proceed.
 
 `create_protection_emitter` returns an enforce-mode emitter with the `parallel/strictest` profile (an
 action proceeds only when every interceptor allows it) and a per-interceptor timeout of the Defender
@@ -152,7 +155,7 @@ add_a365_defender(emitter, interceptor)
 
 | Defender result | agent-hooks verdict |
 |---|---|
-| `allow` (with any warnings and labels) | `allow`, keeping Defender's warnings and `result_labels` |
+| `allow` (with any warnings and labels) | `allow`, keeping Defender's warnings and `result_labels`; a warning reason that is empty or in the `host_error:` namespace agent-hooks reserves becomes `defender:warning` |
 | `deny` | `deny`, reason `defender:block:<Defender reason>`, Defender's message, labels, and evidence `urn:a365:defender:<correlation id>` |
 | `transform` | `deny`: this SDK version does not apply Defender's rewrite |
 | `allow` of a truncated copy (content over the limit, or the called tool's declaration cut or not found among the first 10,000) | not authoritative: follows the fail mode, like no verdict |
@@ -163,9 +166,10 @@ add_a365_defender(emitter, interceptor)
 20000), and all content in one request shares a budget of four times that, so the request and the time to
 prepare it stay bounded. The content under decision (the user's message, a tool call's arguments, a tool
 result, or the reply) is sent twice, as the point's field and as `target`, so it may use half of the
-budget. The rest goes, in order, to the call's arguments at `post_tool_call`, tool declarations, the most
-recent messages, extensions, and any other member. The envelope (agent, session,
-tenant, actor, ids, names and roles) is never cut. When the content under decision doesn't fit, Defender
+budget. The rest goes, in order, to the called tool's declaration (below), the call's arguments at
+`post_tool_call` (already evaluated at `pre_tool_call`), the other tool declarations, the most recent
+messages, extensions, and any other member. The envelope (agent, session, tenant, actor, ids, names and
+roles) is built from its spec fields alone and never cut. When the content under decision doesn't fit, Defender
 evaluates a truncated copy, so its verdict can't cover the rest. A Defender `deny` (or `transform`) still
 blocks, but an `allow` follows the fail mode (`DefenderRtpEvaluationResult.truncated` is true): fail open
 allows with a `defender:unverified` warning, and fail closed blocks. Raise
@@ -174,7 +178,8 @@ chunks is a follow-up.
 
 **The called tool's declaration.** At `pre_tool_call` and `post_tool_call`, Defender's verdict also depends
 on how the called tool is declared. Its declaration is searched for by name among the first 10,000 entries
-of `tools` and sent first, ahead of the others, which follow in your order as the budget allows. If its
+of `tools` and charged to the budget right after the content under decision, ahead of the call's arguments
+at `post_tool_call` and of the other declarations, which follow in your order as the budget allows. If its
 description or schema had to be cut, or `tools` is longer than 10,000 entries and the called tool isn't
 among the first 10,000, an `allow` follows the fail mode in the same way. A list of at most 10,000 entries
 that doesn't declare the called tool is fine.
@@ -191,7 +196,7 @@ member or error body of an unexpected shape is ignored rather than failing the e
 |---|---|
 | `ENABLE_A365_DEFENDER_RTP` | `true` to call Defender |
 | `A365_DEFENDER_RTP_ENDPOINT` | the prevention endpoint, `https://<host>/v1/protection/evaluate` (HTTPS only) |
-| `A365_DEFENDER_RTP_FAIL_MODE` | `closed` blocks when no verdict is obtained; default is open |
+| `A365_DEFENDER_RTP_FAIL_MODE` | `open` (default) or `closed`, which blocks when no verdict is obtained; any other value is rejected |
 | `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | one deadline for token acquisition and the call (default 10000) |
 | `A365_DEFENDER_RTP_AUTHENTICATION_SCOPE` | overrides the Defender API scope |
 | `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | cuts each content string (default 20000); all content in a request shares four times that. Content under decision beyond it follows the fail mode unless Defender denies |

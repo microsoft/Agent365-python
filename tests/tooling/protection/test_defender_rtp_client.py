@@ -710,7 +710,7 @@ async def test_the_content_under_decision_may_use_half_of_the_budget() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_rest_goes_to_arguments_then_tools_with_the_called_tool_first() -> None:
+async def test_the_rest_goes_to_the_called_tool_then_arguments_then_other_tools() -> None:
     # A budget of 4 x 100; the 50-character result is sent twice and leaves 300.
     client, session = create(max_content_characters=100)
     context = tool_context(
@@ -738,6 +738,36 @@ async def test_the_rest_goes_to_arguments_then_tools_with_the_called_tool_first(
     assert "messages" not in body
     assert "extensions" not in body
     assert result is not None and result.truncated is False
+
+
+@pytest.mark.asyncio
+async def test_the_called_tool_declaration_is_charged_before_the_arguments_at_post_tool_call() -> (
+    None
+):
+    # A budget of 4 x 100; the 50-character result is sent twice and leaves 300. The called
+    # tool's declaration takes 111 of it first, and the arguments, decided on at pre_tool_call,
+    # are cut to what is left without making the verdict unverified.
+    client, session = create(max_content_characters=100)
+    args = {"q": "a" * 100, "r": "b" * 100, "s": "c" * 100}
+    context = tool_context(
+        "post_tool_call",
+        tool_call={"id": "c-1", "name": "Search", "args": args},
+        tool_result={"value": "r" * 50, "is_error": False},
+        tools=[{"name": "Search", "description": "s" * 100}],
+    )
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["tools"] == [{"name": "Search", "description": "s" * 100}]
+    sent_args = body["tool_call"]["args"]
+    assert sent_args["q"] == args["q"]
+    assert len(sent_args["r"]) < 100
+    assert "s" not in sent_args
+    assert result is not None
+    assert result.truncated is False
+    assert result.verified is True
 
 
 @pytest.mark.asyncio
@@ -1167,6 +1197,54 @@ async def test_a_low_limit_keeps_the_tool_call_envelope_whole() -> None:
     assert body["tool_call"]["id"] == "call-1"
     assert body["tool_call"]["name"] == "FetchPage"
     assert body["tools"][0]["name"] == "FetchPage"
+
+
+@pytest.mark.asyncio
+async def test_copies_only_the_spec_fields_of_the_envelope() -> None:
+    client, session = create()
+    padding = "x" * 1_000_000
+    trace = {"trace_id": "0af7651916cd43dd8448eb211c80319c", "span_id": "b7ad6b7169203331"}
+    context = input_context("hello")
+    context["session"] = {
+        "id": "conversation:activity",
+        "started_at": "2026-10-07T12:00:00+02:00",
+        "turn": 3,
+        "padding": padding,
+    }
+    context["tenant"] = {"id": TENANT_ID, "name": "Contoso", "padding": padding}
+    context["trace"] = {**trace, "payload": padding}
+    context["actor"] = {"id": "user-object-id", "kind": "human", "padding": padding}
+
+    await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["session"] == {
+        "id": "conversation:activity",
+        "started_at": "2026-10-07T10:00:00.000Z",
+        "turn": 3,
+    }
+    assert body["tenant"] == {"id": TENANT_ID, "name": "Contoso"}
+    assert body["trace"] == trace
+    assert body["actor"] == {"id": "user-object-id", "kind": "human"}
+    assert len(json.dumps(body)) < 2_000, "nothing else in an envelope object escapes the budget"
+
+
+@pytest.mark.asyncio
+async def test_drops_envelope_fields_that_do_not_meet_the_spec() -> None:
+    client, session = create()
+    context = input_context("hello")
+    context["session"] = {"id": "conversation:activity", "started_at": "yesterday", "turn": -1}
+    context["tenant"] = {"id": TENANT_ID, "name": 5}
+    context["trace"] = {"trace_id": "", "span_id": 7}
+
+    await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["session"] == {"id": "conversation:activity"}
+    assert body["tenant"] == {"id": TENANT_ID}
+    assert "trace" not in body
 
 
 @pytest.mark.asyncio

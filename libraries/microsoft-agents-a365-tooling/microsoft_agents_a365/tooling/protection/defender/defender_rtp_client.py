@@ -15,7 +15,6 @@ import json
 import logging
 import math
 import re
-import sys
 import time
 import uuid
 from collections.abc import Callable, Mapping
@@ -82,7 +81,6 @@ _CONTENT_BUDGET_FACTOR: Final[int] = 4
 _MAX_TOOL_SCAN: Final[int] = 10_000
 # Containers nested deeper are cut, well within the nesting a JSON parser accepts.
 _MAX_DEPTH: Final[int] = 32
-_UNBOUNDED: Final[int] = sys.maxsize
 _OMITTED: Final[object] = object()
 # Ends a cut string whose omitted length is not known without unbounded work.
 _UNCOUNTED_MARKER: Final[str] = "...[truncated]"
@@ -337,21 +335,22 @@ class DefenderRtpClient:
         ``target`` equals the point's field, ``tool_call`` and ``tool_result`` carry only spec
         members, the timestamp is UTC, and loosely filled optional fields are repaired or
         dropped; a member of an unexpected shape is ignored. The envelope (the agent,
-        session, tenant, actor, request, model and trace, and roles, tool names and ids) is not
-        clamped, so the request validates and correlates whatever the limit. Each content string
-        is cut to ``max_content_characters``, and all content shares a budget of
+        session, tenant, actor, request, model and trace, and roles, tool names and ids) is
+        built from its spec fields alone and not clamped, so the request validates and
+        correlates whatever the limit. Each content string is cut to
+        ``max_content_characters``, and all content shares a budget of
         ``_CONTENT_BUDGET_FACTOR`` times that. The content under decision is sent twice (as the
         point's field and as ``target``), so it may use half of the budget; the rest goes, in
-        order, to the call's arguments at ``post_tool_call``, tool declarations (the called
-        tool's first), the most recent messages, extensions, and any other member. Every string
-        is valid Unicode. The copy is built from the context without copying it whole; the
-        context is not modified.
+        order, to the called tool's declaration, the call's arguments at ``post_tool_call``,
+        the other tool declarations, the most recent messages, extensions, and any other
+        member. Every string is valid Unicode. The copy is built from the context without
+        copying it whole; the context is not modified.
 
         Returns:
             The copy, and why Defender's allow of it would not cover what the host acts on, or
             ``None``: the content under decision (``target``, which equals the point's field)
             was cut to fit, or at a tool point the called tool's declaration was cut or not
-            among the entries searched (see :func:`_fit_tools`).
+            among the entries searched (see :func:`_fit_called_tool`).
         """
         point = _read_string(context.get("interception_point"))
         agent_node = context.get("agent")
@@ -361,14 +360,24 @@ class DefenderRtpClient:
             ),
             "agent.id",
         )
+        # The envelope is built from its spec fields alone, kept whole: nothing else a host puts
+        # in an envelope object is copied, so it cannot escape the content budget.
         session = context.get("session")
-        prepared_session = _copy_envelope(session) if isinstance(session, dict) else {}
-        session_id = _require_string(_read_string(prepared_session.get("id")), "session.id")
+        session_id = _require_string(_read_string(_get(session, "id")), "session.id")
         sequence = context.get("sequence")
         if isinstance(sequence, int) and _is_non_negative_integer(sequence):
             self._observe_sequence(session_id, sequence)
         else:
             sequence = self._next_sequence(session_id)
+
+        prepared_session: JsonObject = {"id": _normalize(session_id)}
+        started_at = _parse_timestamp(_get(session, "started_at"))
+        if started_at is not None:
+            prepared_session["started_at"] = _format_utc(started_at)
+
+        turn = _get(session, "turn")
+        if isinstance(turn, int) and _is_non_negative_integer(turn):
+            prepared_session["turn"] = turn
 
         prepared_agent: JsonObject = {
             "id": _normalize(agent_id),
@@ -388,14 +397,16 @@ class DefenderRtpClient:
         # the token's tid, so the agent's tenant is authoritative: a different host value would
         # only be rejected, and a rejection follows the fail mode.
         tenant = context.get("tenant")
-        prepared_tenant = _copy_envelope(tenant) if isinstance(tenant, dict) else {}
-        host_tenant_id = _read_string(prepared_tenant.get("id"))
+        host_tenant_id = _read_string(_get(tenant, "id"))
         if host_tenant_id and host_tenant_id != agent.tenant_id:
             logger.warning(
                 "Defender RTP: the context's tenant.id is not the agent's tenant; sending the "
                 "agent's tenant, which the token is issued for."
             )
-        prepared_tenant["id"] = _normalize(agent.tenant_id)
+        prepared_tenant: JsonObject = {"id": _normalize(agent.tenant_id)}
+        tenant_name = _read_string(_get(tenant, "name"))
+        if tenant_name:
+            prepared_tenant["name"] = _normalize(tenant_name)
 
         hook: JsonObject = {
             "spec": self.AGENT_HOOKS_SPEC,
@@ -443,7 +454,14 @@ class DefenderRtpClient:
 
         trace = context.get("trace")
         if isinstance(trace, dict):
-            hook["trace"] = _copy_envelope(trace)
+            prepared_trace: JsonObject = {}
+            for key in ("trace_id", "span_id"):
+                value = _read_string(trace.get(key))
+                if value:
+                    prepared_trace[key] = _normalize(value)
+
+            if prepared_trace:
+                hook["trace"] = prepared_trace
 
         max_characters = self._options.max_content_characters
         budget = max_characters * _CONTENT_BUDGET_FACTOR
@@ -501,16 +519,32 @@ class DefenderRtpClient:
                 hook["tool_result"] = prepared_result
                 hook["target"] = value
 
-        # The rest of the context shares what the content under decision leaves. Apart from the
+        # The rest of the context shares what the content under decision leaves, in order: the
+        # called tool's declaration, which Defender's verdict also depends on; the call's
+        # arguments at post_tool_call, which Defender decided on at pre_tool_call; the other
+        # declarations; the newest messages; extensions; and any other member. Apart from the
         # called tool's declaration, what is cut here does not change the authority of the
         # verdict.
         fitter = _Fitter(max_characters, budget - 2 * decision.used)
+        declared = context.get("tools")
+        tools: list[object] = []
+        called_index: int | None = None
+        tool_truncation: str | None = None
+        if tool_name is not None:
+            called_tool, called_index, tool_truncation = _fit_called_tool(
+                fitter,
+                declared if isinstance(declared, list) else [],
+                tool_name,
+                context.get("extensions"),
+            )
+            if called_tool is not None:
+                tools.append(called_tool)
+
         if point == "post_tool_call" and called is not None:
-            # Defender decided on the arguments at pre_tool_call; here they are context.
             called["args"], _ = fitter.fit(_to_arguments(_get(tool_call, "args")), {})
 
-        tools, tool_truncation = _fit_tools(
-            fitter, context.get("tools"), tool_name, context.get("extensions")
+        tools += _fit_other_tools(
+            fitter, declared if isinstance(declared, list) else [], called_index
         )
         if tools:
             hook["tools"] = tools
@@ -835,8 +869,7 @@ class DefenderRtpClient:
         return "tooluse_" + self._id_factory().hex[:12]
 
     def _utc_timestamp(self, value: object) -> str:
-        parsed = _parse_timestamp(value) or datetime.fromtimestamp(self._clock(), tz=UTC)
-        return f"{parsed.strftime('%Y-%m-%dT%H:%M:%S')}.{parsed.microsecond // 1000:03d}Z"
+        return _format_utc(_parse_timestamp(value) or datetime.fromtimestamp(self._clock(), tz=UTC))
 
 
 async def _resolve_token(
@@ -1017,44 +1050,57 @@ class _Fitter:
         return text
 
 
-def _fit_tools(
-    fitter: _Fitter, tools: object, tool_name: str | None, extensions: object
-) -> tuple[list[object], str | None]:
-    """Tool declarations with their spec members, within the budget, and why Defender's verdict
-    would not cover the called tool's declaration, or ``None``.
+def _fit_called_tool(
+    fitter: _Fitter, declared: list[object], tool_name: str, extensions: object
+) -> tuple[JsonObject | None, int | None, str | None]:
+    """The called tool's declaration, its index in ``declared``, and why Defender's verdict would
+    not cover it, or ``None``.
 
-    At a tool point, the called tool's declaration is searched for by name among the first
-    ``_MAX_TOOL_SCAN`` entries and copied first, before any other. Defender's verdict depends on
-    it, so it is a truncation when its description or schema had to be cut, or when the list is
-    longer than the entries searched and the called tool is not among them; a list searched in
-    full that does not declare the called tool is not. The other declarations then fill what is
-    left of the budget in the host's order, and only as many entries are read as the budget could
-    hold (each costs at least one character). Without any declaration, the called tool is
-    declared from the ``a365`` extension.
+    The declaration is searched for by name among the first ``_MAX_TOOL_SCAN`` entries and copied
+    with its name whole, as the call's own name is. When none of the entries searched declares a
+    tool, the called tool is declared from the ``a365`` extension's ``tool.description`` instead.
+    Defender's verdict depends on the declaration, so it is a truncation when its description or
+    schema had to be cut, or when the list is longer than the entries searched and the called
+    tool is not among them; a list searched in full that does not declare the called tool is not.
     """
-    declared = tools if isinstance(tools, list) else []
-    declarations: list[object] = []
-    truncation: str | None = None
     called_index: int | None = None
-    if tool_name is not None:
-        called_index = next(
-            (
-                index
-                for index, tool in enumerate(itertools.islice(declared, _MAX_TOOL_SCAN))
-                if _read_string(_get(tool, "name")) == tool_name
-            ),
-            None,
+    named = False
+    for index, tool in enumerate(itertools.islice(declared, _MAX_TOOL_SCAN)):
+        name = _read_string(_get(tool, "name"))
+        if name == tool_name:
+            called_index = index
+            break
+
+        named = named or bool(name)
+
+    declaration: JsonObject | None = None
+    cut = False
+    if called_index is not None:
+        declaration = {"name": _normalize(tool_name)}
+        cut = _fit_tool_members(fitter, declaration, declared[called_index])
+    elif not named:
+        declaration = {"name": _normalize(tool_name)}
+        # An extension namespace may hold any JSON value, so each level's shape is checked.
+        description = _read_string(
+            _get(_get(_get(extensions, _A365_EXTENSION), "tool"), "description")
         )
-        if called_index is not None:
-            # The name is the call's own, which the request carries whole anyway.
-            declaration: JsonObject = {"name": _normalize(tool_name)}
-            if _fit_tool_members(fitter, declaration, declared[called_index]):
-                truncation = _TRUNCATED_TOOL_ERROR
+        if description:
+            fitter.fit_member(declaration, "description", description)
+            cut = fitter.cut
 
-            declarations.append(declaration)
-        elif len(declared) > _MAX_TOOL_SCAN:
-            truncation = _UNSCANNED_TOOL_ERROR
+    if called_index is None and len(declared) > _MAX_TOOL_SCAN:
+        return declaration, None, _UNSCANNED_TOOL_ERROR
 
+    return declaration, called_index, _TRUNCATED_TOOL_ERROR if cut else None
+
+
+def _fit_other_tools(
+    fitter: _Fitter, declared: list[object], called_index: int | None
+) -> list[object]:
+    """The declarations other than the called tool's, with their spec members, in the host's
+    order within what is left of the budget. Only as many entries are read as the budget could
+    hold (each costs at least one character)."""
+    declarations: list[object] = []
     for index, tool in enumerate(itertools.islice(declared, fitter.remaining)):
         name = _read_string(_get(tool, "name"))
         if index == called_index or not name:
@@ -1063,24 +1109,11 @@ def _fit_tools(
         if not fitter.reserve(name):
             break
 
-        declaration = {"name": _normalize(name)}
+        declaration: JsonObject = {"name": _normalize(name)}
         _fit_tool_members(fitter, declaration, tool)
         declarations.append(declaration)
 
-    if not declarations and tool_name is not None:
-        declaration = {"name": _normalize(tool_name)}
-        # An extension namespace may hold any JSON value, so each level's shape is checked.
-        description = _read_string(
-            _get(_get(_get(extensions, _A365_EXTENSION), "tool"), "description")
-        )
-        if description:
-            fitter.fit_member(declaration, "description", description)
-            if fitter.cut and truncation is None:
-                truncation = _TRUNCATED_TOOL_ERROR
-
-        declarations.append(declaration)
-
-    return declarations, truncation
+    return declarations
 
 
 def _fit_tool_members(fitter: _Fitter, declaration: JsonObject, tool: object) -> bool:
@@ -1131,13 +1164,6 @@ def _fit_messages(fitter: _Fitter, messages: object) -> list[object]:
 
     fitted.reverse()
     return fitted
-
-
-def _copy_envelope(node: Mapping[str, object]) -> JsonObject:
-    """A copy of an envelope object such as the session: not clamped or counted against the
-    content budget, with every string valid Unicode."""
-    fitted, _ = _Fitter(_UNBOUNDED, _UNBOUNDED).fit(node, {})
-    return fitted if isinstance(fitted, dict) else {}
 
 
 def _content_of(node: object) -> object:
@@ -1257,6 +1283,11 @@ def _parse_timestamp(value: object) -> datetime | None:
         return parsed.astimezone(UTC)
     except (ValueError, OverflowError):
         return None
+
+
+def _format_utc(moment: datetime) -> str:
+    """An RFC 3339 UTC instant with millisecond precision."""
+    return f"{moment.strftime('%Y-%m-%dT%H:%M:%S')}.{moment.microsecond // 1000:03d}Z"
 
 
 def _serialize(hook: JsonObject) -> bytes:

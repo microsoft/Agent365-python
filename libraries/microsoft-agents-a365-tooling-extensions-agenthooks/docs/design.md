@@ -39,11 +39,13 @@ record = await emitter.emit_unchecked(builder.input(content=user_message))
 |-----------|------|-------------|
 | `client` | `DefenderRtpClient` | The Defender client |
 | `resolve_call` | `Callable[[AgentContext], A365DefenderCall \| None \| Awaitable[...]]` | The agent identity and token resolver for a context. Called only for the points Defender evaluates while enabled; `None` (no agent identity) follows the fail mode |
-| `on_evaluated` | `Callable[[DefenderRtpEvaluationResult], None] \| None` | Receives each evaluation (logging, telemetry); its exceptions are logged and never change the verdict |
+| `on_evaluated` | `Callable[[DefenderRtpEvaluationResult], None] \| None` | Receives each evaluation (logging, telemetry) on a worker thread once the verdict is decided, outside the emitter's interceptor timeout; neither its exceptions (logged) nor its duration change the verdict |
 
 `to_verdict(result)` maps a `DefenderRtpEvaluationResult` to an agent-hooks `Verdict`:
 
-- evaluated `allow` of content within the limit: `allow` with Defender's warnings and `result_labels`
+- evaluated `allow` of content within the limit: `allow` with Defender's warnings and `result_labels`; a warning
+  reason that is empty or in the `host_error:` namespace (reserved by agent-hooks, whose emitter would reject the
+  verdict and deny) becomes `defender:warning`
 - evaluated `deny` or `transform` (also of a truncated copy): `deny`, reason `defender:block[:<reason>]`, the block reason as the message, the
   labels, and evidence pointing at `urn:a365:defender:<correlation id>`
 - not evaluated, or an allow of a truncated copy (content over the limit, or the called tool's declaration cut or not
@@ -53,7 +55,9 @@ record = await emitter.emit_unchecked(builder.input(content=user_message))
 An exception from the call resolver, the token resolver or the client (an invalid context or identity), or a call
 resolver that returns `None`, is never a verdict: the interceptor turns it into `DefenderRtpClient.unavailable(...)`,
 which follows the fail mode and reaches `on_evaluated`, rather than letting the emitter record a host error or
-allowing the context unevaluated.
+allowing the context unevaluated. Only the exception's type reaches the result (`evaluation failed (<type>)`), and
+so the verdict and the interception record, since its message can carry credentials or content; the exception
+itself is logged.
 
 ### create_protection_emitter / add_a365_defender
 
