@@ -168,6 +168,8 @@ class DefenderRtpClient:
         self._clock = clock or time.time
         self._tokens: dict[_TokenKey, _CachedToken] = {}
         self._in_flight_tokens: dict[_TokenKey, asyncio.Future[str]] = {}
+        # A synchronous token resolver's call per identity, kept until its worker thread exits.
+        self._resolver_calls: dict[_TokenKey, asyncio.Future[object]] = {}
         self._sequences: dict[str, int] = {}
         # The highest sequence of any session no longer tracked: an untracked session resumes
         # above it, so a generated sequence never repeats or decreases within a session.
@@ -437,11 +439,9 @@ class DefenderRtpClient:
 
             hook["actor"] = prepared_actor
 
-        request_id = context.get("request_id")
-        if request_id is None:
-            request_id = agent.request_id or None
-
-        if isinstance(request_id, str):
+        # A request id that is missing, empty or not a string falls back to the turn's.
+        request_id = _first_non_empty(_read_string(context.get("request_id")), agent.request_id)
+        if request_id is not None:
             hook["request_id"] = _normalize(request_id)
 
         model = context.get("model")
@@ -817,7 +817,7 @@ class DefenderRtpClient:
         scope: str,
     ) -> str:
         async with asyncio.timeout(self._options.timeout_seconds):
-            token = await _resolve_token(token_resolver, agent.agent_id, agent.tenant_id, [scope])
+            token = await self._resolve_token(key, agent, token_resolver, scope)
 
         if not isinstance(token, str) or not token.strip():
             raise RuntimeError("The Defender token resolver returned no token.")
@@ -838,6 +838,45 @@ class DefenderRtpClient:
             self._tokens[key] = _CachedToken(token, expires_at)
 
         return token
+
+    async def _resolve_token(
+        self,
+        key: _TokenKey,
+        agent: DefenderRtpAgentContext,
+        token_resolver: DefenderRtpTokenResolver,
+        scope: str,
+    ) -> object:
+        """The token from ``token_resolver``, which may be sync or async.
+
+        A synchronous resolver (for example one that calls MSAL directly) would block the event
+        loop, where the deadline cannot interrupt it, so it runs on a worker thread. A timeout
+        cannot stop that thread either, so one call per agent, tenant and scope runs at a time:
+        a later acquisition waits for the same call rather than starting another, and a resolver
+        that blocks cannot pile up threads in the shared executor.
+        """
+        if inspect.iscoroutinefunction(token_resolver):
+            resolved: object = token_resolver(agent.agent_id, agent.tenant_id, [scope])
+        else:
+            call = self._resolver_calls.get(key)
+            if call is None:
+                call = asyncio.ensure_future(
+                    asyncio.to_thread(token_resolver, agent.agent_id, agent.tenant_id, [scope])
+                )
+                self._resolver_calls[key] = call
+                call.add_done_callback(functools.partial(self._resolver_call_done, key))
+
+            resolved = await asyncio.shield(call)
+
+        return await resolved if inspect.isawaitable(resolved) else resolved
+
+    def _resolver_call_done(self, key: _TokenKey, call: asyncio.Future[object]) -> None:
+        if self._resolver_calls.get(key) is call:
+            del self._resolver_calls[key]
+
+        # The acquisitions that waited for it may have timed out; retrieve the failure so it is
+        # not reported as never retrieved.
+        if not call.cancelled():
+            call.exception()
 
     # ---- helpers -------------------------------------------------------------------------
 
@@ -870,22 +909,6 @@ class DefenderRtpClient:
 
     def _utc_timestamp(self, value: object) -> str:
         return _format_utc(_parse_timestamp(value) or datetime.fromtimestamp(self._clock(), tz=UTC))
-
-
-async def _resolve_token(
-    token_resolver: DefenderRtpTokenResolver, agent_id: str, tenant_id: str, scopes: list[str]
-) -> object:
-    """The token from ``token_resolver``, which may be sync or async.
-
-    A synchronous resolver (for example one that calls MSAL directly) would block the event
-    loop, where the deadline cannot interrupt it, so it runs on a worker thread.
-    """
-    if inspect.iscoroutinefunction(token_resolver):
-        resolved: object = token_resolver(agent_id, tenant_id, scopes)
-    else:
-        resolved = await asyncio.to_thread(token_resolver, agent_id, tenant_id, scopes)
-
-    return await resolved if inspect.isawaitable(resolved) else resolved
 
 
 def _log_failed_refresh(refresh: asyncio.Future[str]) -> None:
@@ -1400,14 +1423,14 @@ def _normalized_length(value: str, head: str, normalized_head: str) -> int | Non
     """How many characters ``value`` has once normalized, given its beginning ``head`` and that
     beginning normalized.
 
-    ``None`` when the rest holds surrogates: only normalizing all of it would count what they
-    become, and that work is not bounded (each costs the codec's error handler).
+    ``None`` when ``value`` is longer than ``head`` and not ASCII: what the rest becomes is known
+    only by reading all of it, which would make the work grow with the string rather than the
+    budget.
     """
     if len(head) == len(value):
         return len(normalized_head)
 
-    if value.isascii() or _SURROGATES.search(value, len(head)) is None:
-        # No surrogate in the rest: no pair spans the cut, and each of its characters stays one.
+    if value.isascii():
         return len(normalized_head) + len(value) - len(head)
 
     return None

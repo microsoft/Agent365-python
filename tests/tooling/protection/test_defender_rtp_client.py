@@ -302,6 +302,32 @@ async def test_fills_fields_the_host_did_not_set_from_the_agent_context() -> Non
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("request_id", "sent"),
+    [
+        ("host-request", "host-request"),
+        (None, "activity-id"),
+        ("", "activity-id"),
+        ("  ", "activity-id"),
+        (7, "activity-id"),
+        ({"id": "host-request"}, "activity-id"),
+    ],
+)
+async def test_a_request_id_that_is_missing_or_not_a_string_falls_back_to_the_turns(
+    request_id: object, sent: str
+) -> None:
+    client, session = create()
+    context = input_context("hello")
+    if request_id is not None:
+        context["request_id"] = request_id
+
+    await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert body["request_id"] == sent
+
+
+@pytest.mark.asyncio
 async def test_sends_the_agents_tenant_even_when_the_host_set_another() -> None:
     client, session = create()
     context = input_context("hello")
@@ -596,11 +622,19 @@ async def test_a_split_pair_counts_as_the_character_it_becomes(
 @pytest.mark.parametrize(
     ("text", "kept", "marker"),
     [
-        ("\U0001f600" * 1000, "\U0001f600" * 16, "...[truncated 984 chars]"),
-        ("\ud83d\ude00" * 30 + "x" * 1000, "\U0001f600" * 15, "...[truncated 1015 chars]"),
+        ("x" * 1000, "x" * 16, "...[truncated 984 chars]"),
+        ("\u00e9" * 50, "\u00e9" * 17, "...[truncated 33 chars]"),
+        ("\ud83d\ude00" * 35 + "x" * 10, "\U0001f600" * 17, "...[truncated 28 chars]"),
+        ("\U0001f600" * 1000, "\U0001f600" * 26, "...[truncated]"),
         ("\ud83d\ude00" * 1000, "\U0001f600" * 26, "...[truncated]"),
     ],
-    ids=["emoji", "split pairs only where kept", "split pairs in what is cut"],
+    ids=[
+        "ASCII",
+        "non-ASCII read in full",
+        "split pairs read in full",
+        "non-ASCII longer than what is read",
+        "split pairs longer than what is read",
+    ],
 )
 async def test_a_long_string_is_cut_with_a_marker_counting_normalized_characters(
     text: str, kept: str, marker: str
@@ -2413,3 +2447,37 @@ async def test_prefetch_with_a_blocking_synchronous_token_resolver_times_out() -
         release.set()
 
     assert time.perf_counter() - started < 2
+
+
+@pytest.mark.asyncio
+async def test_a_blocking_synchronous_token_resolver_is_called_once_at_a_time() -> None:
+    # A timeout cannot stop the worker thread, so later evaluations wait for the same call
+    # rather than starting more threads that would block too.
+    client, session = create(timeout_seconds=0.2)
+    release = threading.Event()
+    token = create_token()
+    calls: list[str] = []
+
+    def blocking(agent_id: str, _tenant_id: str, _scopes: list[str]) -> str | None:
+        calls.append(agent_id)
+        release.wait(5)
+        return token
+
+    try:
+        results = [
+            await client.evaluate_hook_context(input_context("hello"), AGENT, blocking)
+            for _ in range(4)
+        ]
+    finally:
+        release.set()
+
+    assert len(calls) == 1
+    assert all(result is not None and not result.evaluated for result in results)
+    assert all(result.error == "entra token unavailable" for result in results if result)
+    assert session.calls == []
+
+    await asyncio.sleep(0.2)
+    result = await client.evaluate_hook_context(input_context("hello"), AGENT, blocking)
+
+    assert result is not None and result.evaluated is True, "a token once the call returns"
+    assert len(calls) <= 2

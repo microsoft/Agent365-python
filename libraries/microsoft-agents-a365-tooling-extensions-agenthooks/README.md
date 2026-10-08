@@ -194,7 +194,7 @@ member or error body of an unexpected shape is ignored rather than failing the e
 
 | Variable | Meaning |
 |---|---|
-| `ENABLE_A365_DEFENDER_RTP` | `true` to call Defender |
+| `ENABLE_A365_DEFENDER_RTP` | `true` (also `1`, `yes`, `on`) to call Defender; `false` (`0`, `no`, `off`) or unset not to; any other value is rejected |
 | `A365_DEFENDER_RTP_ENDPOINT` | the prevention endpoint, `https://<host>/v1/protection/evaluate` (HTTPS only) |
 | `A365_DEFENDER_RTP_FAIL_MODE` | `open` (default) or `closed`, which blocks when no verdict is obtained; any other value is rejected |
 | `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | one deadline for token acquisition and the call (default 10000) |

@@ -32,6 +32,8 @@ AUTHENTICATION_SCOPE_VARIABLE: Final[str] = "A365_DEFENDER_RTP_AUTHENTICATION_SC
 MAX_CONTENT_CHARACTERS_VARIABLE: Final[str] = "A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS"
 
 _INTEGER = re.compile(r"[+-]?\d+")
+_ENABLED_VALUES: Final[frozenset[str]] = frozenset({"true", "1", "yes", "on"})
+_DISABLED_VALUES: Final[frozenset[str]] = frozenset({"false", "0", "no", "off"})
 # The largest timeout (in milliseconds) or content limit read, as in the other Agent 365 SDKs.
 _MAX_INTEGER: Final[int] = 2**31 - 1
 _MAX_TIMEOUT_SECONDS: Final[float] = _MAX_INTEGER / 1000
@@ -83,9 +85,10 @@ class DefenderRtpOptions:
             The configured options.
 
         Raises:
-            ValueError: If the endpoint is not an absolute URL, the fail mode is neither ``open``
-                nor ``closed``, or the timeout or the maximum content characters is not a
-                positive integer of at most 2147483647.
+            ValueError: If the enable flag is not a recognized true or false (``true``/``false``,
+                ``1``/``0``, ``yes``/``no``, ``on``/``off``), the endpoint is not an absolute
+                URL, the fail mode is neither ``open`` nor ``closed``, or the timeout or the
+                maximum content characters is not a positive integer of at most 2147483647.
         """
         variables = os.environ if environ is None else environ
 
@@ -96,9 +99,8 @@ class DefenderRtpOptions:
             value = value.strip()
             return value or None
 
-        enabled = read(ENABLE_VARIABLE)
         options = cls(
-            enabled=enabled is not None and enabled.lower() in ("true", "1", "yes"),
+            enabled=_parse_enabled(read(ENABLE_VARIABLE)),
             fail_closed=_parse_fail_mode(read(FAIL_MODE_VARIABLE)),
         )
 
@@ -173,6 +175,18 @@ def is_https_url(value: str) -> bool:
     """Whether ``value`` is an absolute HTTPS URL, so tokens never travel in plaintext."""
     parsed = urlparse(value)
     return parsed.scheme.lower() == "https" and bool(parsed.netloc)
+
+
+def _parse_enabled(value: str | None) -> bool:
+    """Whether Defender RTP is enabled. Unset means disabled; a value that is not a recognized
+    way of saying true or false is rejected, so a typo cannot quietly turn protection off."""
+    if value is None or value.lower() in _DISABLED_VALUES:
+        return False
+
+    if value.lower() in _ENABLED_VALUES:
+        return True
+
+    raise ValueError(f"{ENABLE_VARIABLE} must be true or false.")
 
 
 def _parse_fail_mode(value: str | None) -> bool:

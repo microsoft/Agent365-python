@@ -301,7 +301,8 @@ dropped, so generated values never repeat or decrease within a session.
 filled optional fields (`extensions`, `model`, `tools`, `messages`, `actor`, `request_id`, `trace`) are repaired or
 dropped; `tool_call.content_hash` and `tool_result.duration_ms` are kept when they meet the spec. `tenant.id` is
 always the agent's tenant, which the token is issued for and Defender requires; `agent.id`, `actor`, `request_id` and
-`model.id` are filled from `DefenderRtpAgentContext` when the host did not set them. The envelope (spec, timestamp,
+`model.id` are filled from `DefenderRtpAgentContext` when the host did not set them (a `request_id` that is empty or
+not a string counts as not set). The envelope (spec, timestamp,
 sequence, agent, session, tenant, actor, request, model, trace, and roles, tool names and ids) is built from its spec
 fields alone (`session` keeps `id`, a UTC `started_at` and a non-negative `turn`; `tenant` its `name`; `trace`
 `trace_id` and `span_id`), so nothing else a host puts in an envelope object escapes the content budget, and it is
@@ -321,7 +322,8 @@ scope until they expire and shares one acquisition between concurrent calls; the
 completes, and a failed one is never cached. Within five minutes of expiry, a call refreshes the token in the
 background and keeps using the cached token, also when the refresh fails. A token resolver may be sync or async; a
 synchronous one (for example one that calls MSAL directly) runs on a worker thread, so it never blocks the event loop
-and the deadline applies while it waits.
+and the deadline applies while it waits. A timeout cannot stop that thread, so one call per agent, tenant and scope
+runs at a time: a later acquisition waits for the same call, and a resolver that blocks cannot pile up threads.
 
 **Deadline:** token acquisition and the request share one deadline, `timeout_seconds`, so the fail mode applies within
 that time, before an agent-hooks interceptor timeout above it.
@@ -333,8 +335,9 @@ Defender's failed validation rules (`diagnostics.validationErrors`) in `error`. 
 this SDK version does not apply it.
 
 **Long content:** each content string is cut to at most `max_content_characters` characters, ending with a
-`...[truncated N chars]` marker when it fits (N counts characters as sent, so a rejoined pair is one; when what was
-cut holds surrogates, counting them would mean normalizing all of it, so the marker is `...[truncated]`), and all
+`...[truncated N chars]` marker when it fits (N counts characters as sent, so a rejoined pair is one; a string that is
+not ASCII and longer than the twice-the-limit prefix that is read gets `...[truncated]`, since counting the rest would
+mean reading all of it), and all
 content in one request shares a budget of four times that
 (each string, key, number and kept-whole name counts its length, every other value one), so the request and the time
 to prepare it stay bounded. The content under decision (`target`: the input, a tool call's arguments, a tool result,
@@ -397,7 +400,7 @@ microsoft_agents_a365/tooling/
 |----------|---------|--------|
 | `ENVIRONMENT` | Controls dev vs prod mode | `Development`, `Production` (default) |
 | `MCP_BASE_URL` | Base URL for MCP servers (dev mode) | URL string |
-| `ENABLE_A365_DEFENDER_RTP` | Enables Defender real-time protection | `true`, `1`, `yes`; default off |
+| `ENABLE_A365_DEFENDER_RTP` | Enables Defender real-time protection | `true`, `1`, `yes`, `on`; `false`, `0`, `no`, `off`; default off; any other value is rejected |
 | `A365_DEFENDER_RTP_ENDPOINT` | Defender prevention endpoint; required when enabled | `https://<host>/v1/protection/evaluate` |
 | `A365_DEFENDER_RTP_FAIL_MODE` | Outcome when no verdict is obtained | `open` (default), `closed`; any other value is rejected |
 | `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | Per-call timeout for token acquisition and evaluation | Positive integer up to `2147483647`; default `10000` |

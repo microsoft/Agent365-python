@@ -65,17 +65,26 @@ def test_reads_the_process_environment_by_default(monkeypatch: pytest.MonkeyPatc
         ("TRUE", True),
         ("1", True),
         ("Yes", True),
+        ("on", True),
         (" true ", True),
         ("false", False),
         ("0", False),
-        ("on", False),
+        ("no", False),
+        ("OFF", False),
         ("", False),
+        ("   ", False),
     ],
 )
 def test_parses_the_enable_flag(value: str, enabled: bool) -> None:
     options = DefenderRtpOptions.from_environment({"ENABLE_A365_DEFENDER_RTP": value})
 
     assert options.enabled is enabled
+
+
+@pytest.mark.parametrize("value", ["tru", "enabled", "2", "y", "disable"])
+def test_rejects_an_enable_flag_that_is_not_true_or_false(value: str) -> None:
+    with pytest.raises(ValueError, match="ENABLE_A365_DEFENDER_RTP must be true or false"):
+        DefenderRtpOptions.from_environment({"ENABLE_A365_DEFENDER_RTP": value})
 
 
 @pytest.mark.parametrize(

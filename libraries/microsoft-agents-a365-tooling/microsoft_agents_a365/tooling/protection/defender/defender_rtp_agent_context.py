@@ -15,7 +15,8 @@ Called with ``(agent_id, tenant_id, scopes)``: the agent identity (application) 
 token's ``appid``; the agent's tenant, which must equal the context's ``tenant.id``; and the scopes
 to request. Returns the agent identity's own app-only token for the Defender API, carrying the
 ``RealtimeProtection.Evaluate.All`` role, or ``None`` when none is available. May be sync or async;
-a synchronous resolver runs on a worker thread, so the evaluation deadline applies while it blocks.
+a synchronous resolver runs on a worker thread, so the evaluation deadline applies while it blocks, and
+one call per agent, tenant and scope runs at a time.
 
 Use the same authority as Observability S2S export: the blueprint credential obtains the agent
 identity's assertion (FMI), and the agent identity exchanges it for the requested scope (see
@@ -38,7 +39,8 @@ class DefenderRtpAgentContext:
         agent_name: The agent's display name (``agent.name``) when the context has none.
         framework: The agent framework (``agent.framework``, lowercase ``[a-z0-9_-]``) when the
             context has none.
-        request_id: The turn's request id (``request_id``), for example the activity id.
+        request_id: The turn's request id (``request_id``), for example the activity id; also
+            used when the context's ``request_id`` is empty or not a string.
         user_id: Who triggered the run (``actor.id``), for example the user's Entra object id.
         actor_kind: The kind of actor (``actor.kind``): ``human`` (default), ``service`` for
             autonomous runs, or ``agent`` for agent-to-agent calls.
