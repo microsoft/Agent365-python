@@ -292,7 +292,9 @@ if result is not None and not result.allowed:
 
 **Request:** Defender receives a fitted copy of the context (the host's context is not modified): `spec` is
 `agent-hooks/0.1`, the timestamp is UTC, a missing or negative `sequence` is numbered after the highest sequence seen in
-the session, `agent.framework` is lowercased to `[a-z0-9_-]` (default `agent365`), `target` equals the point's field,
+the session (the client tracks up to 1,000 sessions; a session it no longer tracks resumes above the highest sequence of
+every session it dropped, so a sequence never repeats or decreases within a session),
+`agent.framework` is lowercased to `[a-z0-9_-]` (default `agent365`), `target` equals the point's field,
 `tool_call` and `tool_result` keep only spec members (non-object tool arguments become `{"input": ...}`), and loosely
 filled optional fields (`extensions`, `model`, `tools`, `messages`, `actor`, `request_id`, `trace`) are repaired or
 dropped; `tool_call.content_hash` and `tool_result.duration_ms` are kept when they meet the spec. `tenant.id` is
@@ -313,7 +315,9 @@ agent identity's assertion from the connection (`AccessTokenProviderBase.get_age
 assertion; the authority must be HTTPS, and a redirect is a token failure) for the Defender API scope. The client caches tokens per agent, tenant and
 scope until they expire and shares one acquisition between concurrent calls; the acquisition is dropped when it
 completes, and a failed one is never cached. Within five minutes of expiry, a call refreshes the token in the
-background and keeps using the cached token, also when the refresh fails.
+background and keeps using the cached token, also when the refresh fails. A token resolver may be sync or async; a
+synchronous one (for example one that calls MSAL directly) runs on a worker thread, so it never blocks the event loop
+and the deadline applies while it waits.
 
 **Deadline:** token acquisition and the request share one deadline, `timeout_seconds`, so the fail mode applies within
 that time, before an agent-hooks interceptor timeout above it.
@@ -330,7 +334,9 @@ this SDK version does not apply it.
 to prepare it stay bounded. The content under decision (`target`: the input, a tool call's arguments, a tool result,
 or the output) is sent twice, as the point's field and as `target`, so it may use half of the budget. The rest goes, in
 order, to the call's arguments at `post_tool_call`, tool declarations (the called tool's first, so a short budget never
-drops it), the most recent messages, extensions, and any other member; what does not fit is dropped. Containers nested
+drops it), the most recent messages, extensions, and any other member; what does not fit is dropped. Tool
+registries, message histories (newest first) and extension namespaces are read only as far as the budget reaches, so a
+long one costs no more than what is sent. Containers nested
 deeper than 32 levels are cut too. When the content under decision is cut, Defender evaluates a truncated copy and the
 result has `truncated=True`. A block (`deny` or `transform`) stays a block; an allow does not cover the rest of the
 content, so `allowed` follows the fail mode, `error` says so, and `verified` is false. Raising the limit is the remedy

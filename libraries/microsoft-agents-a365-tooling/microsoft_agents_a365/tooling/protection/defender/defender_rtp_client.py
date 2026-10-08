@@ -10,6 +10,7 @@ import base64
 import dataclasses
 import functools
 import inspect
+import itertools
 import json
 import logging
 import math
@@ -158,6 +159,9 @@ class DefenderRtpClient:
         self._tokens: dict[_TokenKey, _CachedToken] = {}
         self._in_flight_tokens: dict[_TokenKey, asyncio.Future[str]] = {}
         self._sequences: dict[str, int] = {}
+        # The highest sequence of any session no longer tracked: an untracked session resumes
+        # above it, so a sequence never repeats or decreases within a session.
+        self._untracked_high_water = 0
 
     @property
     def options(self) -> DefenderRtpOptions:
@@ -500,7 +504,9 @@ class DefenderRtpClient:
         extensions = context.get("extensions")
         if isinstance(extensions, dict):
             prepared_extensions: JsonObject = {}
-            for key, extension in extensions.items():
+            # Each namespace kept costs at least one character, so only as many are read as the
+            # budget could hold.
+            for key, extension in itertools.islice(extensions.items(), fitter.remaining):
                 if _is_extension_key(key) and not fitter.fit_member(
                     prepared_extensions, key, extension
                 ):
@@ -759,8 +765,7 @@ class DefenderRtpClient:
         scope: str,
     ) -> str:
         async with asyncio.timeout(self._options.timeout_seconds):
-            resolved = token_resolver(agent.agent_id, agent.tenant_id, [scope])
-            token = await resolved if inspect.isawaitable(resolved) else resolved
+            token = await _resolve_token(token_resolver, agent.agent_id, agent.tenant_id, [scope])
 
         if not isinstance(token, str) or not token.strip():
             raise RuntimeError("The Defender token resolver returned no token.")
@@ -785,18 +790,28 @@ class DefenderRtpClient:
     # ---- helpers -------------------------------------------------------------------------
 
     def _next_sequence(self, session_id: str) -> int:
-        following = self._sequences.pop(session_id, 0) + 1
+        following = self._sequence_high_water(session_id) + 1
         self._track_sequence(session_id, following)
         return following
 
     def _observe_sequence(self, session_id: str, sequence: int) -> None:
         """Record a host-set sequence, so a later generated one stays above it."""
-        self._track_sequence(session_id, max(self._sequences.pop(session_id, 0), sequence))
+        self._track_sequence(session_id, max(self._sequence_high_water(session_id), sequence))
+
+    def _sequence_high_water(self, session_id: str) -> int:
+        """The highest sequence seen in the session, which stops being tracked until recorded.
+
+        A session that is not tracked may have been dropped from the bounded cache, so its
+        sequences resume above those of every dropped session.
+        """
+        tracked = self._sequences.pop(session_id, None)
+        return tracked if tracked is not None else self._untracked_high_water
 
     def _track_sequence(self, session_id: str, high_water: int) -> None:
         self._sequences[session_id] = high_water
         while len(self._sequences) > _MAX_TRACKED_SESSIONS:
-            del self._sequences[next(iter(self._sequences))]
+            dropped = self._sequences.pop(next(iter(self._sequences)))
+            self._untracked_high_water = max(self._untracked_high_water, dropped)
 
     def _generated_tool_call_id(self) -> str:
         return "tooluse_" + self._id_factory().hex[:12]
@@ -804,6 +819,22 @@ class DefenderRtpClient:
     def _utc_timestamp(self, value: object) -> str:
         parsed = _parse_timestamp(value) or datetime.fromtimestamp(self._clock(), tz=UTC)
         return f"{parsed.strftime('%Y-%m-%dT%H:%M:%S')}.{parsed.microsecond // 1000:03d}Z"
+
+
+async def _resolve_token(
+    token_resolver: DefenderRtpTokenResolver, agent_id: str, tenant_id: str, scopes: list[str]
+) -> object:
+    """The token from ``token_resolver``, which may be sync or async.
+
+    A synchronous resolver (for example one that calls MSAL directly) would block the event
+    loop, where the deadline cannot interrupt it, so it runs on a worker thread.
+    """
+    if inspect.iscoroutinefunction(token_resolver):
+        resolved: object = token_resolver(agent_id, tenant_id, scopes)
+    else:
+        resolved = await asyncio.to_thread(token_resolver, agent_id, tenant_id, scopes)
+
+    return await resolved if inspect.isawaitable(resolved) else resolved
 
 
 def _log_failed_refresh(refresh: asyncio.Future[str]) -> None:
@@ -835,6 +866,11 @@ class _Fitter:
     def used(self) -> int:
         """The characters of the budget spent so far."""
         return self._budget - self._remaining
+
+    @property
+    def remaining(self) -> int:
+        """The characters of the budget left."""
+        return self._remaining
 
     def fit(self, node: object, default: object = _OMITTED) -> tuple[object, bool]:
         """A fitted copy of ``node`` (``default`` when none of it fits), and whether it was cut."""
@@ -961,9 +997,13 @@ def _fit_tools(
     """Tool declarations with their spec members, within the budget.
 
     The called tool's declaration comes first, so a short budget never drops it. At a tool
-    point without declarations, the called tool is declared from the ``a365`` extension.
+    point without declarations, the called tool is declared from the ``a365`` extension. Only
+    as many entries are read as the budget could hold (each declaration costs at least one
+    character), so a long tool registry costs no more than what is sent.
     """
-    ordered = tools if isinstance(tools, list) else []
+    declared = tools if isinstance(tools, list) else []
+    ordered = declared[: fitter.remaining]
+    called_unread = False
     if tool_name is not None:
         index = next(
             (
@@ -975,8 +1015,15 @@ def _fit_tools(
         )
         if index is not None:
             ordered = [ordered[index], *ordered[:index], *ordered[index + 1 :]]
+        else:
+            # The called tool may be declared beyond the entries read; declare it from its
+            # name, so a long registry never hides it.
+            called_unread = len(declared) > len(ordered)
 
     declarations: list[object] = []
+    if called_unread and tool_name is not None:
+        declarations.append(_called_tool(fitter, tool_name, extensions))
+
     for tool in ordered:
         name = _read_string(_get(tool, "name"))
         if not name:
@@ -997,32 +1044,38 @@ def _fit_tools(
         declarations.append(declaration)
 
     if not declarations and tool_name is not None:
-        declaration = {"name": _normalize(tool_name)}
-        # An extension namespace may hold any JSON value, so each level's shape is checked.
-        description = _read_string(
-            _get(_get(_get(extensions, _A365_EXTENSION), "tool"), "description")
-        )
-        if description:
-            fitter.fit_member(declaration, "description", description)
-
-        declarations.append(declaration)
+        declarations.append(_called_tool(fitter, tool_name, extensions))
 
     return declarations
 
 
+def _called_tool(fitter: _Fitter, tool_name: str, extensions: object) -> JsonObject:
+    """A declaration of the called tool from its name and the ``a365`` extension."""
+    declaration: JsonObject = {"name": _normalize(tool_name)}
+    # An extension namespace may hold any JSON value, so each level's shape is checked.
+    description = _read_string(_get(_get(_get(extensions, _A365_EXTENSION), "tool"), "description"))
+    if description:
+        fitter.fit_member(declaration, "description", description)
+
+    return declaration
+
+
 def _fit_messages(fitter: _Fitter, messages: object) -> list[object]:
-    """The most recent messages that fit, in their order; none when any is malformed."""
-    if not isinstance(messages, list) or not all(
-        isinstance(message, dict)
-        and bool(_read_string(message.get("role")))
-        and "content" in message
-        for message in messages
-    ):
+    """The most recent messages that fit, in their order.
+
+    Messages are read newest first and only until the budget is spent, so a long history costs
+    no more than what is sent. A message without a role or content among those read drops the
+    history, since Defender rejects it.
+    """
+    if not isinstance(messages, list):
         return []
 
     fitted: list[object] = []
     for message in reversed(messages):
-        role = message["role"]
+        role = _read_string(_get(message, "role"))
+        if not isinstance(message, dict) or not role or "content" not in message:
+            return []
+
         if not fitter.reserve(role):
             break
 

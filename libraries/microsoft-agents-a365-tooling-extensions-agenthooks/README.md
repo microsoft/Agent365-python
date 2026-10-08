@@ -174,8 +174,9 @@ chunks is a follow-up.
 
 Strings are always sent as valid Unicode (a lone surrogate becomes U+FFFD, so it can't keep the request
 from being sent), NaN and infinities are sent as text, and nesting deeper than 32 levels is cut like long
-content. A context member, verdict member or error body of an unexpected shape is ignored rather than
-failing the evaluation.
+content. Tool registries, message histories and extension namespaces are read only as far as the budget
+reaches, so a long one doesn't slow the call down. A context member, verdict member or error body of an
+unexpected shape is ignored rather than failing the evaluation.
 
 ## Configuration
 

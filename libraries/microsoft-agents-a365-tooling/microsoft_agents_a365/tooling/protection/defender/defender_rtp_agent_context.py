@@ -14,7 +14,8 @@ DefenderRtpTokenResolver = Callable[[str, str, list[str]], Awaitable[str | None]
 Called with ``(agent_id, tenant_id, scopes)``: the agent identity (application) id, which is the
 token's ``appid``; the agent's tenant, which must equal the context's ``tenant.id``; and the scopes
 to request. Returns the agent identity's own app-only token for the Defender API, carrying the
-``RealtimeProtection.Evaluate.All`` role, or ``None`` when none is available. May be sync or async.
+``RealtimeProtection.Evaluate.All`` role, or ``None`` when none is available. May be sync or async;
+a synchronous resolver runs on a worker thread, so the evaluation deadline applies while it blocks.
 
 Use the same authority as Observability S2S export: the blueprint credential obtains the agent
 identity's assertion (FMI), and the agent identity exchanges it for the requested scope (see

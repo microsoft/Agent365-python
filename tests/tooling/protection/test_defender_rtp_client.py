@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import copy
 import json
+import threading
 import time
 import uuid
 
@@ -19,7 +21,11 @@ from microsoft_agents_a365.tooling.protection.defender import (
     DefenderRtpAgentContext,
     DefenderRtpClient,
     DefenderRtpOptions,
+    DefenderRtpTokenResolver,
     DefenderRtpWarning,
+)
+from microsoft_agents_a365.tooling.protection.defender import (
+    defender_rtp_client as client_module,
 )
 from microsoft_agents_a365.tooling.protection.defender.defender_rtp_client import _truncate
 
@@ -359,6 +365,31 @@ async def test_numbers_contexts_without_a_sequence_per_session() -> None:
         await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
 
     assert [body["sequence"] for body in session.bodies] == [1, 2, 1, 3]
+
+
+@pytest.mark.asyncio
+async def test_a_session_dropped_from_the_sequence_cache_resumes_above_its_sequences(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(client_module, "_MAX_TRACKED_SESSIONS", 2)
+    client, session = create()
+
+    async def evaluate(session_id: str, sequence: int | None = None) -> object:
+        context = input_context("hello")
+        context["session"] = {"id": session_id}
+        if sequence is None:
+            del context["sequence"]
+        else:
+            context["sequence"] = sequence
+        await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+        return session.bodies[-1]["sequence"]
+
+    assert [await evaluate("a"), await evaluate("a")] == [1, 2]
+    assert await evaluate("b", 40) == 40
+    assert await evaluate("c") == 1
+    assert await evaluate("d") == 3, "above session a, which was dropped"
+    assert await evaluate("a") == 41, "above every dropped session, so a never repeats"
+    assert await evaluate("a") == 42
 
 
 @pytest.mark.asyncio
@@ -1942,3 +1973,108 @@ async def test_accepts_a_synchronous_token_resolver() -> None:
 
     assert result is not None and result.evaluated
     assert session.calls[0].authorization == f"Bearer {token}"
+
+
+# ─── bounded reads and blocking resolvers ─────────────────────────────────────
+
+
+class Unreadable(dict[str, object]):
+    """A tool or message entry that fails the test when it is read."""
+
+    def get(self, key: str, default: object = None) -> object:
+        raise AssertionError(f"read {key!r} beyond the budget")
+
+
+@pytest.mark.asyncio
+async def test_reads_only_as_many_tool_declarations_as_the_budget_could_hold() -> None:
+    # A budget of 4 x 100 leaves about 400 for tools: the registry is read no further.
+    client, session = create(max_content_characters=100)
+    tools: list[object] = [{"name": f"tool{i}"} for i in range(1000)]
+    tools += [Unreadable(), {"name": "Search", "description": "Searches the web."}]
+    context = tool_context(
+        "pre_tool_call", tool_call={"id": "c-1", "name": "Search", "args": {}}, tools=tools
+    )
+
+    await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["tools"][0] == {"name": "Search"}, "the called tool is declared from its name"
+    assert body["tools"][1]["name"] == "tool0"
+    assert len(body["tools"]) < 1000
+
+
+@pytest.mark.asyncio
+async def test_reads_messages_only_as_far_as_the_budget_reaches() -> None:
+    client, session = create(max_content_characters=100)
+    messages: list[object] = [Unreadable(), {"role": 5, "content": "malformed"}]
+    messages += [{"role": "user", "content": f"message {i}"} for i in range(1000)]
+    context = input_context("hello")
+    context["messages"] = messages
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["messages"][-1] == {"role": "user", "content": "message 999"}
+    assert 0 < len(body["messages"]) < 1000
+    assert result is not None and result.truncated is False
+
+
+def blocking_resolver(release: threading.Event) -> DefenderRtpTokenResolver:
+    def resolve(_agent_id: str, _tenant_id: str, _scopes: list[str]) -> str | None:
+        release.wait(5)
+        return create_token()
+
+    return resolve
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_a_blocking_synchronous_token_resolver_does_not_hold_up_the_event_loop(
+    fail_closed: bool,
+) -> None:
+    client, session = create(fail_closed=fail_closed, timeout_seconds=0.2)
+    release = threading.Event()
+    ticks = 0
+
+    async def tick() -> None:
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    ticker = asyncio.create_task(tick())
+    started = time.perf_counter()
+    try:
+        result = await client.evaluate_hook_context(
+            input_context("hello"), AGENT, blocking_resolver(release)
+        )
+    finally:
+        release.set()
+        ticker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await ticker
+
+    assert time.perf_counter() - started < 2
+    assert ticks >= 5, "the event loop kept running while the resolver blocked"
+    assert result is not None
+    assert result.evaluated is False
+    assert result.error == "entra token unavailable"
+    assert result.allowed is not fail_closed
+    assert session.calls == []
+
+
+@pytest.mark.asyncio
+async def test_prefetch_with_a_blocking_synchronous_token_resolver_times_out() -> None:
+    client, _ = create(timeout_seconds=0.2)
+    release = threading.Event()
+    started = time.perf_counter()
+
+    try:
+        with pytest.raises(TimeoutError):
+            await client.prefetch_access_token(AGENT, blocking_resolver(release))
+    finally:
+        release.set()
+
+    assert time.perf_counter() - started < 2
