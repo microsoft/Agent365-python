@@ -1,0 +1,256 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+"""Microsoft Defender for AI real-time protection as an agent-hooks interceptor."""
+
+from __future__ import annotations
+
+import asyncio
+import contextvars
+import inspect
+import logging
+import re
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import Final
+from urllib.parse import quote
+
+from agent_hooks import AgentContext, Decision, Evidence, Verdict
+from agent_hooks import Warning as HookWarning
+from microsoft_agents_a365.tooling.protection.defender import (
+    DefenderRtpAgentContext,
+    DefenderRtpClient,
+    DefenderRtpEvaluationResult,
+    DefenderRtpTokenResolver,
+)
+
+logger = logging.getLogger(__name__)
+
+_INVALID_REASON_CHARACTERS = re.compile(r"[^A-Za-z0-9_.-]")
+# agent-hooks reserves this namespace for host failures, in warning reasons too.
+_RESERVED_REASON_PREFIX: Final[str] = "host_error:"
+_FAIL_CLOSED_MESSAGE: Final[str] = (
+    "Security validation is unavailable and this agent is configured to fail closed."
+)
+
+
+@dataclass(frozen=True)
+class A365DefenderCall:
+    """The agent identity and credentials for the Defender call of one emitted context.
+
+    Attributes:
+        agent: The agent identity and turn; fills context fields the host did not set.
+        token_resolver: Resolves the agent identity's Defender token, for example
+            :meth:`DefenderRtpTokenResolvers.from_agentic_connection`.
+    """
+
+    agent: DefenderRtpAgentContext
+    token_resolver: DefenderRtpTokenResolver
+
+
+A365DefenderCallResolver = Callable[
+    [AgentContext], A365DefenderCall | None | Awaitable[A365DefenderCall | None]
+]
+"""Returns the agent identity and token resolver for an emitted context; may be async."""
+
+
+class A365DefenderInterceptor:
+    """An agent-hooks interceptor for Microsoft Defender for AI real-time protection.
+
+    For each context the host emits at ``input``, ``pre_tool_call``, ``post_tool_call`` or
+    ``output``, Defender receives a fitted copy (normalized to its request validation and
+    clamped, keeping the context's session, sequence and tool call ids), and Defender's verdict
+    decides: ``deny`` blocks the action. Other points are allowed without a call.
+
+    When no verdict is obtained (transport, authentication or validation failure, no agent
+    identity resolved, or an error from the call resolver or the token resolver), the verdict
+    follows :attr:`DefenderRtpOptions.fail_closed`: allow with a ``defender:unverified``
+    warning, or deny with reason ``runtime_error:defender_unverified``, which is never reported
+    as a detection.
+    """
+
+    NAME: Final[str] = "defender"
+    """The name the interceptor is registered under."""
+
+    def __init__(
+        self,
+        client: DefenderRtpClient,
+        resolve_call: A365DefenderCallResolver,
+        on_evaluated: Callable[[DefenderRtpEvaluationResult], None] | None = None,
+    ) -> None:
+        """Initialize the interceptor.
+
+        Args:
+            client: The Defender client.
+            resolve_call: Returns the agent identity and token resolver for a context, for
+                example from the current turn. It is called only for the points Defender
+                evaluates while Defender RTP is enabled. ``None`` (no agent identity, for
+                example an activity without an agentic instance or tenant id) follows the fail
+                mode, like an unavailable Defender.
+            on_evaluated: Receives each evaluation, for logging and telemetry (for example the
+                correlation id). It runs on a worker thread once the verdict is decided, outside
+                the emitter's interceptor timeout, so neither an exception it raises (which is
+                logged) nor the time it takes changes the verdict; callbacks for concurrent
+                evaluations may run concurrently.
+        """
+        if client is None:
+            raise TypeError("client is required.")
+
+        if resolve_call is None:
+            raise TypeError("resolve_call is required.")
+
+        self._client = client
+        self._resolve_call = resolve_call
+        self._on_evaluated = on_evaluated
+
+    async def intercept(self, context: AgentContext, /) -> Verdict:
+        """Evaluate one emitted context with Defender.
+
+        Args:
+            context: The agent-hooks context the emitter dispatches.
+
+        Returns:
+            The agent-hooks verdict for the context.
+        """
+        point = context.get("interception_point")
+        if (
+            not self._client.options.enabled
+            or not DefenderRtpClient.is_evaluated_interception_point(
+                point if isinstance(point, str) else None
+            )
+        ):
+            return Verdict.allow()
+
+        result: DefenderRtpEvaluationResult | None
+        point_name = point if isinstance(point, str) else ""
+        try:
+            resolved = self._resolve_call(context)
+            call = await resolved if inspect.isawaitable(resolved) else resolved
+            if call is None:
+                # No agent identity (for example an activity without an agentic instance or
+                # tenant id) means no verdict can be obtained, never an allow.
+                result = self._client.unavailable(point_name, "no agent identity was resolved")
+            else:
+                result = await self._client.evaluate_hook_context(
+                    context, call.agent, call.token_resolver
+                )
+        except Exception as error:
+            # A failure to resolve the identity or to evaluate is never a verdict: it follows the
+            # fail mode. Only the exception's type reaches the result, and so the verdict and the
+            # interception record, since its message can carry credentials or content; the
+            # exception itself goes to the log.
+            logger.warning(
+                "The Defender evaluation failed at %s; the fail mode applies.",
+                point_name,
+                exc_info=error,
+            )
+            result = self._client.unavailable(
+                point_name, f"evaluation failed ({type(error).__name__})"
+            )
+
+        if result is None:
+            return Verdict.allow()
+
+        # The verdict is decided before the callback sees the result, and the callback runs on a
+        # worker thread, off the emitter's timed interception, so neither what it does nor how
+        # long it takes changes the verdict.
+        verdict = self.to_verdict(result)
+        if self._on_evaluated is not None:
+            try:
+                asyncio.get_running_loop().run_in_executor(
+                    None,
+                    contextvars.copy_context().run,
+                    _notify_evaluated,
+                    self._on_evaluated,
+                    result,
+                )
+            except Exception:
+                logger.exception("The Defender evaluation callback could not be scheduled.")
+
+        return verdict
+
+    @staticmethod
+    def to_verdict(result: DefenderRtpEvaluationResult) -> Verdict:
+        """Map a Defender evaluation to the agent-hooks verdict the host composes.
+
+        Args:
+            result: The Defender evaluation.
+
+        Returns:
+            The agent-hooks verdict.
+        """
+        name = A365DefenderInterceptor.NAME
+        verdict = result.verdict
+        labels = verdict.result_labels if verdict is not None else ()
+        defender_warnings = tuple(
+            HookWarning(reason=_warning_reason(warning.reason), message=warning.message or "")
+            for warning in (verdict.warnings if verdict is not None else ())
+        )
+        if result.verified:
+            if result.allowed:
+                return Verdict(
+                    decision=Decision.ALLOW, warnings=defender_warnings, result_labels=labels
+                )
+
+            reason = verdict.reason if verdict is not None else None
+            code = ":" + _INVALID_REASON_CHARACTERS.sub("_", reason) if reason else ""
+            return Verdict(
+                decision=Decision.DENY,
+                reason=f"{name}:block{code}",
+                message=result.block_reason,
+                evidence=Evidence(
+                    artefact=f"{name}-verdict",
+                    verification_pointers={
+                        "correlation": f"urn:a365:{name}:{quote(result.correlation_id, safe='')}"
+                    },
+                ),
+                result_labels=labels,
+            )
+
+        # No verdict, or an allow of a truncated copy that does not cover the whole content.
+        unverified = (
+            HookWarning(
+                reason=f"{name}:unverified", message=result.error or "no verdict was returned"
+            ),
+        )
+        if result.allowed:
+            return Verdict(
+                decision=Decision.ALLOW,
+                warnings=unverified + defender_warnings,
+                result_labels=labels,
+            )
+
+        return Verdict(
+            decision=Decision.DENY,
+            reason=f"runtime_error:{name}_unverified",
+            message=result.block_reason or _FAIL_CLOSED_MESSAGE,
+            warnings=unverified,
+        )
+
+
+def _warning_reason(reason: str | None) -> str:
+    """Defender's warning reason, or the interceptor's own when it is empty or in the
+    ``host_error:`` namespace, which agent-hooks reserves for host failures: the emitter rejects
+    a verdict that uses it, which would turn Defender's allow into a host error that denies
+    whatever the fail mode."""
+    if not reason or not reason.strip() or reason.startswith(_RESERVED_REASON_PREFIX):
+        return f"{A365DefenderInterceptor.NAME}:warning"
+
+    return reason
+
+
+def _notify_evaluated(
+    on_evaluated: Callable[[DefenderRtpEvaluationResult], None],
+    result: DefenderRtpEvaluationResult,
+) -> None:
+    """Hand an evaluation to the host's callback. It is for logging and telemetry, so its
+    failure is logged and never changes the verdict."""
+    try:
+        on_evaluated(result)
+    except Exception:
+        logger.exception(
+            "The Defender evaluation callback failed at %s; the verdict is unchanged. "
+            "x-ms-correlation-id=%s",
+            result.interception_point,
+            result.correlation_id,
+        )

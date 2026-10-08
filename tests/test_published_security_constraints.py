@@ -41,6 +41,7 @@ EXPECTED_REQUIREMENTS = {
     "runtime": {"pyjwt"},
     "tooling": {"pyjwt"},
     "tooling-extensions-agentframework": MCP_REQUIREMENTS | {"pyasn1"},
+    "tooling-extensions-agenthooks": {"pyjwt"},
     "tooling-extensions-azureaifoundry": {"pyjwt"},
     "tooling-extensions-googleadk": MCP_REQUIREMENTS | {"pyasn1"},
     "tooling-extensions-openai": MCP_REQUIREMENTS,

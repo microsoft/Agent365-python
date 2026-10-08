@@ -132,6 +132,7 @@ libraries/
         ├── *-tooling-extensions-openai
         ├── *-tooling-extensions-semantickernel
         ├── *-tooling-extensions-agentframework
+        ├── *-tooling-extensions-agenthooks
         └── *-tooling-extensions-azureaifoundry
 ```
 
