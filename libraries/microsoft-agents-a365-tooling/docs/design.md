@@ -379,9 +379,9 @@ microsoft_agents_a365/tooling/
 | `ENABLE_A365_DEFENDER_RTP` | Enables Defender real-time protection | `true`, `1`, `yes`; default off |
 | `A365_DEFENDER_RTP_ENDPOINT` | Defender prevention endpoint; required when enabled | `https://<host>/v1/protection/evaluate` |
 | `A365_DEFENDER_RTP_FAIL_MODE` | Outcome when no verdict is obtained | `open` (default), `closed` |
-| `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | Per-call timeout for token acquisition and evaluation | Positive integer; default `10000` |
+| `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | Per-call timeout for token acquisition and evaluation | Positive integer up to `2147483647`; default `10000` |
 | `A365_DEFENDER_RTP_AUTHENTICATION_SCOPE` | Token scope | Default `api://86a21212-634e-4553-b3d6-e477e4c9d9ec/.default` |
-| `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | Maximum characters per content string; all content in a request shares four times that | Positive integer; default `20000` |
+| `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | Maximum characters per content string; all content in a request shares four times that | Positive integer up to `2147483647`; default `20000` |
 
 ## Error Handling
 

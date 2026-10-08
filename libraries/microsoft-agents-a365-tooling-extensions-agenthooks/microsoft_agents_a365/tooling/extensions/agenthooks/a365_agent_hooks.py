@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Final
 
 from agent_hooks import CompositionConfig, EnforcementMode, InterceptionEmitter, SynthesisPolicy
@@ -33,10 +34,21 @@ def create_protection_emitter(
 
     Returns:
         The configured emitter.
+
+    Raises:
+        ValueError: If the interceptor timeout is not a positive, finite number of seconds.
     """
     if interceptor_timeout_seconds is None:
         defender_timeout = (defender or DefenderRtpOptions()).timeout_seconds
         interceptor_timeout_seconds = defender_timeout + _INTERCEPTOR_TIMEOUT_MARGIN_SECONDS
+
+    # agent-hooks accepts any float; NaN or infinity would leave a host without a timeout.
+    if (
+        isinstance(interceptor_timeout_seconds, bool)
+        or not isinstance(interceptor_timeout_seconds, int | float)
+        or not 0 < interceptor_timeout_seconds < math.inf
+    ):
+        raise ValueError("interceptor_timeout_seconds must be a positive, finite number.")
 
     return InterceptionEmitter(
         mode=EnforcementMode.ENFORCE,

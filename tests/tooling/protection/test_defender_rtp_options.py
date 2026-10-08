@@ -88,10 +88,23 @@ def test_fails_open_unless_the_fail_mode_is_closed(value: str) -> None:
 @pytest.mark.parametrize(
     "name", ["A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS", "A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS"]
 )
-@pytest.mark.parametrize("value", ["0", "-5", "ten", "1.5"])
+@pytest.mark.parametrize(
+    "value", ["0", "-5", "ten", "1.5", "nan", "inf", "2147483648", "99999999999999999999"]
+)
 def test_rejects_a_value_that_is_not_a_positive_integer(name: str, value: str) -> None:
     with pytest.raises(ValueError, match=name):
         DefenderRtpOptions.from_environment({name: value})
+
+
+def test_accepts_the_largest_integer_the_other_sdks_read() -> None:
+    options = DefenderRtpOptions.from_environment({
+        "A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS": "2147483647",
+        "A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS": "2147483647",
+    })
+
+    assert options.timeout_seconds == 2147483.647
+    assert options.max_content_characters == 2147483647
+    DefenderRtpClient(options)
 
 
 @pytest.mark.parametrize(
@@ -122,7 +135,16 @@ def test_requires_an_endpoint_when_enabled() -> None:
             "absolute HTTPS URL",
         ),
         (DefenderRtpOptions(timeout_seconds=0), "timeout_seconds"),
+        (DefenderRtpOptions(timeout_seconds=-1.0), "timeout_seconds"),
+        (DefenderRtpOptions(timeout_seconds=float("nan")), "timeout_seconds"),
+        (DefenderRtpOptions(timeout_seconds=float("inf")), "timeout_seconds"),
+        (DefenderRtpOptions(timeout_seconds=2147483.648), "timeout_seconds"),
+        (DefenderRtpOptions(timeout_seconds=True), "timeout_seconds"),
         (DefenderRtpOptions(max_content_characters=0), "max_content_characters"),
+        (DefenderRtpOptions(max_content_characters=1.5), "max_content_characters"),  # type: ignore[arg-type]
+        (DefenderRtpOptions(max_content_characters=float("nan")), "max_content_characters"),  # type: ignore[arg-type]
+        (DefenderRtpOptions(max_content_characters=2**31), "max_content_characters"),
+        (DefenderRtpOptions(max_content_characters=True), "max_content_characters"),
         (DefenderRtpOptions(authentication_scope=" "), "authentication_scope"),
     ],
 )

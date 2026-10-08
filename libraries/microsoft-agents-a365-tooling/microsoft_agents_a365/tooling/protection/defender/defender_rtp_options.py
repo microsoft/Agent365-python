@@ -32,6 +32,9 @@ AUTHENTICATION_SCOPE_VARIABLE: Final[str] = "A365_DEFENDER_RTP_AUTHENTICATION_SC
 MAX_CONTENT_CHARACTERS_VARIABLE: Final[str] = "A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS"
 
 _INTEGER = re.compile(r"[+-]?\d+")
+# The largest timeout (in milliseconds) or content limit read, as in the other Agent 365 SDKs.
+_MAX_INTEGER: Final[int] = 2**31 - 1
+_MAX_TIMEOUT_SECONDS: Final[float] = _MAX_INTEGER / 1000
 
 
 @dataclass
@@ -81,7 +84,7 @@ class DefenderRtpOptions:
 
         Raises:
             ValueError: If the endpoint is not an absolute URL, or the timeout or the maximum
-                content characters is not a positive integer.
+                content characters is not a positive integer of at most 2147483647.
         """
         variables = os.environ if environ is None else environ
 
@@ -125,8 +128,9 @@ class DefenderRtpOptions:
 
         Raises:
             ValueError: If Defender RTP is enabled without an endpoint, the endpoint is not an
-                absolute HTTPS URL, or the timeout, the maximum content characters or the
-                authentication scope is invalid.
+                absolute HTTPS URL, the timeout is not a positive, finite number of seconds (at
+                most 2147483.647), the maximum content characters is not a positive integer (at
+                most 2147483647), or the authentication scope is missing.
         """
         if self.enabled and not self.endpoint:
             raise ValueError(
@@ -137,11 +141,28 @@ class DefenderRtpOptions:
         if self.endpoint and not is_https_url(self.endpoint):
             raise ValueError("DefenderRtpOptions.endpoint must be an absolute HTTPS URL.")
 
-        if self.timeout_seconds <= 0:
-            raise ValueError("DefenderRtpOptions.timeout_seconds must be positive.")
+        timeout = self.timeout_seconds
+        # NaN fails both comparisons, and infinity the upper bound: neither is a deadline.
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, int | float)
+            or not 0 < timeout <= _MAX_TIMEOUT_SECONDS
+        ):
+            raise ValueError(
+                "DefenderRtpOptions.timeout_seconds must be a positive, finite number of at "
+                f"most {_MAX_TIMEOUT_SECONDS} seconds."
+            )
 
-        if self.max_content_characters <= 0:
-            raise ValueError("DefenderRtpOptions.max_content_characters must be positive.")
+        maximum = self.max_content_characters
+        if (
+            isinstance(maximum, bool)
+            or not isinstance(maximum, int)
+            or not 0 < maximum <= _MAX_INTEGER
+        ):
+            raise ValueError(
+                "DefenderRtpOptions.max_content_characters must be a positive integer of at "
+                f"most {_MAX_INTEGER}."
+            )
 
         if not self.authentication_scope or not self.authentication_scope.strip():
             raise ValueError("DefenderRtpOptions.authentication_scope is required.")
@@ -156,6 +177,6 @@ def is_https_url(value: str) -> bool:
 def _parse_positive(value: str, name: str) -> int:
     if _INTEGER.fullmatch(value) is not None:
         parsed = int(value)
-        if parsed > 0:
+        if 0 < parsed <= _MAX_INTEGER:
             return parsed
-    raise ValueError(f"{name} must be a positive integer.")
+    raise ValueError(f"{name} must be a positive integer of at most {_MAX_INTEGER}.")

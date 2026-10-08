@@ -702,6 +702,20 @@ def test_creates_an_enforcing_strictest_emitter_with_room_for_the_defender_timeo
     assert create_protection_emitter(interceptor_timeout_seconds=1.5)._timeout == 1.5
 
 
+@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), 0, -1.0, True])
+def test_rejects_an_interceptor_timeout_that_is_not_positive_and_finite(timeout: float) -> None:
+    with pytest.raises(ValueError, match="interceptor_timeout_seconds"):
+        create_protection_emitter(interceptor_timeout_seconds=timeout)
+
+
+@pytest.mark.parametrize("defender_timeout", [float("nan"), float("inf"), -2.0, -5.0])
+def test_rejects_a_defender_timeout_that_leaves_no_interceptor_timeout(
+    defender_timeout: float,
+) -> None:
+    with pytest.raises(ValueError, match="interceptor_timeout_seconds"):
+        create_protection_emitter(defender=DefenderRtpOptions(timeout_seconds=defender_timeout))
+
+
 def test_registers_the_interceptor_under_the_defender_name() -> None:
     interceptor = A365DefenderInterceptor(
         DefenderRtpClient(DefenderRtpOptions()), lambda _context: None
