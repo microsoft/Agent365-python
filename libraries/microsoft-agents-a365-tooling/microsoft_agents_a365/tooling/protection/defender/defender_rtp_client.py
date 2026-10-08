@@ -862,8 +862,9 @@ class _Fitter:
 
     def _member(self, owner: JsonObject, key: object, value: object, depth: int) -> bool:
         text = _key_text(key)
-        # Normalizing never lengthens a key, so an oversized one is rejected before it is read.
-        if len(text) >= self._remaining:
+        # A normalized character takes at most two of the original (a rejoined pair), so a key
+        # this long cannot fit; it is rejected before it is read.
+        if len(text) >= 2 * self._remaining:
             self._cut = True
             return False
 
@@ -941,11 +942,15 @@ class _Fitter:
             self._cut = True
             return _OMITTED
 
-        if len(value) > limit:
+        # Normalized before it is measured, so a split surrogate pair counts as the one
+        # character it becomes. A normalized character takes at most two of the original, so
+        # this prefix decides whether the text fits, however long the original is.
+        head = value[: 2 * limit + 1]
+        text = _normalize(head)
+        if len(head) < len(value) or len(text) > limit:
             self._cut = True
-            value = _truncate(value, limit)
+            text = _truncate(text, limit, len(text) + len(value) - len(head))
 
-        text = _normalize(value)
         self._remaining -= max(1, len(text))
         return text
 
@@ -1238,23 +1243,28 @@ def _is_duration(value: object) -> bool:
     return isinstance(value, float) and math.isfinite(value) and value >= 0
 
 
-def _truncate(value: str, max_characters: int) -> str:
-    """At most ``max_characters`` characters, ending with a truncation marker when one fits."""
-    if len(value) <= max_characters:
+def _truncate(value: str, max_characters: int, length: int | None = None) -> str:
+    """At most ``max_characters`` characters, ending with a truncation marker when one fits.
+
+    ``length`` is the length of the text when ``value`` is only its beginning; the marker
+    counts the characters omitted from that text.
+    """
+    total = len(value) if length is None else max(length, len(value))
+    if total <= max_characters:
         return value
 
-    omitted = len(value) - max_characters
+    omitted = total - max_characters
     while True:
         marker = f"...[truncated {omitted} chars]"
         kept = max_characters - len(marker)
         if kept <= 0:
             return value[:max_characters]
 
-        if len(value) - kept == omitted:
+        if total - kept == omitted:
             return value[:kept] + marker
 
         # The marker's own length moved the cut; recount (settles within a few passes).
-        omitted = len(value) - kept
+        omitted = total - kept
 
 
 def _is_extension_key(key: object) -> bool:

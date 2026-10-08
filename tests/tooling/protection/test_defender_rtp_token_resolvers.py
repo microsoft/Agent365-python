@@ -42,7 +42,7 @@ class FakeAgenticConnection:
 
 
 class LegacyAgenticConnection:
-    """The microsoft-agents-hosting-core 0.7 shape: the assertion takes no tenant."""
+    """The microsoft-agents-hosting-core 0.4 to 0.7 shape: the assertion takes no tenant."""
 
     def __init__(self) -> None:
         self.requests: list[str] = []

@@ -308,7 +308,7 @@ a private copy of its options, so later changes to the caller's object do not re
 
 **Authentication:** Defender is always called app-only as the agent identity. `from_agentic_connection` gets the
 agent identity's assertion from the connection (`AccessTokenProviderBase.get_agentic_application_token`, implemented by
-`MsalAuth`; hosting-core 0.8 and later pass the tenant, 0.7 does not) and exchanges it at
+`MsalAuth`; hosting-core 0.8 and later pass the tenant, 0.4 to 0.7 do not) and exchanges it at
 `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token` (`client_credentials` with a `jwt-bearer` client
 assertion; the authority must be HTTPS, and a redirect is a token failure) for the Defender API scope. The client caches tokens per agent, tenant and
 scope until they expire and shares one acquisition between concurrent calls; the acquisition is dropped when it

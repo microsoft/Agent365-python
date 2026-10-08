@@ -541,6 +541,42 @@ async def test_a_surrogate_does_not_keep_the_content_from_defender(text: str, se
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("max_characters", "text", "sent"),
+    [
+        (1, "\ud83d\ude00", "\U0001f600"),
+        (2, "\ud83d\ude00" * 2, "\U0001f600" * 2),
+        (5, "ab" + "\ud83d\ude00" * 3, "ab" + "\U0001f600" * 3),
+    ],
+)
+async def test_a_split_pair_counts_as_the_character_it_becomes(
+    max_characters: int, text: str, sent: str
+) -> None:
+    client, session = create(max_content_characters=max_characters)
+
+    result = await client.evaluate_hook_context(input_context(text), AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert body["input"]["content"] == sent
+    assert result is not None and result.truncated is False
+
+
+@pytest.mark.asyncio
+async def test_a_long_string_with_split_pairs_is_cut_with_a_marker() -> None:
+    client, session = create(max_content_characters=40)
+    text = "\ud83d\ude00" * 1000
+
+    result = await client.evaluate_hook_context(input_context(text), AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    content = body["input"]["content"]
+    assert len(content) == 40
+    assert content.startswith("\U0001f600") and content.endswith("chars]")
+    assert all("\ud800" > character or character > "\udfff" for character in content)
+    assert result is not None and result.truncated is True
+
+
+@pytest.mark.asyncio
 async def test_keys_that_become_equal_are_both_sent() -> None:
     client, session = create(deny_block_me)
     args = {chr(0xD800): "benign", chr(0xDC00): "BLOCK_ME"}

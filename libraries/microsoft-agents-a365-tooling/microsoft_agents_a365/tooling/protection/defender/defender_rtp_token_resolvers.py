@@ -39,8 +39,9 @@ class DefenderRtpTokenResolvers:
         the Defender API token. This is the same authority Observability S2S export uses.
 
         ``microsoft-agents-hosting-core`` 0.8 and later pass the agent's tenant to
-        ``get_agentic_application_token(tenant_id, agent_app_instance_id)``; 0.7 takes only the
-        agent identity and issues the assertion in the connection's configured tenant.
+        ``get_agentic_application_token(tenant_id, agent_app_instance_id)``; earlier releases
+        (0.4 to 0.7) take only the agent identity and issue the assertion in the connection's
+        configured tenant.
 
         Args:
             connection: The agent's connection, for example
