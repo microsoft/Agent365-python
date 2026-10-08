@@ -128,6 +128,7 @@ async def test_forwards_the_context_with_a_unique_correlation_id_and_the_agent_i
     assert call.url == ENDPOINT
     assert call.authorization == f"Bearer {tokens.token}"
     assert call.content_type == "application/json"
+    assert call.allow_redirects is False
     assert call.correlation_id is not None
     uuid.UUID(call.correlation_id)
     assert session.calls[1].correlation_id != call.correlation_id
@@ -589,6 +590,26 @@ async def test_follows_the_fail_mode_on_an_http_error_and_keeps_the_service_deta
     )
     assert (result.block_reason is not None) is fail_closed
     assert result.correlation_id == session.calls[0].correlation_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [301, 302, 307, 308])
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_a_redirect_is_not_followed_and_follows_the_fail_mode(
+    status: int, fail_closed: bool
+) -> None:
+    client, session = create(lambda _: FakeResponse(status, b""), fail_closed=fail_closed)
+
+    result = await client.evaluate_hook_context(
+        input_context("hello"), AGENT, TokenSource().resolve
+    )
+
+    assert result is not None
+    assert result.evaluated is False
+    assert result.allowed is not fail_closed
+    assert result.error == f"http {status}"
+    assert result.http_status == status
+    assert [call.allow_redirects for call in session.calls] == [False]
 
 
 @pytest.mark.asyncio

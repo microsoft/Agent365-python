@@ -64,6 +64,7 @@ class RecordedCall:
     correlation_id: str | None
     content_type: str | None
     body: JsonObject
+    allow_redirects: bool = True
 
 
 class _PendingRequest:
@@ -96,7 +97,14 @@ class FakeDefenderSession:
         """The request bodies, in order."""
         return [call.body for call in self.calls]
 
-    def post(self, url: str, *, data: bytes, headers: Mapping[str, str]) -> _PendingRequest:
+    def post(
+        self,
+        url: str,
+        *,
+        data: bytes,
+        headers: Mapping[str, str],
+        allow_redirects: bool = True,
+    ) -> _PendingRequest:
         async def respond() -> FakeResponse:
             body = json.loads(data)
             self.calls.append(
@@ -106,6 +114,7 @@ class FakeDefenderSession:
                     correlation_id=headers.get("x-ms-correlation-id"),
                     content_type=headers.get("Content-Type"),
                     body=body,
+                    allow_redirects=allow_redirects,
                 )
             )
             response = self.respond(body)
@@ -124,12 +133,16 @@ class FakeTokenSession:
             lambda: json_response({"token_type": "Bearer", "access_token": "defender-token"})
         )
         self.requests: list[tuple[str, dict[str, str]]] = []
+        self.allow_redirects: list[bool] = []
         self.pending: list[_PendingRequest] = []
         self.closed = False
 
-    def post(self, url: str, *, data: Mapping[str, str]) -> _PendingRequest:
+    def post(
+        self, url: str, *, data: Mapping[str, str], allow_redirects: bool = True
+    ) -> _PendingRequest:
         async def respond() -> FakeResponse:
             self.requests.append((url, dict(data)))
+            self.allow_redirects.append(allow_redirects)
             response = self.respond()
             return await response if inspect.isawaitable(response) else response
 

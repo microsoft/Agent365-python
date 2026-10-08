@@ -43,8 +43,8 @@ asks the agent's connection for the agent identity's assertion (`get_agentic_app
 exchanges it at Entra for the Defender token. The client caches the token per agent, tenant and scope
 until it expires. Within five minutes of expiry, a call refreshes it in the background and keeps using
 the cached token, also when the refresh fails. `prefetch_access_token` acquires the token ahead of the
-first evaluation. The endpoint and the token authority must be HTTPS URLs, so the token and the
-assertion never travel in plaintext.
+first evaluation. The endpoint and the token authority must be HTTPS URLs, and redirects are not
+followed, so the token and the assertion never travel in plaintext or to another host.
 
 ### Granting the Defender permission
 

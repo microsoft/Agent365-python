@@ -84,7 +84,9 @@ class DefenderRtpTokenResolvers:
             }
             url = f"{base_authority}/{quote(tenant_id, safe='')}/oauth2/v2.0/token"
             async with http_session(session) as http:
-                async with http.post(url, data=form) as response:
+                # No redirects: a 307/308 would resend the assertion to a target that never
+                # passed the HTTPS check; a 3xx is a token failure.
+                async with http.post(url, data=form, allow_redirects=False) as response:
                     status = response.status
                     body = await response.read()
 

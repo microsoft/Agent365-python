@@ -75,7 +75,21 @@ async def test_exchanges_the_agent_identity_assertion_for_the_defender_token() -
         )
     ]
     assert session.pending[0].response is not None and session.pending[0].response.exited
+    assert session.allow_redirects == [False]
     assert not session.closed
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [302, 307, 308])
+async def test_a_redirect_from_the_token_endpoint_is_a_token_failure(status: int) -> None:
+    session = FakeTokenSession(lambda: FakeResponse(status, b""))
+    resolve = DefenderRtpTokenResolvers.from_agentic_connection(FakeAgenticConnection(), session)  # type: ignore[arg-type]
+
+    with pytest.raises(RuntimeError) as raised:
+        await resolve(AGENT_ID, TENANT_ID, [DEFAULT_AUTHENTICATION_SCOPE])
+
+    assert str(raised.value) == f"The Defender token request failed with HTTP {status}."
+    assert session.allow_redirects == [False]
 
 
 @pytest.mark.asyncio

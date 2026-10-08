@@ -418,8 +418,13 @@ class DefenderRtpClient:
         try:
             async with asyncio.timeout_at(deadline):
                 async with http_session(self._session) as session:
+                    # No redirects: a 307/308 would resend the context and the token to a
+                    # target that never passed the HTTPS check; a 3xx follows the fail mode.
                     async with session.post(
-                        endpoint, data=body.encode("utf-8"), headers=headers
+                        endpoint,
+                        data=body.encode("utf-8"),
+                        headers=headers,
+                        allow_redirects=False,
                     ) as response:
                         status = response.status
                         try:
