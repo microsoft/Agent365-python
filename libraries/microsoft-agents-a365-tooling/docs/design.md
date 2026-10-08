@@ -291,9 +291,11 @@ if result is not None and not result.allowed:
 `enabled` is false, return `None` without a call.
 
 **Request:** Defender receives a fitted copy of the context (the host's context is not modified): `spec` is
-`agent-hooks/0.1`, the timestamp is UTC, a missing or negative `sequence` is numbered after the highest sequence seen in
-the session (the client tracks up to 1,000 sessions; a session it no longer tracks resumes above the highest sequence of
-every session it dropped, so a sequence never repeats or decreases within a session),
+`agent-hooks/0.1` and the timestamp is UTC. A valid `sequence` the host set (an integer of at least 0) is sent
+unchanged: the client does not repair the order of host values, so it is the host that keeps them increasing. A
+missing or invalid one is generated above the highest sequence seen in the session, host values included; the client
+tracks up to 1,000 sessions, and a session it no longer tracks continues above the highest sequence of every session it
+dropped, so generated values never repeat or decrease within a session.
 `agent.framework` is lowercased to `[a-z0-9_-]` (default `agent365`), `target` equals the point's field,
 `tool_call` and `tool_result` keep only spec members (non-object tool arguments become `{"input": ...}`), and loosely
 filled optional fields (`extensions`, `model`, `tools`, `messages`, `actor`, `request_id`, `trace`) are repaired or
@@ -329,18 +331,28 @@ Defender's failed validation rules (`diagnostics.validationErrors`) in `error`. 
 this SDK version does not apply it.
 
 **Long content:** each content string is cut to at most `max_content_characters` characters, ending with a
-`...[truncated N chars]` marker when it fits, and all content in one request shares a budget of four times that
+`...[truncated N chars]` marker when it fits (N counts characters as sent, so a rejoined pair is one; when what was
+cut holds surrogates, counting them would mean normalizing all of it, so the marker is `...[truncated]`), and all
+content in one request shares a budget of four times that
 (each string, key, number and kept-whole name counts its length, every other value one), so the request and the time
 to prepare it stay bounded. The content under decision (`target`: the input, a tool call's arguments, a tool result,
 or the output) is sent twice, as the point's field and as `target`, so it may use half of the budget. The rest goes, in
-order, to the call's arguments at `post_tool_call`, tool declarations (the called tool's first, so a short budget never
-drops it), the most recent messages, extensions, and any other member; what does not fit is dropped. Tool
-registries, message histories (newest first) and extension namespaces are read only as far as the budget reaches, so a
-long one costs no more than what is sent. Containers nested
-deeper than 32 levels are cut too. When the content under decision is cut, Defender evaluates a truncated copy and the
-result has `truncated=True`. A block (`deny` or `transform`) stays a block; an allow does not cover the rest of the
-content, so `allowed` follows the fail mode, `error` says so, and `verified` is false. Raising the limit is the remedy
-for long-content agents; chunked evaluation is a follow-up.
+order, to the call's arguments at `post_tool_call`, tool declarations, the most recent messages, extensions, and any
+other member; what does not fit is dropped. Message histories (newest first), extension namespaces and the tool
+declarations after the called tool's are read only as far as the budget reaches, so a long one costs no more than
+what is sent. Containers nested deeper than 32 levels are cut too. When the content under decision is cut, Defender
+evaluates a truncated copy and the result has `truncated=True`. A block (`deny` or `transform`) stays a block; an
+allow does not cover the rest of the content, so `allowed` follows the fail mode, `error` says so, and `verified` is
+false. Raising the limit is the remedy for long-content agents; chunked evaluation is a follow-up.
+
+**The called tool's declaration:** at `pre_tool_call` and `post_tool_call`, Defender's verdict also depends on how the
+called tool is declared. Its declaration is searched for by name among the first 10,000 entries of `tools` and copied
+first, before any other, with its name whole; the other declarations then fill what is left of the budget in the host's
+order. The result has `truncated=True` too, and an allow follows the fail mode, when the called tool's description or
+schema had to be cut, or when `tools` is longer than the entries searched and the called tool is not among them (each
+with its own `error`). A list searched in full that does not declare the called tool is not a truncation. Without any
+declaration, the called tool is declared from the `a365` extension's `tool.description`, which counts as its
+description.
 
 **Unexpected shapes:** every optional node is shape-checked before it is read: a context member (for example a string
 `model` or `a365` extension), a verdict member (`transform`, `warnings`, `result_labels`), a `400` body's

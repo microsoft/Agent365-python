@@ -78,10 +78,14 @@ _KNOWN_MEMBERS: Final[frozenset[str]] = frozenset(
 )
 # A fitted copy carries at most this many times max_content_characters of content in all.
 _CONTENT_BUDGET_FACTOR: Final[int] = 4
+# At a tool point, the called tool's declaration is searched for among this many entries.
+_MAX_TOOL_SCAN: Final[int] = 10_000
 # Containers nested deeper are cut, well within the nesting a JSON parser accepts.
 _MAX_DEPTH: Final[int] = 32
 _UNBOUNDED: Final[int] = sys.maxsize
 _OMITTED: Final[object] = object()
+# Ends a cut string whose omitted length is not known without unbounded work.
+_UNCOUNTED_MARKER: Final[str] = "...[truncated]"
 _CONTENT_HASH = re.compile(r"sha256:[0-9a-f]{64}")
 _SURROGATES = re.compile("[\ud800-\udfff]")
 _EXTENSION_KEY = re.compile(r"[a-z][a-z0-9_]*")
@@ -97,6 +101,14 @@ _TRANSFORM_BLOCK_REASON: Final[str] = (
 _DENY_BLOCK_REASON: Final[str] = "Blocked by Microsoft Defender for AI."
 _TRUNCATED_ERROR: Final[str] = (
     "content exceeded max_content_characters; Defender evaluated a truncated copy"
+)
+_TRUNCATED_TOOL_ERROR: Final[str] = (
+    "the called tool's declaration exceeded max_content_characters; Defender evaluated a "
+    "truncated copy"
+)
+_UNSCANNED_TOOL_ERROR: Final[str] = (
+    f"the called tool was not among the first {_MAX_TOOL_SCAN} tool declarations; Defender "
+    "evaluated without its declaration"
 )
 _TRUNCATED_BLOCK_REASON: Final[str] = (
     "The content is longer than Microsoft Defender for AI evaluates, and this agent is "
@@ -160,7 +172,7 @@ class DefenderRtpClient:
         self._in_flight_tokens: dict[_TokenKey, asyncio.Future[str]] = {}
         self._sequences: dict[str, int] = {}
         # The highest sequence of any session no longer tracked: an untracked session resumes
-        # above it, so a sequence never repeats or decreases within a session.
+        # above it, so a generated sequence never repeats or decreases within a session.
         self._untracked_high_water = 0
 
     @property
@@ -195,7 +207,8 @@ class DefenderRtpClient:
         budget of four times that (the content under decision, which is sent twice, may use
         half of it), and every string is valid Unicode. When the content under decision does
         not fit, Defender evaluates the cut copy: its deny still blocks, but its allow follows
-        the fail mode (``truncated``).
+        the fail mode (``truncated``). So does an allow at a tool point when the called tool's
+        declaration had to be cut, or was not among the first 10,000 tool declarations.
         Token acquisition and the request share one deadline,
         :attr:`DefenderRtpOptions.timeout_seconds`, so the fail mode applies within that time.
 
@@ -229,7 +242,7 @@ class DefenderRtpClient:
         started = time.perf_counter()
         _require_string(agent.agent_id, "agent_id")
         _require_string(agent.tenant_id, "tenant_id")
-        hook, truncated = self._prepare(context, agent)
+        hook, truncation = self._prepare(context, agent)
         body = _serialize(hook)
         session_id = _read_string(_get(hook.get("session"), "id"))
 
@@ -252,7 +265,7 @@ class DefenderRtpClient:
                 time.perf_counter() - started,
             )
 
-        return await self._post(body, point, session_id, token, started, deadline, truncated)
+        return await self._post(body, point, session_id, token, started, deadline, truncation)
 
     async def prefetch_access_token(
         self,
@@ -318,7 +331,7 @@ class DefenderRtpClient:
 
     def _prepare(
         self, context: Mapping[str, object], agent: DefenderRtpAgentContext
-    ) -> tuple[JsonObject, bool]:
+    ) -> tuple[JsonObject, str | None]:
         """A fitted copy of the context that meets Defender's request validation and size limits.
 
         ``target`` equals the point's field, ``tool_call`` and ``tool_result`` carry only spec
@@ -335,8 +348,10 @@ class DefenderRtpClient:
         context is not modified.
 
         Returns:
-            The copy, and whether the content under decision (``target``, which equals the
-            point's field) was cut to fit.
+            The copy, and why Defender's allow of it would not cover what the host acts on, or
+            ``None``: the content under decision (``target``, which equals the point's field)
+            was cut to fit, or at a tool point the called tool's declaration was cut or not
+            among the entries searched (see :func:`_fit_tools`).
         """
         point = _read_string(context.get("interception_point"))
         agent_node = context.get("agent")
@@ -486,14 +501,17 @@ class DefenderRtpClient:
                 hook["tool_result"] = prepared_result
                 hook["target"] = value
 
-        # The rest of the context shares what the content under decision leaves. What is cut
-        # here does not change the authority of the verdict.
+        # The rest of the context shares what the content under decision leaves. Apart from the
+        # called tool's declaration, what is cut here does not change the authority of the
+        # verdict.
         fitter = _Fitter(max_characters, budget - 2 * decision.used)
         if point == "post_tool_call" and called is not None:
             # Defender decided on the arguments at pre_tool_call; here they are context.
             called["args"], _ = fitter.fit(_to_arguments(_get(tool_call, "args")), {})
 
-        tools = _fit_tools(fitter, context.get("tools"), tool_name, context.get("extensions"))
+        tools, tool_truncation = _fit_tools(
+            fitter, context.get("tools"), tool_name, context.get("extensions")
+        )
         if tools:
             hook["tools"] = tools
 
@@ -519,7 +537,7 @@ class DefenderRtpClient:
             if key not in _KNOWN_MEMBERS and not fitter.fit_member(hook, key, member):
                 break
 
-        return hook, truncated
+        return hook, _TRUNCATED_ERROR if truncated else tool_truncation
 
     # ---- transport -----------------------------------------------------------------------
 
@@ -531,7 +549,7 @@ class DefenderRtpClient:
         access_token: str,
         started: float,
         deadline: float,
-        truncated: bool = False,
+        truncation: str | None = None,
     ) -> DefenderRtpEvaluationResult:
         correlation_id = str(self._id_factory())
         endpoint = self._options.endpoint
@@ -618,14 +636,14 @@ class DefenderRtpClient:
             ",".join(verdict.result_labels) or "-",
             correlation_id,
         )
-        if truncated and allowed:
-            # Defender evaluated a truncated copy; its allow does not cover the content beyond
-            # the limit, which the host would still act on. A block stays authoritative.
+        if truncation is not None and allowed:
+            # Defender evaluated a truncated copy; its allow does not cover what was cut, which
+            # the host would still act on. A block stays authoritative.
             fail_closed = self._options.fail_closed
             logger.warning(
                 "Defender RTP %s: %s (%s), x-ms-correlation-id=%s",
                 point,
-                _TRUNCATED_ERROR,
+                truncation,
                 "blocked" if fail_closed else "allowed",
                 correlation_id,
             )
@@ -637,7 +655,7 @@ class DefenderRtpClient:
                 session_id=session_id,
                 verdict=verdict,
                 http_status=status,
-                error=_TRUNCATED_ERROR,
+                error=truncation,
                 latency_seconds=time.perf_counter() - started,
                 block_reason=_TRUNCATED_BLOCK_REASON if fail_closed else None,
                 truncated=True,
@@ -653,7 +671,7 @@ class DefenderRtpClient:
             http_status=status,
             latency_seconds=time.perf_counter() - started,
             block_reason=block_reason,
-            truncated=truncated,
+            truncated=truncation is not None,
         )
 
     def _failure(
@@ -872,6 +890,11 @@ class _Fitter:
         """The characters of the budget left."""
         return self._remaining
 
+    @property
+    def cut(self) -> bool:
+        """Whether the last :meth:`fit` or :meth:`fit_member` cut or left out anything."""
+        return self._cut
+
     def fit(self, node: object, default: object = _OMITTED) -> tuple[object, bool]:
         """A fitted copy of ``node`` (``default`` when none of it fits), and whether it was cut."""
         self._cut = False
@@ -906,6 +929,9 @@ class _Fitter:
 
         name = _unique_key(owner, _normalize(text))
         if len(name) >= self._remaining:
+            # Normalizing it took work in proportion to the budget left, which is spent with it,
+            # so names that do not fit cannot add up to unbounded work.
+            self._remaining = 0
             self._cut = True
             return False
 
@@ -985,7 +1011,7 @@ class _Fitter:
         text = _normalize(head)
         if len(head) < len(value) or len(text) > limit:
             self._cut = True
-            text = _truncate(text, limit, len(text) + len(value) - len(head))
+            text = _truncate(text, limit, _normalized_length(value, head, text))
 
         self._remaining -= max(1, len(text))
         return text
@@ -993,71 +1019,85 @@ class _Fitter:
 
 def _fit_tools(
     fitter: _Fitter, tools: object, tool_name: str | None, extensions: object
-) -> list[object]:
-    """Tool declarations with their spec members, within the budget.
+) -> tuple[list[object], str | None]:
+    """Tool declarations with their spec members, within the budget, and why Defender's verdict
+    would not cover the called tool's declaration, or ``None``.
 
-    The called tool's declaration comes first, so a short budget never drops it. At a tool
-    point without declarations, the called tool is declared from the ``a365`` extension. Only
-    as many entries are read as the budget could hold (each declaration costs at least one
-    character), so a long tool registry costs no more than what is sent.
+    At a tool point, the called tool's declaration is searched for by name among the first
+    ``_MAX_TOOL_SCAN`` entries and copied first, before any other. Defender's verdict depends on
+    it, so it is a truncation when its description or schema had to be cut, or when the list is
+    longer than the entries searched and the called tool is not among them; a list searched in
+    full that does not declare the called tool is not. The other declarations then fill what is
+    left of the budget in the host's order, and only as many entries are read as the budget could
+    hold (each costs at least one character). Without any declaration, the called tool is
+    declared from the ``a365`` extension.
     """
     declared = tools if isinstance(tools, list) else []
-    ordered = declared[: fitter.remaining]
-    called_unread = False
+    declarations: list[object] = []
+    truncation: str | None = None
+    called_index: int | None = None
     if tool_name is not None:
-        index = next(
+        called_index = next(
             (
-                position
-                for position, tool in enumerate(ordered)
+                index
+                for index, tool in enumerate(itertools.islice(declared, _MAX_TOOL_SCAN))
                 if _read_string(_get(tool, "name")) == tool_name
             ),
             None,
         )
-        if index is not None:
-            ordered = [ordered[index], *ordered[:index], *ordered[index + 1 :]]
-        else:
-            # The called tool may be declared beyond the entries read; declare it from its
-            # name, so a long registry never hides it.
-            called_unread = len(declared) > len(ordered)
+        if called_index is not None:
+            # The name is the call's own, which the request carries whole anyway.
+            declaration: JsonObject = {"name": _normalize(tool_name)}
+            if _fit_tool_members(fitter, declaration, declared[called_index]):
+                truncation = _TRUNCATED_TOOL_ERROR
 
-    declarations: list[object] = []
-    if called_unread and tool_name is not None:
-        declarations.append(_called_tool(fitter, tool_name, extensions))
+            declarations.append(declaration)
+        elif len(declared) > _MAX_TOOL_SCAN:
+            truncation = _UNSCANNED_TOOL_ERROR
 
-    for tool in ordered:
+    for index, tool in enumerate(itertools.islice(declared, fitter.remaining)):
         name = _read_string(_get(tool, "name"))
-        if not name:
+        if index == called_index or not name:
             continue
 
         if not fitter.reserve(name):
             break
 
-        declaration: JsonObject = {"name": _normalize(name)}
-        description = _get(tool, "description")
-        if isinstance(description, str):
-            fitter.fit_member(declaration, "description", description)
-
-        schema = _get(tool, "schema")
-        if isinstance(schema, dict):
-            fitter.fit_member(declaration, "schema", schema)
-
+        declaration = {"name": _normalize(name)}
+        _fit_tool_members(fitter, declaration, tool)
         declarations.append(declaration)
 
     if not declarations and tool_name is not None:
-        declarations.append(_called_tool(fitter, tool_name, extensions))
+        declaration = {"name": _normalize(tool_name)}
+        # An extension namespace may hold any JSON value, so each level's shape is checked.
+        description = _read_string(
+            _get(_get(_get(extensions, _A365_EXTENSION), "tool"), "description")
+        )
+        if description:
+            fitter.fit_member(declaration, "description", description)
+            if fitter.cut and truncation is None:
+                truncation = _TRUNCATED_TOOL_ERROR
 
-    return declarations
+        declarations.append(declaration)
+
+    return declarations, truncation
 
 
-def _called_tool(fitter: _Fitter, tool_name: str, extensions: object) -> JsonObject:
-    """A declaration of the called tool from its name and the ``a365`` extension."""
-    declaration: JsonObject = {"name": _normalize(tool_name)}
-    # An extension namespace may hold any JSON value, so each level's shape is checked.
-    description = _read_string(_get(_get(_get(extensions, _A365_EXTENSION), "tool"), "description"))
-    if description:
+def _fit_tool_members(fitter: _Fitter, declaration: JsonObject, tool: object) -> bool:
+    """Copy a tool's description (a string) and schema (an object) into ``declaration``, within
+    the budget; whether either had to be cut or left out."""
+    cut = False
+    description = _get(tool, "description")
+    if isinstance(description, str):
         fitter.fit_member(declaration, "description", description)
+        cut = fitter.cut
 
-    return declaration
+    schema = _get(tool, "schema")
+    if isinstance(schema, dict):
+        fitter.fit_member(declaration, "schema", schema)
+        cut = cut or fitter.cut
+
+    return cut
 
 
 def _fit_messages(fitter: _Fitter, messages: object) -> list[object]:
@@ -1296,13 +1336,18 @@ def _is_duration(value: object) -> bool:
     return isinstance(value, float) and math.isfinite(value) and value >= 0
 
 
-def _truncate(value: str, max_characters: int, length: int | None = None) -> str:
-    """At most ``max_characters`` characters, ending with a truncation marker when one fits.
+def _truncate(value: str, max_characters: int, total: int | None) -> str:
+    """The beginning of a text, at most ``max_characters`` characters, ending with a truncation
+    marker when one fits.
 
-    ``length`` is the length of the text when ``value`` is only its beginning; the marker
-    counts the characters omitted from that text.
+    ``value`` is the text, or its beginning when the text is longer. The marker counts the
+    characters omitted from the ``total`` the whole text has, or has no count when ``total`` is
+    ``None`` (not known without unbounded work).
     """
-    total = len(value) if length is None else max(length, len(value))
+    if total is None:
+        kept = max_characters - len(_UNCOUNTED_MARKER)
+        return value[:max_characters] if kept <= 0 else value[:kept] + _UNCOUNTED_MARKER
+
     if total <= max_characters:
         return value
 
@@ -1318,6 +1363,23 @@ def _truncate(value: str, max_characters: int, length: int | None = None) -> str
 
         # The marker's own length moved the cut; recount (settles within a few passes).
         omitted = total - kept
+
+
+def _normalized_length(value: str, head: str, normalized_head: str) -> int | None:
+    """How many characters ``value`` has once normalized, given its beginning ``head`` and that
+    beginning normalized.
+
+    ``None`` when the rest holds surrogates: only normalizing all of it would count what they
+    become, and that work is not bounded (each costs the codec's error handler).
+    """
+    if len(head) == len(value):
+        return len(normalized_head)
+
+    if value.isascii() or _SURROGATES.search(value, len(head)) is None:
+        # No surrogate in the rest: no pair spans the cut, and each of its characters stays one.
+        return len(normalized_head) + len(value) - len(head)
+
+    return None
 
 
 def _is_extension_key(key: object) -> bool:

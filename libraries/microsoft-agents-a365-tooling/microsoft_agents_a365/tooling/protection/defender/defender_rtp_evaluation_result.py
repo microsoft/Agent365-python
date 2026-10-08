@@ -47,10 +47,12 @@ class DefenderRtpEvaluationResult:
     """The outcome of one Defender evaluation.
 
     ``evaluated`` is false when no verdict was obtained; ``allowed`` then follows
-    :attr:`DefenderRtpOptions.fail_closed`. ``truncated`` is true when the content under
-    decision exceeded :attr:`DefenderRtpOptions.max_content_characters`, so Defender evaluated a
-    truncated copy: a block still blocks, but an allow does not cover the rest of the content,
-    so ``allowed`` then follows the fail mode too.
+    :attr:`DefenderRtpOptions.fail_closed`. ``truncated`` is true when Defender evaluated a
+    truncated copy: the content under decision exceeded
+    :attr:`DefenderRtpOptions.max_content_characters`, or at a tool point the called tool's
+    declaration had to be cut or was not among the first 10,000 tool declarations. A block still
+    blocks, but an allow does not cover what was cut, so ``allowed`` then follows the fail mode
+    too.
 
     Attributes:
         allowed: Whether the action may proceed.
@@ -65,7 +67,8 @@ class DefenderRtpEvaluationResult:
             ``http 403: ...``.
         latency_seconds: Time spent on the evaluation call, in seconds.
         block_reason: A user-facing reason when the action is blocked.
-        truncated: Whether Defender evaluated a truncated copy of the content under decision.
+        truncated: Whether Defender evaluated a truncated copy of the content under decision or
+            of the called tool's declaration.
     """
 
     allowed: bool
@@ -85,7 +88,8 @@ class DefenderRtpEvaluationResult:
         """Whether Defender's verdict decides the action.
 
         False when no verdict was obtained, or when Defender allowed a truncated copy of the
-        content; the result then follows the fail mode.
+        content under decision or of the called tool's declaration; the result then follows the
+        fail mode.
         """
         if not self.evaluated:
             return False

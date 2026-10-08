@@ -593,16 +593,26 @@ async def test_a_split_pair_counts_as_the_character_it_becomes(
 
 
 @pytest.mark.asyncio
-async def test_a_long_string_with_split_pairs_is_cut_with_a_marker() -> None:
+@pytest.mark.parametrize(
+    ("text", "kept", "marker"),
+    [
+        ("\U0001f600" * 1000, "\U0001f600" * 16, "...[truncated 984 chars]"),
+        ("\ud83d\ude00" * 30 + "x" * 1000, "\U0001f600" * 15, "...[truncated 1015 chars]"),
+        ("\ud83d\ude00" * 1000, "\U0001f600" * 26, "...[truncated]"),
+    ],
+    ids=["emoji", "split pairs only where kept", "split pairs in what is cut"],
+)
+async def test_a_long_string_is_cut_with_a_marker_counting_normalized_characters(
+    text: str, kept: str, marker: str
+) -> None:
     client, session = create(max_content_characters=40)
-    text = "\ud83d\ude00" * 1000
 
     result = await client.evaluate_hook_context(input_context(text), AGENT, TokenSource().resolve)
 
     (body,) = session.bodies
     content = body["input"]["content"]
+    assert content == kept + marker
     assert len(content) == 40
-    assert content.startswith("\U0001f600") and content.endswith("chars]")
     assert all("\ud800" > character or character > "\udfff" for character in content)
     assert result is not None and result.truncated is True
 
@@ -1036,7 +1046,7 @@ async def test_uses_but_does_not_cache_a_token_whose_payload_has_an_unexpected_s
 def test_truncation_never_exceeds_the_maximum(max_characters: int, length: int) -> None:
     value = "".join(chr(ord("a") + index % 26) for index in range(length))
 
-    clamped = _truncate(value, max_characters)
+    clamped = _truncate(value, max_characters, len(value))
 
     assert len(clamped) <= max_characters or clamped == value
     if length <= max_characters:
@@ -1048,6 +1058,21 @@ def test_truncation_never_exceeds_the_maximum(max_characters: int, length: int) 
         assert len(clamped) == max_characters
     else:
         assert clamped == value[:max_characters], "no room for the marker: a hard cut"
+
+
+@pytest.mark.parametrize("max_characters", [1, 13, 14, 15, 40])
+def test_truncation_without_a_known_length_has_a_marker_without_a_count(
+    max_characters: int,
+) -> None:
+    value = "x" * 100
+
+    clamped = _truncate(value, max_characters, None)
+
+    assert len(clamped) == max_characters
+    if max_characters <= len("...[truncated]"):
+        assert clamped == value[:max_characters], "no room for the marker: a hard cut"
+    else:
+        assert clamped == value[: max_characters - 14] + "...[truncated]"
 
 
 LONG = "x" * 45
@@ -1985,23 +2010,255 @@ class Unreadable(dict[str, object]):
         raise AssertionError(f"read {key!r} beyond the budget")
 
 
-@pytest.mark.asyncio
-async def test_reads_only_as_many_tool_declarations_as_the_budget_could_hold() -> None:
-    # A budget of 4 x 100 leaves about 400 for tools: the registry is read no further.
-    client, session = create(max_content_characters=100)
-    tools: list[object] = [{"name": f"tool{i}"} for i in range(1000)]
-    tools += [Unreadable(), {"name": "Search", "description": "Searches the web."}]
-    context = tool_context(
-        "pre_tool_call", tool_call={"id": "c-1", "name": "Search", "args": {}}, tools=tools
-    )
+TRUNCATED_TOOL_ERROR = (
+    "the called tool's declaration exceeded max_content_characters; Defender evaluated a "
+    "truncated copy"
+)
+UNSCANNED_TOOL_ERROR = (
+    "the called tool was not among the first 10000 tool declarations; Defender evaluated "
+    "without its declaration"
+)
+SEARCH_TOOL: JsonObject = {
+    "name": "Search",
+    "description": "Searches the web.",
+    "schema": {"type": "object", "properties": {"query": {"type": "string"}}},
+}
 
-    await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+def padding(count: int) -> list[object]:
+    return [{"name": f"tool{i}", "description": "A tool."} for i in range(count)]
+
+
+def search_context(point: str, tools: object) -> JsonObject:
+    fields: JsonObject = {
+        "tool_call": {"id": "c-1", "name": "Search", "args": {"query": "release notes"}}
+    }
+    if point == "post_tool_call":
+        fields["tool_result"] = {"value": "3 results", "is_error": False}
+    if tools is not None:
+        fields["tools"] = tools
+    return tool_context(point, **fields)
+
+
+def nested_object(depth: int) -> JsonObject:
+    node: JsonObject = {}
+    for _ in range(depth):
+        node = {"properties": node}
+    return node
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("point", ["pre_tool_call", "post_tool_call"])
+async def test_declares_the_called_tool_first_from_a_padded_list(point: str) -> None:
+    client, session = create()
+    tools = [*padding(client_module._MAX_TOOL_SCAN - 1), SEARCH_TOOL]
+
+    result = await client.evaluate_hook_context(
+        search_context(point, tools), AGENT, TokenSource().resolve
+    )
 
     (body,) = session.bodies
     assert contract_errors(body) == []
-    assert body["tools"][0] == {"name": "Search"}, "the called tool is declared from its name"
-    assert body["tools"][1]["name"] == "tool0"
-    assert len(body["tools"]) < 1000
+    assert body["tools"][0] == SEARCH_TOOL, "found among the entries searched, and whole"
+    assert [tool["name"] for tool in body["tools"][1:3]] == ["tool0", "tool1"]
+    assert result is not None
+    assert result.truncated is False
+    assert result.verified is True
+    assert result.allowed is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "tools",
+    [
+        [*padding(10_000), SEARCH_TOOL],
+        padding(10_001),
+    ],
+    ids=["called tool beyond the entries searched", "longer list without it"],
+)
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_a_called_tool_not_among_the_entries_searched_follows_the_fail_mode(
+    tools: list[object], fail_closed: bool
+) -> None:
+    client, session = create(fail_closed=fail_closed)
+
+    result = await client.evaluate_hook_context(
+        search_context("pre_tool_call", tools), AGENT, TokenSource().resolve
+    )
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["tools"][0]["name"] == "tool0"
+    assert result is not None
+    assert result.evaluated is True
+    assert result.truncated is True
+    assert result.verified is False
+    assert result.error == UNSCANNED_TOOL_ERROR
+    assert result.allowed is not fail_closed
+
+
+@pytest.mark.asyncio
+async def test_searches_no_further_than_the_entries_searched() -> None:
+    # A budget of 4 x 100 copies only the first few declarations, so nothing reads the
+    # entries beyond the 10,000 searched.
+    client, session = create(max_content_characters=100)
+    tools = [*padding(10_000), Unreadable(), SEARCH_TOOL]
+
+    result = await client.evaluate_hook_context(
+        search_context("pre_tool_call", tools), AGENT, TokenSource().resolve
+    )
+
+    (body,) = session.bodies
+    assert body["tools"][0]["name"] == "tool0"
+    assert result is not None and result.truncated is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("count", [3, 10_000])
+async def test_a_called_tool_absent_from_a_list_searched_in_full_is_not_a_truncation(
+    count: int,
+) -> None:
+    client, session = create()
+
+    result = await client.evaluate_hook_context(
+        search_context("pre_tool_call", padding(count)), AGENT, TokenSource().resolve
+    )
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert [tool["name"] for tool in body["tools"][:3]] == ["tool0", "tool1", "tool2"]
+    assert all(tool["name"] != "Search" for tool in body["tools"])
+    assert result is not None
+    assert result.truncated is False
+    assert result.verified is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        {"name": "Search", "description": "d" * 101},
+        {"name": "Search", "schema": {"description": "s" * 101}},
+        {"name": "Search", "schema": nested_object(40)},
+    ],
+    ids=["description", "schema string", "schema nesting"],
+)
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_a_cut_called_tool_declaration_follows_the_fail_mode(
+    declaration: JsonObject, fail_closed: bool
+) -> None:
+    client, session = create(max_content_characters=100, fail_closed=fail_closed)
+
+    result = await client.evaluate_hook_context(
+        search_context("pre_tool_call", [{"name": "Other"}, declaration]),
+        AGENT,
+        TokenSource().resolve,
+    )
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert body["tools"][0]["name"] == "Search", "the called tool comes first"
+    assert result is not None
+    assert result.truncated is True
+    assert result.error == TRUNCATED_TOOL_ERROR
+    assert result.allowed is not fail_closed
+
+
+@pytest.mark.asyncio
+async def test_a_called_tool_declaration_the_budget_cannot_hold_follows_the_fail_mode() -> None:
+    # A budget of 4 x 100: arguments of 199 fill the half they may use and leave 2.
+    client, session = create(max_content_characters=100)
+    context = search_context("pre_tool_call", [SEARCH_TOOL])
+    context["tool_call"]["args"] = {"a": "x" * 99, "b": "y" * 97}  # type: ignore[index]
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert body["target"] == {"a": "x" * 99, "b": "y" * 97}, "the arguments fit"
+    assert body["tools"] == [{"name": "Search"}]
+    assert result is not None
+    assert result.truncated is True
+    assert result.error == TRUNCATED_TOOL_ERROR
+
+
+@pytest.mark.asyncio
+async def test_a_deny_stays_a_deny_when_the_called_tool_declaration_was_cut() -> None:
+    client, _ = create(
+        lambda _: json_response({"decision": "deny", "reason": "prevention_blocked"}),
+        max_content_characters=100,
+    )
+
+    result = await client.evaluate_hook_context(
+        search_context("pre_tool_call", [{"name": "Search", "description": "d" * 101}]),
+        AGENT,
+        TokenSource().resolve,
+    )
+
+    assert result is not None
+    assert result.truncated is True
+    assert result.verified is True
+    assert result.allowed is False
+    assert result.error is None
+
+
+@pytest.mark.asyncio
+async def test_cutting_another_tool_declaration_is_not_a_truncation() -> None:
+    client, session = create(max_content_characters=100)
+
+    result = await client.evaluate_hook_context(
+        search_context("pre_tool_call", [{"name": "Other", "description": "o" * 101}, SEARCH_TOOL]),
+        AGENT,
+        TokenSource().resolve,
+    )
+
+    (body,) = session.bodies
+    assert body["tools"][0] == SEARCH_TOOL
+    assert body["tools"][1]["name"] == "Other"
+    assert len(body["tools"][1]["description"]) == 100
+    assert result is not None and result.truncated is False
+
+
+@pytest.mark.asyncio
+async def test_a_cut_extension_description_of_the_called_tool_follows_the_fail_mode() -> None:
+    client, session = create(max_content_characters=100)
+    context = search_context("pre_tool_call", None)
+    context["extensions"] = {"a365": {"tool": {"description": "d" * 101}}}
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    (declaration,) = body["tools"]
+    assert declaration["name"] == "Search"
+    assert len(declaration["description"]) == 100
+    assert result is not None
+    assert result.truncated is True
+    assert result.error == TRUNCATED_TOOL_ERROR
+
+
+@pytest.mark.asyncio
+async def test_names_that_do_not_fit_are_normalized_at_most_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lengths: list[int] = []
+    normalize = client_module._normalize
+
+    def counting(text: str) -> str:
+        lengths.append(len(text))
+        return normalize(text)
+
+    monkeypatch.setattr(client_module, "_normalize", counting)
+    client, _ = create(max_content_characters=100)
+    key = "\u4e2d" * 300
+    context = tool_context(
+        "post_tool_call",
+        tool_call={"id": "c-1", "name": "Run", "args": {}},
+        tool_result={"value": [{key: 1} for _ in range(1000)], "is_error": False},
+    )
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    assert lengths.count(300) == 1, "a name that does not fit spends the rest of the budget"
+    assert result is not None and result.truncated is True
 
 
 @pytest.mark.asyncio

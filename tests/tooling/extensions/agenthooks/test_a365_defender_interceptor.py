@@ -644,6 +644,32 @@ async def test_a_defender_transform_of_truncated_content_blocks_even_when_failin
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_a_called_tool_not_among_the_declarations_searched_follows_the_fail_mode(
+    fail_closed: bool,
+) -> None:
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+    context = builder.pre_tool_call(call_id="call-1", name="Search", args={"query": "q"})
+    context["tools"] = [{"name": f"tool{i}"} for i in range(10_000)] + [{"name": "Search"}]
+
+    async with harness(allow, fail_closed=fail_closed) as h:
+        record = await h.emitter.emit_unchecked(context)
+
+    assert record.proceeds is not fail_closed
+    (evaluation,) = h.evaluations
+    assert evaluation.truncated is True
+    if fail_closed:
+        assert record.verdict.reason == "runtime_error:defender_unverified"
+    else:
+        (warning,) = record.verdict.warnings
+        assert warning.reason == "defender:unverified"
+        assert warning.message == (
+            "the called tool was not among the first 10000 tool declarations; Defender "
+            "evaluated without its declaration"
+        )
+
+
+@pytest.mark.asyncio
 async def test_content_within_the_limit_is_allowed_without_warnings() -> None:
     builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
 

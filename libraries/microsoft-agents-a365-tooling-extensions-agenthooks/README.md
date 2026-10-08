@@ -155,7 +155,7 @@ add_a365_defender(emitter, interceptor)
 | `allow` (with any warnings and labels) | `allow`, keeping Defender's warnings and `result_labels` |
 | `deny` | `deny`, reason `defender:block:<Defender reason>`, Defender's message, labels, and evidence `urn:a365:defender:<correlation id>` |
 | `transform` | `deny`: this SDK version does not apply Defender's rewrite |
-| `allow` of a truncated copy (content over the limit) | not authoritative: follows the fail mode, like no verdict |
+| `allow` of a truncated copy (content over the limit, or the called tool's declaration cut or not found among the first 10,000) | not authoritative: follows the fail mode, like no verdict |
 | no verdict, fail open (default) | `allow` with a `defender:unverified` warning carrying the error |
 | no verdict, fail closed | `deny`, reason `runtime_error:defender_unverified`, never reported as a detection |
 
@@ -163,8 +163,8 @@ add_a365_defender(emitter, interceptor)
 20000), and all content in one request shares a budget of four times that, so the request and the time to
 prepare it stay bounded. The content under decision (the user's message, a tool call's arguments, a tool
 result, or the reply) is sent twice, as the point's field and as `target`, so it may use half of the
-budget. The rest goes, in order, to the call's arguments at `post_tool_call`, tool declarations (the called
-tool's first), the most recent messages, extensions, and any other member. The envelope (agent, session,
+budget. The rest goes, in order, to the call's arguments at `post_tool_call`, tool declarations, the most
+recent messages, extensions, and any other member. The envelope (agent, session,
 tenant, actor, ids, names and roles) is never cut. When the content under decision doesn't fit, Defender
 evaluates a truncated copy, so its verdict can't cover the rest. A Defender `deny` (or `transform`) still
 blocks, but an `allow` follows the fail mode (`DefenderRtpEvaluationResult.truncated` is true): fail open
@@ -172,11 +172,18 @@ allows with a `defender:unverified` warning, and fail closed blocks. Raise
 `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` for agents that handle long content; evaluating long content in
 chunks is a follow-up.
 
+**The called tool's declaration.** At `pre_tool_call` and `post_tool_call`, Defender's verdict also depends
+on how the called tool is declared. Its declaration is searched for by name among the first 10,000 entries
+of `tools` and sent first, ahead of the others, which follow in your order as the budget allows. If its
+description or schema had to be cut, or `tools` is longer than 10,000 entries and the called tool isn't
+among the first 10,000, an `allow` follows the fail mode in the same way. A list of at most 10,000 entries
+that doesn't declare the called tool is fine.
+
 Strings are always sent as valid Unicode (a lone surrogate becomes U+FFFD, so it can't keep the request
 from being sent), NaN and infinities are sent as text, and nesting deeper than 32 levels is cut like long
-content. Tool registries, message histories and extension namespaces are read only as far as the budget
-reaches, so a long one doesn't slow the call down. A context member, verdict member or error body of an
-unexpected shape is ignored rather than failing the evaluation.
+content. Message histories, extension namespaces and the tool declarations after the called tool's are read
+only as far as the budget reaches, so a long one doesn't slow the call down. A context member, verdict
+member or error body of an unexpected shape is ignored rather than failing the evaluation.
 
 ## Configuration
 
