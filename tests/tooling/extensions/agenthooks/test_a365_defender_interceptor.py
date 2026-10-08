@@ -24,6 +24,7 @@ from agent_hooks import (
 )
 from microsoft_agents_a365.tooling.extensions.agenthooks import (
     A365DefenderCall,
+    A365DefenderCallResolver,
     A365DefenderInterceptor,
     add_a365_defender,
     create_protection_emitter,
@@ -443,6 +444,118 @@ async def test_a_defender_timeout_blocks_as_unverified_when_failing_closed() -> 
 
     assert record.proceeds is False
     assert record.verdict.reason == "runtime_error:defender_unverified"
+
+
+def emitter_with(
+    resolve_call: A365DefenderCallResolver,
+    *,
+    enabled: bool = True,
+    fail_closed: bool = False,
+) -> tuple[InterceptionEmitter, FakeDefenderSession]:
+    session = FakeDefenderSession(allow)
+    options = DefenderRtpOptions(enabled=enabled, endpoint=ENDPOINT, fail_closed=fail_closed)
+    emitter = add_a365_defender(
+        create_protection_emitter(defender=options),
+        A365DefenderInterceptor(DefenderRtpClient(options, session), resolve_call),  # type: ignore[arg-type]
+    )
+    return emitter, session
+
+
+@pytest.mark.asyncio
+async def test_does_not_resolve_the_call_for_points_defender_does_not_evaluate() -> None:
+    seen: list[str] = []
+
+    def resolve_call(context: AgentContext) -> A365DefenderCall | None:
+        seen.append(context["interception_point"])
+        raise AssertionError("not expected")
+
+    emitter, session = emitter_with(resolve_call)
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    for context in (
+        builder.agent_startup(tools_registered=["Search"]),
+        builder.pre_model_call(model_id="gpt-4o", messages=[{"role": "user", "content": "hi"}]),
+        builder.post_model_call(
+            model_id="gpt-4o", content="hi", tool_calls=[], finish_reason="stop"
+        ),
+        builder.agent_shutdown(reason="completed"),
+    ):
+        record = await emitter.emit_unchecked(context)
+        assert record.proceeds is True
+
+    assert seen == []
+    assert session.calls == []
+
+
+@pytest.mark.asyncio
+async def test_does_not_resolve_the_call_when_disabled() -> None:
+    seen: list[str] = []
+
+    def resolve_call(context: AgentContext) -> A365DefenderCall | None:
+        seen.append(context["interception_point"])
+        raise AssertionError("not expected")
+
+    emitter, session = emitter_with(resolve_call, enabled=False)
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    record = await emitter.emit_unchecked(builder.input(content="hello"))
+
+    assert record.proceeds is True
+    assert record.verdict.warnings == ()
+    assert seen == []
+    assert session.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("is_async", [False, True])
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_a_failing_call_resolver_follows_the_fail_mode(
+    is_async: bool, fail_closed: bool
+) -> None:
+    def failing(_context: AgentContext) -> A365DefenderCall | None:
+        raise RuntimeError("no turn context")
+
+    async def failing_async(_context: AgentContext) -> A365DefenderCall | None:
+        raise RuntimeError("no turn context")
+
+    emitter, session = emitter_with(failing_async if is_async else failing, fail_closed=fail_closed)
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    record = await emitter.emit_unchecked(builder.input(content="hello"))
+
+    assert session.calls == []
+    assert not (record.verdict.reason or "").startswith("host_error:")
+    (warning,) = record.verdict.warnings
+    assert warning.reason == "defender:unverified"
+    assert warning.message == "RuntimeError: no turn context"
+    if fail_closed:
+        assert record.proceeds is False
+        assert record.verdict.reason == "runtime_error:defender_unverified"
+    else:
+        assert record.proceeds is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_a_failing_token_resolver_follows_the_fail_mode(fail_closed: bool) -> None:
+    async def failing_tokens(_agent_id: str, _tenant_id: str, _scopes: list[str]) -> str | None:
+        raise RuntimeError("no credential")
+
+    agent = DefenderRtpAgentContext(agent_id=AGENT_ID, tenant_id=TENANT_ID)
+    emitter, session = emitter_with(
+        lambda _context: A365DefenderCall(agent, failing_tokens), fail_closed=fail_closed
+    )
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    record = await emitter.emit_unchecked(builder.input(content="hello"))
+
+    assert session.calls == []
+    (warning,) = record.verdict.warnings
+    assert warning.reason == "defender:unverified"
+    assert warning.message == "entra token unavailable"
+    assert record.proceeds is not fail_closed
+    if fail_closed:
+        assert record.verdict.reason == "runtime_error:defender_unverified"
 
 
 def test_creates_an_enforcing_strictest_emitter_with_room_for_the_defender_timeout() -> None:

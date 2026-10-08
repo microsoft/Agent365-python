@@ -37,7 +37,7 @@ record = await emitter.emit_unchecked(builder.input(content=user_message))
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `client` | `DefenderRtpClient` | The Defender client |
-| `resolve_call` | `Callable[[AgentContext], A365DefenderCall \| None \| Awaitable[...]]` | The agent identity and token resolver for a context; `None` allows without a call |
+| `resolve_call` | `Callable[[AgentContext], A365DefenderCall \| None \| Awaitable[...]]` | The agent identity and token resolver for a context; `None` allows without a call. Called only for the points Defender evaluates while enabled |
 | `on_evaluated` | `Callable[[DefenderRtpEvaluationResult], None] \| None` | Receives each evaluation (logging, telemetry); its exceptions are logged and never change the verdict |
 
 `to_verdict(result)` maps a `DefenderRtpEvaluationResult` to an agent-hooks `Verdict`:
@@ -48,8 +48,9 @@ record = await emitter.emit_unchecked(builder.input(content=user_message))
 - not evaluated: `allow` with a `defender:unverified` warning (fail open), or `deny` with reason
   `runtime_error:defender_unverified` (fail closed)
 
-An exception from the client (an invalid context or identity) is never a verdict: the interceptor turns it into
-`DefenderRtpClient.unavailable(...)`, which follows the fail mode.
+An exception from the call resolver, the token resolver or the client (an invalid context or identity) is never a
+verdict: the interceptor turns it into `DefenderRtpClient.unavailable(...)`, which follows the fail mode, rather than
+letting the emitter record a host error.
 
 ### create_protection_emitter / add_a365_defender
 

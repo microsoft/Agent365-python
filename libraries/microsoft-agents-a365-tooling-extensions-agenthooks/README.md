@@ -48,23 +48,27 @@ assertion never travel in plaintext.
 
 ### Granting the Defender permission
 
-Once [microsoft/Agent365-devTools#485](https://github.com/microsoft/Agent365-devTools/pull/485) ships,
-`a365 setup all --authmode s2s` (or `both`) grants `RealtimeProtection.Evaluate.All` to the blueprint as
-an inheritable permission, so every agent identity under it inherits it.
+Defender accepts only callers whose app-only token carries the application permission
+`RealtimeProtection.Evaluate.All` on the Defender API (`86a21212-634e-4553-b3d6-e477e4c9d9ec`).
+[microsoft/Agent365-devTools#485](https://github.com/microsoft/Agent365-devTools/pull/485) adds this to
+`a365 setup`. Until it ships, a tenant administrator grants it once per agent blueprint, and every agent
+identity created from the blueprint inherits it:
 
-Until then, a tenant administrator grants the application permission to each agent identity, for example
-with [Microsoft Graph PowerShell](https://learn.microsoft.com/powershell/microsoftgraph/):
+1. If the tenant has no service principal for the Defender API yet, create one:
+   `az ad sp create --id 86a21212-634e-4553-b3d6-e477e4c9d9ec`.
+2. Assign the app role to the blueprint's service principal:
+   `POST https://graph.microsoft.com/v1.0/servicePrincipals/{blueprint-sp-object-id}/appRoleAssignments`
+   with `principalId` (the blueprint SP), `resourceId` (the Defender API SP) and `appRoleId` (the id of
+   `RealtimeProtection.Evaluate.All` in that SP's `appRoles`). Requires Global Administrator or Privileged
+   Role Administrator.
+3. Make it inheritable:
+   `POST https://graph.microsoft.com/beta/applications/microsoft.graph.agentIdentityBlueprint/{blueprint-object-id}/inheritablePermissions`
+   with
+   `{"resourceAppId":"86a21212-634e-4553-b3d6-e477e4c9d9ec","inheritableScopes":{"@odata.type":"#microsoft.graph.allAllowedScopes","kind":"allAllowed"},"inheritableRoles":{"@odata.type":"#microsoft.graph.allAllowedRoles","kind":"allAllowed"}}`.
+   Requires Agent ID Administrator or Global Administrator.
 
-```powershell
-Connect-MgGraph -Scopes "AppRoleAssignment.ReadWrite.All", "Application.Read.All"
-$defender = Get-MgServicePrincipal -Filter "appId eq '86a21212-634e-4553-b3d6-e477e4c9d9ec'"
-$role = $defender.AppRoles | Where-Object Value -eq "RealtimeProtection.Evaluate.All"
-New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId <agent-identity-id> `
-    -PrincipalId <agent-identity-id> -ResourceId $defender.Id -AppRoleId $role.Id
-```
-
-Defender also requires the agent's tenant to be onboarded to Microsoft Defender for AI. Without the
-permission or the onboarding, Defender answers `403`, which follows the fail mode.
+The tenant must also be onboarded to Defender for AI; otherwise Defender returns 403, which follows the
+fail mode.
 
 ## Usage
 
@@ -123,8 +127,10 @@ if not record.proceeds:
 ```
 
 The call resolver may also be async, and returning `None` allows the context without a call (for
-example for a turn that has no agent identity). `emitter.emit(...)` raises
-`agent_hooks.InterceptionBlocked` instead of returning a record that does not proceed.
+example for a turn that has no agent identity). It runs only for the four points Defender evaluates
+while Defender RTP is enabled, and an exception from it, or from the token resolver, follows the fail
+mode instead of failing the emission. `emitter.emit(...)` raises `agent_hooks.InterceptionBlocked`
+instead of returning a record that does not proceed.
 
 `create_protection_emitter` returns an enforce-mode emitter with the `parallel/strictest` profile (an
 action proceeds only when every interceptor allows it) and a per-interceptor timeout of the Defender
