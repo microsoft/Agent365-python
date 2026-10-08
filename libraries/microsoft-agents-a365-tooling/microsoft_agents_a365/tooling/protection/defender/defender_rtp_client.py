@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import copy
+import dataclasses
 import functools
 import inspect
 import json
@@ -30,7 +31,7 @@ from .defender_rtp_evaluation_result import (
     DefenderRtpVerdict,
     DefenderRtpWarning,
 )
-from .defender_rtp_options import DefenderRtpOptions
+from .defender_rtp_options import DefenderRtpOptions, is_https_url
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +110,10 @@ class DefenderRtpClient:
         Raises:
             ValueError: If the options cannot be used for an enabled client.
         """
-        options.validate()
-        self._options = options
+        # A private copy: later changes to the caller's options (for example an http://
+        # endpoint) cannot bypass the validation below.
+        self._options = dataclasses.replace(options)
+        self._options.validate()
         self._session = session
         self._id_factory = id_factory or uuid.uuid4
         self._clock = clock or time.time
@@ -120,8 +123,8 @@ class DefenderRtpClient:
 
     @property
     def options(self) -> DefenderRtpOptions:
-        """The configuration this client uses."""
-        return self._options
+        """A copy of the configuration this client uses."""
+        return dataclasses.replace(self._options)
 
     @staticmethod
     def is_evaluated_interception_point(interception_point: str | None) -> bool:
@@ -286,7 +289,10 @@ class DefenderRtpClient:
             "agent.id",
         )
         session_id = _require_string(_read_string(_get(hook.get("session"), "id")), "session.id")
-        if not _is_non_negative_integer(hook.get("sequence")):
+        sequence = hook.get("sequence")
+        if isinstance(sequence, int) and _is_non_negative_integer(sequence):
+            self._observe_sequence(session_id, sequence)
+        else:
             hook["sequence"] = self._next_sequence(session_id)
 
         prepared_agent: JsonObject = {
@@ -305,11 +311,19 @@ class DefenderRtpClient:
 
         hook["agent"] = prepared_agent
 
-        if not _read_string(_get(hook.get("tenant"), "id")):
-            tenant = hook.get("tenant")
-            prepared_tenant: JsonObject = tenant if isinstance(tenant, dict) else {}
-            prepared_tenant["id"] = agent.tenant_id
-            hook["tenant"] = prepared_tenant
+        # The token is issued in the agent's tenant, and Defender requires tenant.id to equal
+        # the token's tid, so the agent's tenant is authoritative: a different host value would
+        # only be rejected, and a rejection follows the fail mode.
+        tenant = hook.get("tenant")
+        prepared_tenant: JsonObject = tenant if isinstance(tenant, dict) else {}
+        host_tenant_id = _read_string(prepared_tenant.get("id"))
+        if host_tenant_id and host_tenant_id != agent.tenant_id:
+            logger.warning(
+                "Defender RTP: the context's tenant.id is not the agent's tenant; sending the "
+                "agent's tenant, which the token is issued for."
+            )
+        prepared_tenant["id"] = agent.tenant_id
+        hook["tenant"] = prepared_tenant
 
         if hook.get("actor") is None and agent.user_id:
             hook["actor"] = {
@@ -388,9 +402,9 @@ class DefenderRtpClient:
     ) -> DefenderRtpEvaluationResult:
         correlation_id = str(self._id_factory())
         endpoint = self._options.endpoint
-        if not endpoint:
+        if not endpoint or not is_https_url(endpoint):
             return self._failure(
-                point, correlation_id, session_id, "no endpoint configured", None, started
+                point, correlation_id, session_id, "no HTTPS endpoint configured", None, started
             )
 
         headers = {
@@ -614,11 +628,17 @@ class DefenderRtpClient:
 
     def _next_sequence(self, session_id: str) -> int:
         following = self._sequences.pop(session_id, 0) + 1
-        self._sequences[session_id] = following
+        self._track_sequence(session_id, following)
+        return following
+
+    def _observe_sequence(self, session_id: str, sequence: int) -> None:
+        """Record a host-set sequence, so a later generated one stays above it."""
+        self._track_sequence(session_id, max(self._sequences.pop(session_id, 0), sequence))
+
+    def _track_sequence(self, session_id: str, high_water: int) -> None:
+        self._sequences[session_id] = high_water
         while len(self._sequences) > _MAX_TRACKED_SESSIONS:
             del self._sequences[next(iter(self._sequences))]
-
-        return following
 
     def _generated_tool_call_id(self) -> str:
         return "tooluse_" + self._id_factory().hex[:12]
@@ -865,10 +885,22 @@ def _clamp(node: object, max_characters: int) -> object:
 
 
 def _truncate(value: str, max_characters: int) -> str:
+    """At most ``max_characters`` characters, ending with a truncation marker when one fits."""
     if len(value) <= max_characters:
         return value
 
-    return f"{value[:max_characters]}...[truncated {len(value) - max_characters} chars]"
+    omitted = len(value) - max_characters
+    while True:
+        marker = f"...[truncated {omitted} chars]"
+        kept = max_characters - len(marker)
+        if kept <= 0:
+            return value[:max_characters]
+
+        if len(value) - kept == omitted:
+            return value[:kept] + marker
+
+        # The marker's own length moved the cut; recount (settles within a few passes).
+        omitted = len(value) - kept
 
 
 def _is_extension_key(key: object) -> bool:

@@ -291,14 +291,16 @@ if result is not None and not result.allowed:
 `enabled` is false, return `None` without a call.
 
 **Request:** Defender receives a fitted copy of the context (the host's context is not modified): `spec` is
-`agent-hooks/0.1`, the timestamp is UTC, a missing or negative `sequence` is numbered per session, `agent.framework` is
-lowercased to `[a-z0-9_-]` (default `agent365`), `target` equals the point's field, `tool_call` and `tool_result` keep
-only spec members (non-object tool arguments become `{"input": ...}`), and loosely filled optional fields
-(`extensions`, `model`, `tools`, `messages`, `actor`) are repaired or dropped. `agent.id`, `tenant.id`, `actor`,
-`request_id` and `model.id` are filled from `DefenderRtpAgentContext` when the host did not set them. Every string value
-except the protocol fields (`spec`, `interception_point`, `timestamp`) is clamped to `max_content_characters` with a
-`...[truncated N chars]` marker. Each call sends a unique `x-ms-correlation-id`. The endpoint must be an absolute HTTPS
-URL.
+`agent-hooks/0.1`, the timestamp is UTC, a missing or negative `sequence` is numbered after the highest sequence seen in
+the session, `agent.framework` is lowercased to `[a-z0-9_-]` (default `agent365`), `target` equals the point's field,
+`tool_call` and `tool_result` keep only spec members (non-object tool arguments become `{"input": ...}`), and loosely
+filled optional fields (`extensions`, `model`, `tools`, `messages`, `actor`) are repaired or dropped. `tenant.id` is
+always the agent's tenant, which the token is issued for and Defender requires; `agent.id`, `actor`, `request_id` and
+`model.id` are filled from `DefenderRtpAgentContext` when the host did not set them. Every string value except the
+protocol fields (`spec`, `interception_point`, `timestamp`) is cut to at most `max_content_characters` characters,
+ending with a `...[truncated N chars]` marker when it fits. Each call sends a unique `x-ms-correlation-id`. The
+endpoint must be an absolute HTTPS URL; the client keeps a private copy of its options, so later changes to the
+caller's object do not reach it.
 
 **Authentication:** Defender is always called app-only as the agent identity. `from_agentic_connection` gets the
 agent identity's assertion from the connection (`AccessTokenProviderBase.get_agentic_application_token`, implemented by

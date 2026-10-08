@@ -72,7 +72,7 @@ A365DefenderInterceptor.intercept()
        │  resolve_call(context) → A365DefenderCall(agent, token_resolver)
        ▼
 DefenderRtpClient.evaluate_hook_context()          (microsoft-agents-a365-tooling)
-       ├── fit a copy of the context to Defender's validation (normalize; clamp every string; fill agent, tenant, actor)
+       ├── fit a copy of the context to Defender's validation (normalize; clamp every string; agent's tenant; fill agent, actor)
        ├── token: cached, or token_resolver → agent identity app-only token (one deadline with the POST)
        └── POST endpoint (HTTPS), x-ms-correlation-id: <guid>
        ▼

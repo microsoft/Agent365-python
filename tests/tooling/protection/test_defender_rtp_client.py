@@ -19,6 +19,7 @@ from microsoft_agents_a365.tooling.protection.defender import (
     DefenderRtpOptions,
     DefenderRtpWarning,
 )
+from microsoft_agents_a365.tooling.protection.defender.defender_rtp_client import _truncate
 
 from .defender_fakes import (
     AGENT_ID,
@@ -292,17 +293,57 @@ async def test_fills_fields_the_host_did_not_set_from_the_agent_context() -> Non
 
 
 @pytest.mark.asyncio
-async def test_keeps_the_hosts_tenant_and_actor() -> None:
+async def test_sends_the_agents_tenant_even_when_the_host_set_another() -> None:
     client, session = create()
     context = input_context("hello")
-    context["tenant"] = {"id": "host-tenant"}
+    context["tenant"] = {"id": "host-tenant", "name": "Contoso"}
     context["actor"] = {"id": "host-user", "kind": "human"}
 
     await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
 
     (body,) = session.bodies
-    assert body["tenant"] == {"id": "host-tenant"}
+    assert body["tenant"] == {"id": TENANT_ID, "name": "Contoso"}, "the token's tenant wins"
     assert body["actor"] == {"id": "host-user", "kind": "human"}
+    assert context["tenant"] == {"id": "host-tenant", "name": "Contoso"}
+
+
+@pytest.mark.asyncio
+async def test_generated_sequences_continue_after_the_hosts_highest() -> None:
+    client, session = create()
+    for session_id, sequence in (
+        ("s-a", 7),
+        ("s-a", None),
+        ("s-a", 3),
+        ("s-a", None),
+        ("s-b", None),
+    ):
+        context = input_context("hello")
+        context["session"] = {"id": session_id}
+        if sequence is None:
+            del context["sequence"]
+        else:
+            context["sequence"] = sequence
+        await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    assert [body["sequence"] for body in session.bodies] == [7, 8, 3, 9, 1]
+
+
+@pytest.mark.asyncio
+async def test_a_change_to_the_options_after_construction_does_not_reach_the_client() -> None:
+    options = DefenderRtpOptions(enabled=True, endpoint=ENDPOINT)
+    session = FakeDefenderSession(allow)
+    client = DefenderRtpClient(options, session)  # type: ignore[arg-type]
+
+    options.endpoint = "http://prevention.example.test/v1/protection/evaluate"
+    client.options.endpoint = "http://prevention.example.test/v1/protection/evaluate"
+    result = await client.evaluate_hook_context(
+        input_context("hello"), AGENT, TokenSource().resolve
+    )
+
+    assert result is not None and result.evaluated
+    assert [call.url for call in session.calls] == [ENDPOINT]
+    assert client.options.endpoint == ENDPOINT
+    assert client.options is not client.options
 
 
 @pytest.mark.asyncio
@@ -325,14 +366,34 @@ async def test_clamps_long_strings() -> None:
 
     (body,) = session.bodies
     assert contract_errors(body) == []
-    assert body["input"]["content"] == "a" * 40 + "...[truncated 10 chars]"
+    assert body["input"]["content"] == "a" * 17 + "...[truncated 33 chars]"
+    assert len(body["input"]["content"]) == 40
+
+
+@pytest.mark.parametrize("max_characters", [1, 5, 21, 22, 23, 24, 40, 100, 20000])
+@pytest.mark.parametrize("length", [1, 5, 22, 23, 24, 41, 99, 100, 101, 1000, 25000])
+def test_truncation_never_exceeds_the_maximum(max_characters: int, length: int) -> None:
+    value = "".join(chr(ord("a") + index % 26) for index in range(length))
+
+    clamped = _truncate(value, max_characters)
+
+    assert len(clamped) <= max_characters or clamped == value
+    if length <= max_characters:
+        assert clamped == value
+    elif "...[truncated " in clamped:
+        kept, marker = clamped.split("...[truncated ", 1)
+        assert value.startswith(kept)
+        assert marker == f"{length - len(kept)} chars]"
+        assert len(clamped) == max_characters
+    else:
+        assert clamped == value[:max_characters], "no room for the marker: a hard cut"
 
 
 @pytest.mark.asyncio
 async def test_clamps_every_string_value_sent() -> None:
     client, session = create(max_content_characters=40)
     long = "x" * 45
-    clamped = "x" * 40 + "...[truncated 5 chars]"
+    clamped = "x" * 17 + "...[truncated 28 chars]"
     context = input_context("hello")
     context["agent"] = {"id": AGENT_ID, "framework": "agent365", "name": long}
     context["messages"] = [{"role": "user", "content": [{"type": "text", "text": long}]}]
@@ -356,7 +417,7 @@ async def test_clamps_every_string_value_sent() -> None:
 async def test_clamps_tool_arguments_and_results_once_and_keeps_target_equal() -> None:
     client, session = create(max_content_characters=40)
     long = "y" * 41
-    clamped = "y" * 40 + "...[truncated 1 chars]"
+    clamped = "y" * 17 + "...[truncated 24 chars]"
     context = tool_context(
         "post_tool_call",
         tool_call={"id": "c-1", "name": "Search", "args": {"query": [long, 5]}},
