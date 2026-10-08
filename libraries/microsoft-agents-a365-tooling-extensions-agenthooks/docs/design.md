@@ -42,11 +42,11 @@ record = await emitter.emit_unchecked(builder.input(content=user_message))
 
 `to_verdict(result)` maps a `DefenderRtpEvaluationResult` to an agent-hooks `Verdict`:
 
-- evaluated `allow`: `allow` with Defender's warnings and `result_labels`
-- evaluated `deny` or `transform`: `deny`, reason `defender:block[:<reason>]`, the block reason as the message, the
+- evaluated `allow` of content within the limit: `allow` with Defender's warnings and `result_labels`
+- evaluated `deny` or `transform` (also of a truncated copy): `deny`, reason `defender:block[:<reason>]`, the block reason as the message, the
   labels, and evidence pointing at `urn:a365:defender:<correlation id>`
-- not evaluated: `allow` with a `defender:unverified` warning (fail open), or `deny` with reason
-  `runtime_error:defender_unverified` (fail closed)
+- not evaluated, or an allow of a truncated copy (content over the limit, `verified` false): `allow` with a
+  `defender:unverified` warning (fail open), or `deny` with reason `runtime_error:defender_unverified` (fail closed)
 
 An exception from the call resolver, the token resolver or the client (an invalid context or identity) is never a
 verdict: the interceptor turns it into `DefenderRtpClient.unavailable(...)`, which follows the fail mode, rather than

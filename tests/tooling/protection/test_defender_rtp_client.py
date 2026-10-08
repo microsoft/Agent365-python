@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import json
 import time
 import uuid
 
@@ -369,6 +370,148 @@ async def test_clamps_long_strings() -> None:
     assert contract_errors(body) == []
     assert body["input"]["content"] == "a" * 17 + "...[truncated 33 chars]"
     assert len(body["input"]["content"]) == 40
+
+
+PADDING = "a" * 20000
+TRUNCATED_ERROR = "content exceeded max_content_characters; Defender evaluated a truncated copy"
+
+
+def deny_block_me(body: JsonObject) -> FakeResponse:
+    if "BLOCK_ME" in json.dumps(body["target"]):
+        return json_response({
+            "decision": "deny",
+            "reason": "prevention_blocked",
+            "message": "Blocked by policy.",
+        })
+    return json_response({"decision": "allow"})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_an_allow_of_a_truncated_copy_follows_the_fail_mode(fail_closed: bool) -> None:
+    client, session = create(deny_block_me, fail_closed=fail_closed)
+
+    result = await client.evaluate_hook_context(
+        input_context(PADDING + "BLOCK_ME"), AGENT, TokenSource().resolve
+    )
+
+    (body,) = session.bodies
+    assert "BLOCK_ME" not in body["input"]["content"], "the payload was beyond the limit"
+    assert len(body["input"]["content"]) == 20000
+    assert result is not None
+    assert result.evaluated is True
+    assert result.truncated is True
+    assert result.verified is False
+    assert result.verdict is not None and result.verdict.decision == "allow"
+    assert result.allowed is not fail_closed
+    assert result.error == TRUNCATED_ERROR
+    assert (result.block_reason is not None) is fail_closed
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_a_deny_of_a_truncated_copy_stays_a_deny(fail_closed: bool) -> None:
+    client, _ = create(deny_block_me, fail_closed=fail_closed)
+
+    result = await client.evaluate_hook_context(
+        input_context("BLOCK_ME" + PADDING), AGENT, TokenSource().resolve
+    )
+
+    assert result is not None
+    assert result.evaluated is True
+    assert result.truncated is True
+    assert result.verified is True
+    assert result.allowed is False
+    assert result.block_reason == "Blocked by policy."
+    assert result.error is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail_closed", [False, True])
+async def test_a_transform_of_a_truncated_copy_stays_a_block(fail_closed: bool) -> None:
+    client, _ = create(
+        lambda _: json_response({
+            "decision": "transform",
+            "transform": {"path": "/target", "value": "[redacted]"},
+        }),
+        fail_closed=fail_closed,
+    )
+
+    result = await client.evaluate_hook_context(
+        input_context("secret" + PADDING), AGENT, TokenSource().resolve
+    )
+
+    assert result is not None
+    assert result.truncated is True
+    assert result.verified is True
+    assert result.allowed is False
+    assert result.block_reason is not None and "rewrite" in result.block_reason
+    assert result.error is None
+
+
+@pytest.mark.asyncio
+async def test_content_within_the_limit_is_allowed_normally() -> None:
+    client, _ = create(deny_block_me)
+
+    result = await client.evaluate_hook_context(
+        input_context("a short, harmless message"), AGENT, TokenSource().resolve
+    )
+
+    assert result is not None
+    assert result.allowed is True
+    assert result.truncated is False
+    assert result.verified is True
+    assert result.error is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "context",
+    [
+        tool_context(
+            "pre_tool_call",
+            tool_call={"id": "c-1", "name": "FetchPage", "args": {"text": PADDING + "BLOCK_ME"}},
+        ),
+        tool_context(
+            "post_tool_call",
+            tool_call={"id": "c-1", "name": "FetchPage", "args": {}},
+            tool_result={"value": [PADDING + "BLOCK_ME"], "is_error": False},
+        ),
+        tool_context("output", output={"content": PADDING + "BLOCK_ME"}),
+    ],
+    ids=["pre_tool_call", "post_tool_call", "output"],
+)
+async def test_truncation_of_the_content_under_decision_is_tracked_at_every_point(
+    context: JsonObject,
+) -> None:
+    client, session = create(deny_block_me)
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert contract_errors(body) == []
+    assert result is not None
+    assert result.truncated is True
+    assert result.verified is False
+    assert result.error == TRUNCATED_ERROR
+
+
+@pytest.mark.asyncio
+async def test_long_context_outside_the_content_under_decision_does_not_affect_the_verdict() -> (
+    None
+):
+    client, session = create(deny_block_me)
+    context = input_context("hello")
+    context["messages"] = [{"role": "user", "content": PADDING + "earlier turn"}]
+
+    result = await client.evaluate_hook_context(context, AGENT, TokenSource().resolve)
+
+    (body,) = session.bodies
+    assert len(body["messages"][0]["content"]) == 20000
+    assert result is not None
+    assert result.truncated is False
+    assert result.verified is True
+    assert result.allowed is True
 
 
 @pytest.mark.parametrize("max_characters", [1, 5, 21, 22, 23, 24, 40, 100, 20000])

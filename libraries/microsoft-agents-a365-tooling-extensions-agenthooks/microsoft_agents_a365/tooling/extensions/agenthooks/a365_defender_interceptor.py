@@ -152,18 +152,17 @@ class A365DefenderInterceptor:
             The agent-hooks verdict.
         """
         name = A365DefenderInterceptor.NAME
-        if result.evaluated:
-            verdict = result.verdict
-            labels = verdict.result_labels if verdict is not None else ()
+        verdict = result.verdict
+        labels = verdict.result_labels if verdict is not None else ()
+        defender_warnings = tuple(
+            HookWarning(reason=warning.reason or f"{name}:warning", message=warning.message or "")
+            for warning in (verdict.warnings if verdict is not None else ())
+        )
+        if result.verified:
             if result.allowed:
-                warnings = tuple(
-                    HookWarning(
-                        reason=warning.reason or f"{name}:warning",
-                        message=warning.message or "",
-                    )
-                    for warning in (verdict.warnings if verdict is not None else ())
+                return Verdict(
+                    decision=Decision.ALLOW, warnings=defender_warnings, result_labels=labels
                 )
-                return Verdict(decision=Decision.ALLOW, warnings=warnings, result_labels=labels)
 
             reason = verdict.reason if verdict is not None else None
             code = ":" + _INVALID_REASON_CHARACTERS.sub("_", reason) if reason else ""
@@ -180,13 +179,18 @@ class A365DefenderInterceptor:
                 result_labels=labels,
             )
 
+        # No verdict, or an allow of a truncated copy that does not cover the whole content.
         unverified = (
             HookWarning(
                 reason=f"{name}:unverified", message=result.error or "no verdict was returned"
             ),
         )
         if result.allowed:
-            return Verdict(decision=Decision.ALLOW, warnings=unverified)
+            return Verdict(
+                decision=Decision.ALLOW,
+                warnings=unverified + defender_warnings,
+                result_labels=labels,
+            )
 
         return Verdict(
             decision=Decision.DENY,

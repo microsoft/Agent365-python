@@ -320,6 +320,12 @@ with `error` and `http_status`) and is allowed, or blocked when `A365_DEFENDER_R
 Defender's failed validation rules (`diagnostics.validationErrors`) in `error`. A `transform` verdict blocks, because
 this SDK version does not apply it.
 
+**Long content:** when the content under decision (`target`: the input, a tool call's arguments, a tool result, or the
+output) is longer than `max_content_characters`, Defender evaluates a truncated copy and the result has
+`truncated=True`. A block stays a block; an allow does not cover the rest of the content, so `allowed` follows the fail
+mode, `error` says so, and `verified` is false. Raising the limit is the remedy for long-content agents; chunked
+evaluation is a follow-up.
+
 ## File Structure
 
 ```

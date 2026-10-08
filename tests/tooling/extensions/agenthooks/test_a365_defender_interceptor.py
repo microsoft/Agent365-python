@@ -558,6 +558,90 @@ async def test_a_failing_token_resolver_follows_the_fail_mode(fail_closed: bool)
         assert record.verdict.reason == "runtime_error:defender_unverified"
 
 
+PADDING = "a" * 20000
+TRUNCATED_ERROR = "content exceeded max_content_characters; Defender evaluated a truncated copy"
+
+
+def deny_block_me(body: JsonObject) -> FakeResponse:
+    if "BLOCK_ME" in str(body["target"]):
+        return json_response({"decision": "deny", "reason": "prevention_blocked"})
+    return json_response({"decision": "allow"})
+
+
+@pytest.mark.asyncio
+async def test_padding_past_the_limit_blocks_as_unverified_when_failing_closed() -> None:
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    async with harness(deny_block_me, fail_closed=True) as h:
+        record = await h.emitter.emit_unchecked(builder.input(content=PADDING + "BLOCK_ME"))
+
+    assert record.proceeds is False
+    assert record.verdict.reason == "runtime_error:defender_unverified"
+    (warning,) = record.verdict.warnings
+    assert warning.reason == "defender:unverified"
+    assert warning.message == TRUNCATED_ERROR
+    (evaluation,) = h.evaluations
+    assert evaluation.truncated is True and evaluation.evaluated is True
+
+
+@pytest.mark.asyncio
+async def test_padding_past_the_limit_is_allowed_with_a_warning_when_failing_open() -> None:
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    async with harness(deny_block_me) as h:
+        record = await h.emitter.emit_unchecked(builder.input(content=PADDING + "BLOCK_ME"))
+
+    assert record.proceeds is True
+    (warning,) = record.verdict.warnings
+    assert warning.reason == "defender:unverified"
+    assert warning.message == TRUNCATED_ERROR
+
+
+@pytest.mark.asyncio
+async def test_a_defender_deny_of_truncated_content_blocks_even_when_failing_open() -> None:
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    async with harness(deny_block_me) as h:
+        record = await h.emitter.emit_unchecked(builder.input(content="BLOCK_ME" + PADDING))
+
+    assert record.proceeds is False
+    assert record.verdict.reason == "defender:block:prevention_blocked"
+
+
+@pytest.mark.asyncio
+async def test_content_within_the_limit_is_allowed_without_warnings() -> None:
+    builder = AgentContextBuilder(agent_id=AGENT_ID, framework="agent-framework", session_id="s")
+
+    async with harness(deny_block_me) as h:
+        record = await h.emitter.emit_unchecked(builder.input(content="a harmless message"))
+
+    assert record.proceeds is True
+    assert record.verdict.warnings == ()
+
+
+def test_maps_an_allow_of_a_truncated_copy_to_an_unverified_verdict() -> None:
+    result = DefenderRtpEvaluationResult(
+        allowed=True,
+        evaluated=True,
+        truncated=True,
+        error=TRUNCATED_ERROR,
+        verdict=DefenderRtpVerdict(
+            warnings=(DefenderRtpWarning("prevention_annotated", "Suspicious."),),
+            result_labels=("MaliciousUrl",),
+        ),
+    )
+
+    verdict = A365DefenderInterceptor.to_verdict(result)
+
+    assert result.verified is False
+    assert verdict.decision is Decision.ALLOW
+    assert [(w.reason, w.message) for w in verdict.warnings] == [
+        ("defender:unverified", TRUNCATED_ERROR),
+        ("prevention_annotated", "Suspicious."),
+    ]
+    assert verdict.result_labels == ("MaliciousUrl",)
+
+
 def test_creates_an_enforcing_strictest_emitter_with_room_for_the_defender_timeout() -> None:
     emitter = create_protection_emitter(defender=DefenderRtpOptions(timeout_seconds=3))
 

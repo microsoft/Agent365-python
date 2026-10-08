@@ -154,8 +154,16 @@ add_a365_defender(emitter, interceptor)
 | `allow` (with any warnings and labels) | `allow`, keeping Defender's warnings and `result_labels` |
 | `deny` | `deny`, reason `defender:block:<Defender reason>`, Defender's message, labels, and evidence `urn:a365:defender:<correlation id>` |
 | `transform` | `deny`: this SDK version does not apply Defender's rewrite |
+| `allow` of a truncated copy (content over the limit) | not authoritative: follows the fail mode, like no verdict |
 | no verdict, fail open (default) | `allow` with a `defender:unverified` warning carrying the error |
 | no verdict, fail closed | `deny`, reason `runtime_error:defender_unverified`, never reported as a detection |
+
+**Long content.** When the content under decision (the user's message, a tool call's arguments, a tool
+result, or the reply) is longer than `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS`, Defender evaluates a
+truncated copy, so its verdict can't cover the rest. A Defender `deny` still blocks, but an `allow`
+follows the fail mode (`DefenderRtpEvaluationResult.truncated` is true): fail open allows with a
+`defender:unverified` warning, and fail closed blocks. Raise `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS`
+for agents that handle long content; evaluating long content in chunks is a follow-up.
 
 ## Configuration
 
@@ -166,7 +174,7 @@ add_a365_defender(emitter, interceptor)
 | `A365_DEFENDER_RTP_FAIL_MODE` | `closed` blocks when no verdict is obtained; default is open |
 | `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | one deadline for token acquisition and the call (default 10000) |
 | `A365_DEFENDER_RTP_AUTHENTICATION_SCOPE` | overrides the Defender API scope |
-| `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | clamps every string value sent (default 20000) |
+| `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | clamps every string value sent (default 20000); content under decision beyond it follows the fail mode unless Defender denies |
 
 Every call sends a unique `x-ms-correlation-id`, returned as `DefenderRtpEvaluationResult.correlation_id`;
 Defender logs each evaluation under it. A `400` reports the failed validation rule in `error`. A timeout,

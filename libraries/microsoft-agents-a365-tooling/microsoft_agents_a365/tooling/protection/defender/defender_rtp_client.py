@@ -63,6 +63,13 @@ _TRANSFORM_BLOCK_REASON: Final[str] = (
     "apply yet."
 )
 _DENY_BLOCK_REASON: Final[str] = "Blocked by Microsoft Defender for AI."
+_TRUNCATED_ERROR: Final[str] = (
+    "content exceeded max_content_characters; Defender evaluated a truncated copy"
+)
+_TRUNCATED_BLOCK_REASON: Final[str] = (
+    "The content is longer than Microsoft Defender for AI evaluates, and this agent is "
+    "configured to fail closed."
+)
 
 
 @dataclass(frozen=True)
@@ -183,7 +190,7 @@ class DefenderRtpClient:
         started = time.perf_counter()
         _require_string(agent.agent_id, "agent_id")
         _require_string(agent.tenant_id, "tenant_id")
-        hook = self._prepare(context, agent)
+        hook, truncated = self._prepare(context, agent)
         body = _serialize(hook)
         session_id = _read_string(_get(hook.get("session"), "id"))
 
@@ -206,7 +213,7 @@ class DefenderRtpClient:
                 time.perf_counter() - started,
             )
 
-        return await self._post(body, point, session_id, token, started, deadline)
+        return await self._post(body, point, session_id, token, started, deadline, truncated)
 
     async def prefetch_access_token(
         self,
@@ -270,12 +277,18 @@ class DefenderRtpClient:
 
     # ---- agent-hooks context -------------------------------------------------------------
 
-    def _prepare(self, context: Mapping[str, object], agent: DefenderRtpAgentContext) -> JsonObject:
+    def _prepare(
+        self, context: Mapping[str, object], agent: DefenderRtpAgentContext
+    ) -> tuple[JsonObject, bool]:
         """A fitted copy of the context that meets Defender's request validation.
 
         ``target`` equals the point's field, ``tool_call`` and ``tool_result`` carry only spec
         members, the timestamp is UTC, loosely filled optional fields are repaired or dropped,
         and every string value except the protocol fields is clamped.
+
+        Returns:
+            The copy, and whether the content under decision (``target``, which equals the
+            point's field) was truncated.
         """
         hook: JsonObject = copy.deepcopy(dict(context))
         hook["spec"] = self.AGENT_HOOKS_SPEC
@@ -384,10 +397,12 @@ class DefenderRtpClient:
         # One pass, so a clamped value is never clamped again and target still equals the
         # point's field.
         max_characters = self._options.max_content_characters
-        return {
+        truncated = _has_string_longer_than(hook.get("target"), max_characters)
+        fitted = {
             key: value if key in _PROTOCOL_FIELDS else _clamp(value, max_characters)
             for key, value in hook.items()
         }
+        return fitted, truncated
 
     # ---- transport -----------------------------------------------------------------------
 
@@ -399,6 +414,7 @@ class DefenderRtpClient:
         access_token: str,
         started: float,
         deadline: float,
+        truncated: bool = False,
     ) -> DefenderRtpEvaluationResult:
         correlation_id = str(self._id_factory())
         endpoint = self._options.endpoint
@@ -485,6 +501,31 @@ class DefenderRtpClient:
             ",".join(verdict.result_labels) or "-",
             correlation_id,
         )
+        if truncated and allowed:
+            # Defender evaluated a truncated copy; its allow does not cover the content beyond
+            # the limit, which the host would still act on. A block stays authoritative.
+            fail_closed = self._options.fail_closed
+            logger.warning(
+                "Defender RTP %s: %s (%s), x-ms-correlation-id=%s",
+                point,
+                _TRUNCATED_ERROR,
+                "blocked" if fail_closed else "allowed",
+                correlation_id,
+            )
+            return DefenderRtpEvaluationResult(
+                allowed=not fail_closed,
+                evaluated=True,
+                interception_point=point,
+                correlation_id=correlation_id,
+                session_id=session_id,
+                verdict=verdict,
+                http_status=status,
+                error=_TRUNCATED_ERROR,
+                latency_seconds=time.perf_counter() - started,
+                block_reason=_TRUNCATED_BLOCK_REASON if fail_closed else None,
+                truncated=True,
+            )
+
         return DefenderRtpEvaluationResult(
             allowed=allowed,
             evaluated=True,
@@ -495,6 +536,7 @@ class DefenderRtpClient:
             http_status=status,
             latency_seconds=time.perf_counter() - started,
             block_reason=block_reason,
+            truncated=truncated,
         )
 
     def _failure(
@@ -887,6 +929,19 @@ def _clamp(node: object, max_characters: int) -> object:
         return {key: _clamp(value, max_characters) for key, value in node.items()}
 
     return copy.deepcopy(node)
+
+
+def _has_string_longer_than(node: object, max_characters: int) -> bool:
+    if isinstance(node, str):
+        return len(node) > max_characters
+
+    if isinstance(node, list | tuple):
+        return any(_has_string_longer_than(item, max_characters) for item in node)
+
+    if isinstance(node, dict):
+        return any(_has_string_longer_than(value, max_characters) for value in node.values())
+
+    return False
 
 
 def _truncate(value: str, max_characters: int) -> str:

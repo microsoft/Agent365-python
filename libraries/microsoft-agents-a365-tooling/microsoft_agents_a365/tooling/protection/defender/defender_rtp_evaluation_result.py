@@ -47,7 +47,10 @@ class DefenderRtpEvaluationResult:
     """The outcome of one Defender evaluation.
 
     ``evaluated`` is false when no verdict was obtained; ``allowed`` then follows
-    :attr:`DefenderRtpOptions.fail_closed`.
+    :attr:`DefenderRtpOptions.fail_closed`. ``truncated`` is true when the content under
+    decision exceeded :attr:`DefenderRtpOptions.max_content_characters`, so Defender evaluated a
+    truncated copy: a block still blocks, but an allow does not cover the rest of the content,
+    so ``allowed`` then follows the fail mode too.
 
     Attributes:
         allowed: Whether the action may proceed.
@@ -58,9 +61,11 @@ class DefenderRtpEvaluationResult:
         session_id: The agent-hooks ``session.id``.
         verdict: Defender's verdict, when one was returned.
         http_status: The HTTP status, when a response was received.
-        error: Why no verdict was obtained, for example ``http 403: ...``.
+        error: Why no verdict was obtained, or why an allow is not authoritative, for example
+            ``http 403: ...``.
         latency_seconds: Time spent on the evaluation call, in seconds.
         block_reason: A user-facing reason when the action is blocked.
+        truncated: Whether Defender evaluated a truncated copy of the content under decision.
     """
 
     allowed: bool
@@ -73,3 +78,18 @@ class DefenderRtpEvaluationResult:
     error: str | None = None
     latency_seconds: float = 0.0
     block_reason: str | None = None
+    truncated: bool = False
+
+    @property
+    def verified(self) -> bool:
+        """Whether Defender's verdict decides the action.
+
+        False when no verdict was obtained, or when Defender allowed a truncated copy of the
+        content; the result then follows the fail mode.
+        """
+        if not self.evaluated:
+            return False
+
+        return not (
+            self.truncated and self.verdict is not None and self.verdict.decision == "allow"
+        )
