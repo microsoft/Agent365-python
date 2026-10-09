@@ -5,4 +5,6 @@
 
 - :mod:`microsoft_agents_a365.tooling.protection.defender`: Microsoft Defender for AI
   real-time protection (Defender RTP).
+- :mod:`microsoft_agents_a365.tooling.protection.purview`: Microsoft Purview data loss
+  prevention (DLP) of agent content.
 """

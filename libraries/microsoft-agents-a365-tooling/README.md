@@ -15,6 +15,16 @@ pip install microsoft-agents-a365-tooling
 
 For usage examples and detailed documentation, see the [Tooling documentation](https://learn.microsoft.com/microsoft-agent-365/developer/tooling?tabs=python) on Microsoft Learn.
 
+## Runtime protection
+
+- `microsoft_agents_a365.tooling.protection.defender`: Microsoft Defender for AI real-time protection (Defender RTP).
+- `microsoft_agents_a365.tooling.protection.purview`: Microsoft Purview data loss prevention (DLP) of the user's
+  messages and the agent's replies, through Microsoft Graph `processContent`.
+
+Neither depends on agent-hooks. To run them as agent-hooks interceptors, and for their configuration and tenant
+setup, see
+[`microsoft-agents-a365-tooling-extensions-agenthooks`](../microsoft-agents-a365-tooling-extensions-agenthooks/README.md).
+
 ## Support
 
 For issues, questions, or feedback:

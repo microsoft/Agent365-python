@@ -83,7 +83,7 @@ The best way to consume this SDK is via our PyPI packages found here: [pypi.org]
 - **libraries/microsoft-agents-a365-runtime**: Microsoft Agent 365 Runtime - Core runtime utilities and extensions
 - **libraries/microsoft-agents-a365-tooling**: Microsoft Agent 365 Tooling SDK - Agent tooling and MCP integration
 - **libraries/microsoft-agents-a365-tooling-extensions-agentframework**: Agent Framework tooling extensions
-- **libraries/microsoft-agents-a365-tooling-extensions-agenthooks**: agent-hooks tooling extensions (Microsoft Defender for AI real-time protection)
+- **libraries/microsoft-agents-a365-tooling-extensions-agenthooks**: agent-hooks tooling extensions (Microsoft Defender for AI real-time protection and Microsoft Purview data loss prevention)
 - **libraries/microsoft-agents-a365-tooling-extensions-azureaifoundry**: Azure AI Foundry tooling extensions
 - **libraries/microsoft-agents-a365-tooling-extensions-openai**: OpenAI tooling extensions
 - **libraries/microsoft-agents-a365-tooling-extensions-semantickernel**: Semantic Kernel tooling extensions

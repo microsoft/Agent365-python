@@ -4,7 +4,7 @@ This document describes the architecture and design of the `microsoft-agents-a36
 
 ## Overview
 
-The tooling package provides MCP (Model Context Protocol) tool server configuration and discovery services. It enables agents to dynamically discover and connect to tool servers for extending agent capabilities. It also provides the client for Microsoft Defender for AI real-time protection (see [Defender Real-Time Protection](#defender-real-time-protection-protectiondefender)).
+The tooling package provides MCP (Model Context Protocol) tool server configuration and discovery services. It enables agents to dynamically discover and connect to tool servers for extending agent capabilities. It also provides the clients for Microsoft Defender for AI real-time protection (see [Defender Real-Time Protection](#defender-real-time-protection-protectiondefender)) and Microsoft Purview data loss prevention (see [Purview Data Loss Prevention](#purview-data-loss-prevention-protectionpurview)).
 
 ## Architecture
 
@@ -365,6 +365,101 @@ the `a365` extension's `tool.description`, which counts as its description.
 `diagnostics`, a token's payload and the token endpoint's response. One of an unexpected shape is ignored, so it never
 turns Defender's verdict into an unavailable result.
 
+## Purview Data Loss Prevention ([protection/purview/](../microsoft_agents_a365/tooling/protection/purview/))
+
+Microsoft Purview data loss prevention (DLP) of agent content through the Microsoft Graph `processContent` API
+(`POST {graph}/me/dataSecurityAndGovernance/processContent`). Purview applies the tenant's DLP policies scoped to the
+agent's application, records the Purview audit event, and returns the policy actions. This module has no agent-hooks
+dependency; `microsoft-agents-a365-tooling-extensions-agenthooks` plugs it into an agent-hooks emitter (the user's
+message at `input`; the reply at `output`, audited in the background by default).
+
+| Class | Purpose |
+|-------|---------|
+| `PurviewDlpOptions` | Configuration; `from_environment()` reads the `A365_PURVIEW_DLP_*` variables |
+| `PurviewDlpClient` | `evaluate()`, `unavailable()`; `UPLOAD_TEXT`, `DOWNLOAD_TEXT` |
+| `PurviewDlpAgentContext` | The agent: identity, tenant, agentic user, blueprint, application location, name, version |
+| `PurviewDlpToken` | A Graph access token (never in `repr`) and the user to evaluate as (`None`: `/me`) |
+| `PurviewDlpTokenResolver` | `(agent, scopes) -> PurviewDlpToken`, sync or async |
+| `PurviewDlpTokenResolvers` | `from_agentic_user()`: the agentic user's delegated token through the agent's connection; `from_access_token_provider()`: a host-supplied token |
+| `PurviewDlpEvaluationResult` | `allowed`, `evaluated`, `truncated`, `activity`, `correlation_id`, `decision`, `protection_scope_state`, `http_status`, `latency_seconds`, `error`, `block_reason`, `verified` |
+
+```python
+from microsoft_agents_a365.tooling.protection.purview import (
+    PurviewDlpAgentContext,
+    PurviewDlpClient,
+    PurviewDlpOptions,
+    PurviewDlpTokenResolvers,
+)
+
+client = PurviewDlpClient(PurviewDlpOptions.from_environment())
+tokens = PurviewDlpTokenResolvers.from_agentic_user(connection)  # once: it caches tokens
+agent = PurviewDlpAgentContext(
+    agent_id=agent_identity_id,
+    tenant_id=tenant_id,
+    agentic_user_id=agentic_user_id,
+    blueprint_id=blueprint_id,
+)
+
+result = await client.evaluate("uploadText", user_message, agent, tokens, session_id=conversation_id)
+if result is not None and not result.allowed:
+    ...  # blocked; Graph logs the call under result.correlation_id (client-request-id)
+```
+
+**Activities:** `uploadText` (content sent to the agent, such as the user's message) and `downloadText` (content the
+agent returns, such as its reply). `evaluate` returns `None` without a call while `enabled` is false or the text is
+empty or whitespace.
+
+**Request:** one `processConversationMetadata` entry with the text (`textContent`), the name `<agent name> <activity>`
+(the agent name defaults to the agent identity id; never empty: Graph rejects an entry without a name inline, as a
+processing error in an HTTP 200), the conversation as `correlationId` (`session_id`, required: it groups the
+conversation's messages in Purview), the sequence number (the agent-hooks `sequence`; when omitted, the client numbers
+its calls in increasing order), `isTruncated`, UTC
+`createdDateTime` and `modifiedDateTime`, `contentCategory` `ai`, and the agent (`aiAgentInfo`: the agent identity as
+`identifier`, `name`, `version` (`1.0` by default), and `blueprintId`, left out when unknown); `activityMetadata`,
+`integratedAppMetadata`, and `protectedAppMetadata` whose `applicationLocation` is the application the DLP policies
+are scoped to (`application_id`, else the blueprint id, else the agent identity id). Microsoft Graph v1.0 accepts the
+agent and `contentCategory`. Every string is sent as valid Unicode. Each call creates one new id, sent as the
+`client-request-id` header and as the entry's `identifier`, and returned as `correlation_id`. The Graph base URL must
+be an absolute HTTPS URL without a query or fragment, and redirects are not followed (a 3xx follows the fail mode);
+the client keeps a private copy of its options.
+
+**Decision:** a `policyActions` entry blocks when its `restrictionAction` is `block` or its `action` is `blockAccess`
+(any case), as in Microsoft's own Purview integrations, and a block stands even beside processing errors or malformed
+actions. Otherwise the actions allow and are counted (`decision.action_count`; `restriction_action` is the blocking
+action's, or else the first action's). `202` and `204` are an evaluated allow. Every node is shape-checked: a body
+that is not an object, has no list of `policyActions`, has a policy action of another shape, or has `processingErrors`
+(a non-list, or a non-empty list) holds no decision. A block sets `block_reason` to "The request was blocked by a
+Microsoft Purview data loss prevention policy." for `uploadText` and "The response was blocked ..." for
+`downloadText`.
+
+**Authentication:** `processContent` is called as a user. `from_agentic_user` gets the agentic user's delegated Graph
+token from the agent's connection (`AccessTokenProviderBase.get_agentic_user_token`, implemented by `MsalAuth`;
+hosting-core 0.8 and later pass the tenant, earlier releases do not) and evaluates as `/me`; it requires
+`PurviewDlpAgentContext.agentic_user_id` and needs the delegated `Content.Process.User` permission, which agentic users
+inherit from the blueprint's Microsoft Graph grant. It caches tokens per tenant, agent, agentic user (ids compared
+without regard to case) and scopes until they expire (at most 100), shares one acquisition between concurrent calls,
+bounds each acquisition by its own timeout (it continues when a caller's deadline passes first), never caches a
+failure, and within five minutes of expiry refreshes in the background, keeping the cached token when the refresh
+fails. `from_access_token_provider` returns a token the host supplies, as `/me` or, with `user_id`, as
+`/users/{user_id}` (for an application token carrying the `Content.Process.User` or `Content.Process.All` application
+permission; not validated end to end yet); these tokens are never cached, since they may be for a user the agent
+context does not identify. The client calls a synchronous token resolver on a worker thread; it does not share such
+calls, since a delegated token is per user and a resolver may depend on the caller's context.
+
+**Deadline and fail mode:** token acquisition and the request share one deadline, `timeout_seconds`. A timeout,
+transport failure (including any exception from the HTTP session other than the caller's cancellation), token failure,
+non-2xx response, or a body without a decision is not evaluated (`evaluated=False`, with `error` and `http_status`)
+and is allowed, or blocked when `A365_PURVIEW_DLP_FAIL_MODE=closed` (with `block_reason` saying so). `error` carries at
+most an exception's type, never a response body or a token.
+
+**Long content:** text longer than `max_content_characters` (counted after rejoining split surrogate pairs; only a
+prefix of twice the limit is read) is cut and sent with `isTruncated: true`, and the result has `truncated=True`. A
+block stays a block; an allow does not cover what was cut, so `allowed` follows the fail mode, `error` says so, and
+`verified` is false.
+
+**Protection scopes:** `protectionScopes/compute` is not called: every content is sent and `processContent` decides,
+so no `ProtectionScopes.Compute.User` permission or scope cache is needed.
+
 ## File Structure
 
 ```
@@ -378,13 +473,20 @@ microsoft_agents_a365/tooling/
 │   └── chat_message_request.py           # ChatMessageRequest dataclass
 ├── protection/
 │   ├── __init__.py
-│   └── defender/                         # Defender real-time protection
+│   ├── defender/                         # Defender real-time protection
+│   │   ├── __init__.py
+│   │   ├── defender_rtp_agent_context.py # DefenderRtpAgentContext, DefenderRtpTokenResolver
+│   │   ├── defender_rtp_client.py        # DefenderRtpClient
+│   │   ├── defender_rtp_evaluation_result.py
+│   │   ├── defender_rtp_options.py       # DefenderRtpOptions
+│   │   └── defender_rtp_token_resolvers.py
+│   └── purview/                          # Purview data loss prevention
 │       ├── __init__.py
-│       ├── defender_rtp_agent_context.py # DefenderRtpAgentContext, DefenderRtpTokenResolver
-│       ├── defender_rtp_client.py        # DefenderRtpClient
-│       ├── defender_rtp_evaluation_result.py
-│       ├── defender_rtp_options.py       # DefenderRtpOptions
-│       └── defender_rtp_token_resolvers.py
+│       ├── purview_dlp_agent_context.py  # PurviewDlpAgentContext, PurviewDlpToken, PurviewDlpTokenResolver
+│       ├── purview_dlp_client.py         # PurviewDlpClient
+│       ├── purview_dlp_evaluation_result.py
+│       ├── purview_dlp_options.py        # PurviewDlpOptions
+│       └── purview_dlp_token_resolvers.py
 ├── services/
 │   ├── __init__.py
 │   └── mcp_tool_server_configuration_service.py  # Main service
@@ -406,6 +508,13 @@ microsoft_agents_a365/tooling/
 | `A365_DEFENDER_RTP_TIMEOUT_MILLISECONDS` | Per-call timeout for token acquisition and evaluation | Positive integer up to `2147483647`; default `10000` |
 | `A365_DEFENDER_RTP_AUTHENTICATION_SCOPE` | Token scope | Default `api://86a21212-634e-4553-b3d6-e477e4c9d9ec/.default` |
 | `A365_DEFENDER_RTP_MAX_CONTENT_CHARACTERS` | Maximum characters per content string; all content in a request shares four times that | Positive integer up to `2147483647`; default `20000` |
+| `ENABLE_A365_PURVIEW_DLP` | Enables Purview data loss prevention | `true`, `1`, `yes`, `on`; `false`, `0`, `no`, `off`; default off; any other value is rejected |
+| `A365_PURVIEW_DLP_GRAPH_BASE_URL` | Microsoft Graph base URL | Absolute HTTPS URL; default `https://graph.microsoft.com/v1.0` |
+| `A365_PURVIEW_DLP_AUTHENTICATION_SCOPE` | Token scope | Default `https://graph.microsoft.com/.default` |
+| `A365_PURVIEW_DLP_FAIL_MODE` | Outcome when no decision is obtained | `open` (default), `closed`; any other value is rejected |
+| `A365_PURVIEW_DLP_TIMEOUT_MILLISECONDS` | Per-call timeout for token acquisition and evaluation | Positive integer up to `2147483647`; default `10000` |
+| `A365_PURVIEW_DLP_MAX_CONTENT_CHARACTERS` | Maximum characters of content sent per evaluation | Positive integer up to `2147483647`; default `100000` |
+| `A365_PURVIEW_DLP_RESPONSE_MODE` | How the agent-hooks interceptor evaluates the reply | `audit` (default), `enforce`; any other value is rejected |
 
 ## Error Handling
 
@@ -440,8 +549,8 @@ pytest tests/tooling/test_mcp_tool_server_configuration_service.py -v
 
 ## Dependencies
 
-- `aiohttp` - Async HTTP client for gateway communication and Defender evaluation
-- `microsoft-agents-hosting-core` - TurnContext type; `AccessTokenProviderBase` for Defender tokens
+- `aiohttp` - Async HTTP client for gateway communication, Defender evaluation and Purview `processContent`
+- `microsoft-agents-hosting-core` - TurnContext type; `AccessTokenProviderBase` for Defender and Purview tokens
 - `microsoft-agents-a365-runtime` - OperationResult, Utility
 
 ## Integration with Framework Extensions
@@ -451,10 +560,10 @@ The tooling package is extended by framework-specific packages:
 | Extension Package | Purpose |
 |-------------------|---------|
 | `tooling-extensions-agentframework` | Microsoft Agents SDK integration |
-| `tooling-extensions-agenthooks` | Defender real-time protection as an agent-hooks interceptor |
+| `tooling-extensions-agenthooks` | Defender real-time protection and Purview data loss prevention as agent-hooks interceptors |
 | `tooling-extensions-azureaifoundry` | Azure AI Foundry integration |
 | `tooling-extensions-openai` | OpenAI function calling integration |
 | `tooling-extensions-semantickernel` | Semantic Kernel plugin integration |
 
 These extensions adapt the `MCPServerConfig` objects to framework-specific tool definitions; the agent-hooks extension
-adapts `DefenderRtpClient` to the agent-hooks interceptor contract.
+adapts `DefenderRtpClient` and `PurviewDlpClient` to the agent-hooks interceptor contract.
