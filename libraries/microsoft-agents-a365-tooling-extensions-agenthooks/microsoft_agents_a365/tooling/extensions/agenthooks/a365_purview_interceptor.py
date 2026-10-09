@@ -333,15 +333,16 @@ def _content_text(content: object, budget: int) -> tuple[str, bool]:
     """The text of a message's content, and whether all of it was read.
 
     A string is the text as it is. Structured content (for example content parts) gives its
-    string and number values in order, one per line, each container read once. Reading stops
-    once the text is longer than ``budget`` characters, since the client sends only the
-    beginning and flags the rest as truncated.
+    string and number values in order, one per line, each container read once. At most
+    ``budget`` characters plus one are kept, the last one only to mark the text as longer than
+    the budget: the client sends only the beginning and flags the rest as truncated, so the
+    work stays bounded however long a value is. A value cut to fit means not all was read.
     """
     if isinstance(content, str):
         return content, True
 
     parts: list[str] = []
-    # The length of the joined text, separators included.
+    # The length of the joined text, separators included; never more than budget + 1.
     length = 0
     pending: list[object] = [content]
     seen: set[int] = set()
@@ -357,9 +358,17 @@ def _content_text(content: object, budget: int) -> tuple[str, bool]:
             continue
 
         text = _value_text(node)
-        if text:
-            length += (1 if parts else 0) + len(text)
-            parts.append(text)
+        if not text:
+            continue
+
+        separator = 1 if parts else 0
+        room = budget + 1 - length - separator
+        if len(text) > room:
+            parts.append(text[:room])
+            return "\n".join(parts), False
+
+        length += separator + len(text)
+        parts.append(text)
 
     return "\n".join(parts), not pending
 

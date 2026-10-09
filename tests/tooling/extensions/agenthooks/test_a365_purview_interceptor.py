@@ -18,9 +18,12 @@ import pytest
 from agent_hooks import (
     AgentContext,
     AgentContextBuilder,
+    CompositionConfig,
     Decision,
+    EnforcementMode,
     InterceptionBlocked,
     InterceptionEmitter,
+    SynthesisPolicy,
 )
 from microsoft_agents_a365.tooling.extensions.agenthooks import (
     A365DefenderCall,
@@ -298,11 +301,13 @@ async def test_structured_content_past_the_limit_is_sent_truncated(fail_closed: 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("fail_closed", [False, True])
+@pytest.mark.parametrize(
+    "content",
+    [[" " * 25, "card 4111 1111 1111 1111"], [" " * 30], [" " * 1_000_000 + "4111 1111"]],
+)
 async def test_blank_content_that_goes_on_past_the_limit_follows_the_fail_mode(
-    fail_closed: bool,
+    fail_closed: bool, content: object
 ) -> None:
-    content = [" " * 25, "card 4111 1111 1111 1111"]
-
     async with harness(block, fail_closed=fail_closed, max_content_characters=10) as h:
         record = await h.emitter.emit_unchecked(builder().input(content=content))
 
@@ -318,9 +323,44 @@ async def test_blank_content_that_goes_on_past_the_limit_follows_the_fail_mode(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "content", [[" ", "\n"], {"flag": True, "none": None}, [], {}, [[], {}], [" " * 30]]
-)
+async def test_reads_only_what_the_limit_needs_of_a_long_structured_value() -> None:
+    context = builder().input(content=["prefix", "x" * 50_000_000])
+
+    async with harness(clean, max_content_characters=10) as h:
+        started = time.perf_counter()
+        verdict = await h.interceptor.intercept(context)
+        elapsed = time.perf_counter() - started
+
+    entry = entry_of(h.graph.bodies[0])
+    assert entry["content"]["data"] == "prefix\nxxx"  # type: ignore[index]
+    assert entry["isTruncated"] is True
+    assert verdict.decision is Decision.ALLOW, "fail open"
+    (warning,) = verdict.warnings
+    assert warning.reason == "purview:unverified", "an allow of truncated content is unverified"
+    assert elapsed < 1.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("session", [None, {}, {"id": ""}, {"id": "   "}, {"id": 7}])
+async def test_a_context_without_a_session_id_follows_the_fail_mode(session: object) -> None:
+    context = builder().input(content=CLEAN_PROMPT)
+    if session is None:
+        del context["session"]
+    else:
+        context["session"] = session
+
+    async with harness(clean, fail_closed=True) as h:
+        verdict = await h.interceptor.intercept(context)
+
+    assert verdict.decision is Decision.DENY
+    assert verdict.reason == "runtime_error:purview_unverified"
+    assert h.graph.calls == []
+    (evaluation,) = h.evaluations
+    assert evaluation.error == "evaluation failed (ValueError)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content", [[" ", "\n"], {"flag": True, "none": None}, [], {}, [[], {}]])
 async def test_allows_content_without_text_without_a_call(content: object) -> None:
     async with harness(block, fail_closed=True, max_content_characters=10) as h:
         record = await h.emitter.emit_unchecked(builder().input(content=content))
@@ -399,7 +439,12 @@ async def test_a_reply_audit_outlives_the_emitters_timeout() -> None:
         await asyncio.sleep(0.5)
         return clean(body)
 
-    emitter = create_protection_emitter(interceptor_timeout_seconds=0.1)
+    # A host's own emitter whose timeout is far below the Purview call's.
+    emitter = InterceptionEmitter(
+        mode=EnforcementMode.ENFORCE,
+        timeout=0.1,
+        composition=CompositionConfig.strictest(SynthesisPolicy.DENY),
+    )
 
     async with harness(slow_clean, emitter=emitter) as h:
         record = await h.emitter.emit_unchecked(builder().output(content="Here you go."))
@@ -737,9 +782,13 @@ async def test_a_slow_evaluation_callback_does_not_hold_up_or_change_the_verdict
         release.wait(5)
         seen.append(result)
 
-    options = PurviewDlpOptions(enabled=True, graph_base_url=GRAPH_BASE_URL)
+    options = PurviewDlpOptions(enabled=True, graph_base_url=GRAPH_BASE_URL, timeout_seconds=0.25)
     emitter = add_a365_purview(
-        create_protection_emitter(interceptor_timeout_seconds=0.5),
+        create_protection_emitter(
+            interceptor_timeout_seconds=0.5,
+            defender=DefenderRtpOptions(timeout_seconds=0.25),
+            purview=options,
+        ),
         A365PurviewInterceptor(
             PurviewDlpClient(options, FakeGraphSession(clean)),  # type: ignore[arg-type]
             lambda _context: A365PurviewCall(AGENT, GraphTokens().resolve),
@@ -822,6 +871,31 @@ def test_rejects_an_enabled_purview_timeout_that_leaves_no_interceptor_timeout(
 
     disabled = PurviewDlpOptions(enabled=False, timeout_seconds=timeout)
     assert create_protection_emitter(purview=disabled)._timeout == 12.0
+
+
+@pytest.mark.parametrize(
+    ("timeout", "purview_timeout", "client"),
+    [(5.0, 7.0, "Purview"), (7.0, 7.0, "Purview"), (2.0, 1.0, "Defender")],
+)
+def test_rejects_an_interceptor_timeout_that_does_not_exceed_the_client_timeouts(
+    timeout: float, purview_timeout: float, client: str
+) -> None:
+    with pytest.raises(ValueError, match=f"must exceed the {client} timeout"):
+        create_protection_emitter(
+            interceptor_timeout_seconds=timeout,
+            defender=DefenderRtpOptions(timeout_seconds=3),
+            purview=PurviewDlpOptions(enabled=True, timeout_seconds=purview_timeout),
+        )
+
+
+def test_an_interceptor_timeout_need_not_exceed_a_disabled_purview_timeout() -> None:
+    emitter = create_protection_emitter(
+        interceptor_timeout_seconds=5,
+        defender=DefenderRtpOptions(timeout_seconds=3),
+        purview=PurviewDlpOptions(enabled=False, timeout_seconds=7),
+    )
+
+    assert emitter._timeout == 5
 
 
 def test_registers_the_interceptor_under_the_purview_name() -> None:

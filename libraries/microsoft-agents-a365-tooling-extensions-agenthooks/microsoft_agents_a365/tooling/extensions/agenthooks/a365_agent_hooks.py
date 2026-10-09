@@ -31,11 +31,10 @@ def create_protection_emitter(
     compose with deny winning.
 
     Args:
-        interceptor_timeout_seconds: Per-interceptor timeout, in seconds. Defaults to the
-            Defender timeout (the Defender default when no Defender options are given) plus two
-            seconds; when the given Purview options are enabled, to the slower of the Defender
-            and Purview timeouts plus two seconds. Each client's own timeout and fail mode so
-            apply first.
+        interceptor_timeout_seconds: Per-interceptor timeout, in seconds. It must exceed the
+            Defender timeout (the Defender default when no Defender options are given) and, when
+            the given Purview options are enabled, the Purview timeout, so that each client's own
+            timeout and fail mode apply first. Defaults to the larger of those plus two seconds.
         defender: The Defender options whose timeout sets the default.
         purview: The Purview options whose timeout, when Purview DLP is enabled, also sets the
             default; a disabled Purview client makes no calls.
@@ -44,20 +43,22 @@ def create_protection_emitter(
         The configured emitter.
 
     Raises:
-        ValueError: If the interceptor timeout is not a positive, finite number of seconds.
+        ValueError: If the interceptor timeout is not a positive, finite number of seconds, or
+            does not exceed the client timeouts (an emitter timeout is a deny whatever the fail
+            mode, so a client must time out first).
     """
-    if interceptor_timeout_seconds is None:
-        slowest = (defender or DefenderRtpOptions()).timeout_seconds
-        if purview is not None and purview.enabled:
-            # max() would drop a NaN; keep it, so an invalid timeout is rejected below.
-            purview_timeout = purview.timeout_seconds
-            slowest = (
-                math.nan
-                if math.isnan(slowest) or math.isnan(purview_timeout)
-                else max(slowest, purview_timeout)
-            )
+    client_timeout = (defender or DefenderRtpOptions()).timeout_seconds
+    client = "Defender"
+    if purview is not None and purview.enabled:
+        purview_timeout = purview.timeout_seconds
+        if math.isnan(client_timeout) or math.isnan(purview_timeout):
+            # max() would drop a NaN; keep it, so the invalid timeout is rejected below.
+            client_timeout = math.nan
+        elif purview_timeout > client_timeout:
+            client_timeout, client = purview_timeout, "Purview"
 
-        interceptor_timeout_seconds = slowest + _INTERCEPTOR_TIMEOUT_MARGIN_SECONDS
+    if interceptor_timeout_seconds is None:
+        interceptor_timeout_seconds = client_timeout + _INTERCEPTOR_TIMEOUT_MARGIN_SECONDS
 
     # agent-hooks accepts any float; NaN or infinity would leave a host without a timeout.
     if (
@@ -66,6 +67,13 @@ def create_protection_emitter(
         or not 0 < interceptor_timeout_seconds < math.inf
     ):
         raise ValueError("interceptor_timeout_seconds must be a positive, finite number.")
+
+    if not interceptor_timeout_seconds > client_timeout:
+        raise ValueError(
+            f"interceptor_timeout_seconds ({interceptor_timeout_seconds}) must exceed the "
+            f"{client} timeout ({client_timeout} s), so the fail mode applies before the emitter "
+            "times out."
+        )
 
     return InterceptionEmitter(
         mode=EnforcementMode.ENFORCE,

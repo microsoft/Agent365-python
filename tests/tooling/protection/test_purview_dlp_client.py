@@ -206,7 +206,9 @@ async def test_scopes_the_application_location_to_the_blueprint_by_default(
 ) -> None:
     client, graph = make_client()
 
-    await client.evaluate("uploadText", "hello", agent, GraphTokens().resolve)
+    await client.evaluate(
+        "uploadText", "hello", agent, GraphTokens().resolve, session_id="conversation-1"
+    )
 
     (body,) = graph.bodies
     application = body["contentToProcess"]["protectedAppMetadata"]["applicationLocation"]  # type: ignore[index]
@@ -223,7 +225,9 @@ async def test_names_an_agent_without_a_name_after_its_id(name: str | None) -> N
     client, graph = make_client()
     agent = PurviewDlpAgentContext(AGENT_ID, TENANT_ID, agent_name=name)
 
-    await client.evaluate("uploadText", "hello", agent, GraphTokens().resolve)
+    await client.evaluate(
+        "uploadText", "hello", agent, GraphTokens().resolve, session_id="conversation-1"
+    )
 
     (body,) = graph.bodies
     assert entry_of(body)["name"] == f"{AGENT_ID} uploadText", "never empty"
@@ -238,7 +242,9 @@ async def test_sends_the_agent_version(version: str | None, sent: str) -> None:
     client, graph = make_client()
     agent = PurviewDlpAgentContext(AGENT_ID, TENANT_ID, agent_version=version)
 
-    await client.evaluate("uploadText", "hello", agent, GraphTokens().resolve)
+    await client.evaluate(
+        "uploadText", "hello", agent, GraphTokens().resolve, session_id="conversation-1"
+    )
 
     request = graph.bodies[0]["contentToProcess"]
     assert entry_of(graph.bodies[0])["agents"][0]["version"] == sent  # type: ignore[index]
@@ -250,14 +256,18 @@ async def test_sends_the_agent_version(version: str | None, sent: str) -> None:
 async def test_numbers_calls_without_a_sequence_number_in_increasing_order() -> None:
     client, graph = make_client()
 
-    for _ in range(3):
-        await client.evaluate("uploadText", "hello", AGENT, GraphTokens().resolve)
+    for session_id in ("conversation-1", "conversation-2", "conversation-1"):
+        await client.evaluate(
+            "uploadText", "hello", AGENT, GraphTokens().resolve, session_id=session_id
+        )
 
     entries = [entry_of(body) for body in graph.bodies]
     assert [entry["sequenceNumber"] for entry in entries] == [0, 1, 2]
-    correlation_ids = {entry["correlationId"] for entry in entries}
-    assert len(correlation_ids) == 3, "a new conversation id when none is given"
-    assert all(str(uuid.UUID(value)) == value for value in correlation_ids)  # type: ignore[arg-type]
+    assert [entry["correlationId"] for entry in entries] == [
+        "conversation-1",
+        "conversation-2",
+        "conversation-1",
+    ]
 
 
 @pytest.mark.asyncio
@@ -631,7 +641,9 @@ async def test_no_token_follows_the_fail_mode_without_a_call(
     async def resolve(_agent: PurviewDlpAgentContext, _scopes: list[str]) -> object:
         return token
 
-    result = await client.evaluate("uploadText", "hello", AGENT, resolve)  # type: ignore[arg-type]
+    result = await client.evaluate(
+        "uploadText", "hello", AGENT, resolve, session_id="conversation-1"
+    )  # type: ignore[arg-type]
 
     assert result is not None
     assert graph.calls == []
@@ -650,7 +662,9 @@ async def test_a_failing_token_resolver_reports_only_the_exception_type(
         raise RuntimeError("AADSTS error with password=hunter2 eyJ.secret")
 
     with caplog.at_level(logging.WARNING):
-        result = await client.evaluate("uploadText", "hello", AGENT, resolve)
+        result = await client.evaluate(
+            "uploadText", "hello", AGENT, resolve, session_id="conversation-1"
+        )
 
     assert result is not None
     assert graph.calls == []
@@ -680,7 +694,9 @@ async def test_runs_a_synchronous_token_resolver_off_the_event_loop() -> None:
         assert scopes == [GRAPH_SCOPE]
         return PurviewDlpToken("sync-token")
 
-    result = await client.evaluate("uploadText", "hello", AGENT, resolve)
+    result = await client.evaluate(
+        "uploadText", "hello", AGENT, resolve, session_id="conversation-1"
+    )
 
     assert result is not None and result.allowed is True
     assert threads and threads[0] != loop_thread
@@ -698,7 +714,9 @@ async def test_a_blocking_synchronous_resolver_cannot_outlast_the_deadline() -> 
 
     started = time.perf_counter()
     try:
-        result = await client.evaluate("uploadText", "hello", AGENT, resolve)
+        result = await client.evaluate(
+            "uploadText", "hello", AGENT, resolve, session_id="conversation-1"
+        )
         elapsed = time.perf_counter() - started
     finally:
         release.set()
@@ -722,7 +740,9 @@ async def test_token_acquisition_and_the_request_share_one_deadline() -> None:
         return PurviewDlpToken("token")
 
     started = time.perf_counter()
-    result = await client.evaluate("uploadText", "hello", AGENT, slow_tokens)
+    result = await client.evaluate(
+        "uploadText", "hello", AGENT, slow_tokens, session_id="conversation-1"
+    )
     elapsed = time.perf_counter() - started
 
     assert result is not None
@@ -812,7 +832,9 @@ async def test_opens_and_closes_its_own_session_when_none_is_given(
     monkeypatch.setattr(aiohttp, "ClientSession", OwnedSession)
     client = PurviewDlpClient(PurviewDlpOptions(enabled=True, graph_base_url=GRAPH_BASE_URL))
 
-    result = await client.evaluate("uploadText", "hello", AGENT, GraphTokens().resolve)
+    result = await client.evaluate(
+        "uploadText", "hello", AGENT, GraphTokens().resolve, session_id="conversation-1"
+    )
 
     assert result is not None and result.allowed is True
     (session,) = sessions
@@ -829,7 +851,9 @@ async def test_does_nothing_when_disabled() -> None:
     tokens = GraphTokens()
     client = PurviewDlpClient(PurviewDlpOptions(), graph)  # type: ignore[arg-type]
 
-    result = await client.evaluate("uploadText", "4111 1111 1111 1111", AGENT, tokens.resolve)
+    result = await client.evaluate(
+        "uploadText", "4111 1111 1111 1111", AGENT, tokens.resolve, session_id="conversation-1"
+    )
 
     assert result is None
     assert graph.calls == []
@@ -842,7 +866,9 @@ async def test_does_not_evaluate_empty_text(text: str) -> None:
     client, graph = make_client()
     tokens = GraphTokens()
 
-    result = await client.evaluate("uploadText", text, AGENT, tokens.resolve)
+    result = await client.evaluate(
+        "uploadText", text, AGENT, tokens.resolve, session_id="conversation-1"
+    )
 
     assert result is None
     assert graph.calls == []
@@ -863,6 +889,10 @@ async def test_does_not_evaluate_empty_text(text: str) -> None:
         ({"sequence_number": True}, ValueError),
         ({"sequence_number": 2**63}, ValueError),
         ({"sequence_number": 1.0}, ValueError),
+        ({"session_id": None}, ValueError),
+        ({"session_id": ""}, ValueError),
+        ({"session_id": "   "}, ValueError),
+        ({"session_id": 7}, ValueError),
     ],
 )
 async def test_rejects_an_invalid_call(arguments: dict[str, object], error: type) -> None:
@@ -872,11 +902,22 @@ async def test_rejects_an_invalid_call(arguments: dict[str, object], error: type
         "text": "hello",
         "agent": AGENT,
         "token_resolver": GraphTokens().resolve,
+        "session_id": "conversation-1",
         **arguments,
     }
 
     with pytest.raises(error):
         await client.evaluate(**call)  # type: ignore[arg-type]
+
+    assert graph.calls == []
+
+
+@pytest.mark.asyncio
+async def test_requires_the_session_id() -> None:
+    client, graph = make_client()
+
+    with pytest.raises(TypeError, match="session_id"):
+        await client.evaluate("uploadText", "hello", AGENT, GraphTokens().resolve)  # type: ignore[call-arg]
 
     assert graph.calls == []
 

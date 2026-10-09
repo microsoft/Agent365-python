@@ -411,8 +411,9 @@ empty or whitespace.
 
 **Request:** one `processConversationMetadata` entry with the text (`textContent`), the name `<agent name> <activity>`
 (the agent name defaults to the agent identity id; never empty: Graph rejects an entry without a name inline, as a
-processing error in an HTTP 200), the conversation as `correlationId` (a new id when none is given), the sequence
-number (the agent-hooks `sequence`; when omitted, the client numbers its calls in increasing order), `isTruncated`, UTC
+processing error in an HTTP 200), the conversation as `correlationId` (`session_id`, required: it groups the
+conversation's messages in Purview), the sequence number (the agent-hooks `sequence`; when omitted, the client numbers
+its calls in increasing order), `isTruncated`, UTC
 `createdDateTime` and `modifiedDateTime`, `contentCategory` `ai`, and the agent (`aiAgentInfo`: the agent identity as
 `identifier`, `name`, `version` (`1.0` by default), and `blueprintId`, left out when unknown); `activityMetadata`,
 `integratedAppMetadata`, and `protectedAppMetadata` whose `applicationLocation` is the application the DLP policies

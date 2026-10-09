@@ -133,7 +133,7 @@ class PurviewDlpClient:
         agent: PurviewDlpAgentContext,
         token_resolver: PurviewDlpTokenResolver,
         *,
-        session_id: str | None = None,
+        session_id: str,
         sequence_number: int | None = None,
     ) -> PurviewDlpEvaluationResult | None:
         """Evaluate one piece of agent content with Purview DLP.
@@ -149,9 +149,9 @@ class PurviewDlpClient:
             text: The content.
             agent: The agent the content belongs to.
             token_resolver: Resolves the Microsoft Graph token and the user to evaluate as.
-            session_id: The conversation the content belongs to, sent as the entry's
-                ``correlationId`` (for example the agent-hooks ``session.id``); a new id when
-                omitted.
+            session_id: The conversation the content belongs to, for example the agent-hooks
+                ``session.id``. Sent as the entry's ``correlationId``, which groups the
+                conversation's messages in Purview; required.
             sequence_number: The content's position in the conversation (for example the
                 agent-hooks ``sequence``); when omitted, the client numbers its calls in
                 increasing order.
@@ -160,8 +160,9 @@ class PurviewDlpClient:
             The result, or ``None`` when Purview DLP is disabled or the text is empty.
 
         Raises:
-            ValueError: If the activity is unknown, the agent identity or the tenant is missing,
-                or the sequence number is not an integer from 0 to 2**63 - 1.
+            ValueError: If the activity is unknown, the agent identity, the tenant or the
+                session id is missing, or the sequence number is not an integer from 0 to
+                2**63 - 1.
         """
         if not self._options.enabled:
             return None
@@ -183,6 +184,8 @@ class PurviewDlpClient:
 
         _require_text(agent.agent_id, "agent_id")
         _require_text(agent.tenant_id, "tenant_id")
+        # Without the conversation, Purview cannot group the session's messages.
+        _require_text(session_id, "session_id")
         if sequence_number is not None and not _is_sequence_number(sequence_number):
             raise ValueError("sequence_number must be an integer from 0 to 2**63 - 1.")
 
@@ -249,7 +252,7 @@ class PurviewDlpClient:
         text: str,
         agent: PurviewDlpAgentContext,
         request_id: str,
-        session_id: str | None,
+        session_id: str,
         sequence_number: int | None,
     ) -> tuple[bytes, bool]:
         """The ``processContent`` request for ``text``, and whether the text was cut.
@@ -265,7 +268,7 @@ class PurviewDlpClient:
         blueprint_id = _text(agent.blueprint_id)
         # DLP policies for an agent are scoped to its blueprint's application.
         application_id = _normalize(_text(agent.application_id) or blueprint_id or agent.agent_id)
-        conversation_id = _normalize(_text(session_id) or str(self._id_factory()))
+        conversation_id = _normalize(session_id)
         sequence = sequence_number if sequence_number is not None else next(self._sequence_numbers)
         timestamp = _format_utc(datetime.fromtimestamp(self._clock(), tz=UTC))
         described: JsonObject = {

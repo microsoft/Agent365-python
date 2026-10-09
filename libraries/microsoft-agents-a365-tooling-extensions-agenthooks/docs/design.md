@@ -95,12 +95,13 @@ Points and activities:
   to `on_evaluated`. `wait_for_pending_audits()` waits for the audits in flight. In `enforce` it is awaited and
   mapped like `input`.
 - Other points, and content without text, are allowed without a call. A string is sent as it is; structured content
-  as its string and number values in order, one per line (each container read once), read only until the text is
-  past twice the limit, so the client always has more than the limit to cut and flag as truncated (a normalized
-  character takes at most two of the original). When the text read is blank but the content goes on, Purview is not
-  called and the fail mode applies: the rest was never read.
-- The context's `session.id` and `sequence` become the entry's `correlationId` and `sequenceNumber`, and its
-  `agent.name` names the agent when the `PurviewDlpAgentContext` has no `agent_name`.
+  as its string and number values in order, one per line (each container read once), kept only until the text is
+  past twice the limit, a long value cut where needed so the work stays bounded, so the client always has more than
+  the limit to cut and flag as truncated (a normalized character takes at most two of the original). When the text
+  read is blank but the content goes on, Purview is not called and the fail mode applies: the rest was never read.
+- The context's `session.id` (required: a context without one follows the fail mode) and `sequence` become the
+  entry's `correlationId` and `sequenceNumber`, and its `agent.name` names the agent when the
+  `PurviewDlpAgentContext` has no `agent_name`.
 
 `to_verdict(result)` maps a `PurviewDlpEvaluationResult` to an agent-hooks `Verdict`:
 
@@ -122,11 +123,12 @@ only the exception's type reaches the result.
 emitter compose and a deny from either wins. The per-interceptor timeout defaults to the Defender timeout (the Defender
 default when no Defender options are given) plus two seconds; when the Purview options are enabled, to the slower of
 the Defender and Purview timeouts plus two seconds, so a Defender-only emitter is unchanged (a disabled Purview client
-makes no calls). Each client bounds token acquisition and its call by one deadline, its own timeout, so its fail mode
-applies before the emitter's timeout (an emitter timeout is a deny, `host_error:interceptor_timeout`, whatever the
-fail mode). agent-hooks' own default interceptor timeout is 5 seconds, below the clients' default of 10, so hosts that
-build their own emitter must set its timeout above both. agent-hooks 0.1 dispatches the interceptors of a parallel
-profile serially (isolation, not scheduling), so a point both evaluate takes the sum of their latencies.
+makes no calls). An explicit timeout must exceed those client timeouts, or `ValueError` is raised. Each client bounds
+token acquisition and its call by one deadline, its own timeout, so its fail mode applies before the emitter's timeout
+(an emitter timeout is a deny, `host_error:interceptor_timeout`, whatever the fail mode). agent-hooks' own default
+interceptor timeout is 5 seconds, below the clients' default of 10, so hosts that build their own emitter must set its
+timeout above both. agent-hooks 0.1 dispatches the interceptors of a parallel profile serially (isolation, not
+scheduling), so a point both evaluate takes the sum of their latencies.
 
 `add_a365_defender(emitter, interceptor)` and `add_a365_purview(emitter, interceptor)` register the interceptors under
 `defender` and `purview` and return the emitter.

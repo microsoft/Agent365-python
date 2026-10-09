@@ -304,6 +304,7 @@ graph_tokens = PurviewDlpTokenResolvers.from_agentic_user(connection)
 activity = turn_context.activity
 purview_agent = PurviewDlpAgentContext(
     agent_id=activity.get_agentic_instance_id(),  # the agent identity
+    # get_agentic_tenant_id() needs hosting-core 0.8+; on older releases use activity.recipient.tenant_id
     tenant_id=activity.get_agentic_tenant_id(),  # the agent's tenant
     agentic_user_id=activity.get_agentic_user(),  # evaluates as the agentic user (/me)
     blueprint_id=connection.configuration.CLIENT_ID,  # the agent blueprint, which DLP policies are scoped to
@@ -335,18 +336,21 @@ if not record.proceeds:
 
 The call resolver may be async. It runs only for content with text at `input` and `output` while Purview DLP
 is enabled. Returning `None` (for example for a turn without an agentic user), or an exception from the call
-or token resolver, follows the fail mode, as for Defender; only an exception's type reaches the verdict. When
-the `PurviewDlpAgentContext` has no `agent_name`, the context's `agent.name` names the agent (and without
-either, its agent identity id does, since Purview requires a name). `on_evaluated` receives every evaluation,
-reply audits included, on a worker thread once the verdict is decided.
+or token resolver, follows the fail mode, as for Defender; only an exception's type reaches the verdict. The
+context's `session.id` is required: it is sent as the conversation (`correlationId`) that groups the messages
+in Purview, so a context without one follows the fail mode. When the `PurviewDlpAgentContext` has no
+`agent_name`, the context's `agent.name` names the agent (and without either, its agent identity id does,
+since Purview requires a name). `on_evaluated` receives every evaluation, reply audits included, on a worker
+thread once the verdict is decided.
 
 `create_protection_emitter(defender=..., purview=...)` sets the interceptor timeout to the Defender timeout
 (the Defender default when no Defender options are given) or, when the Purview options are enabled, to the
 slower of the Defender and Purview timeouts, plus two seconds; so each client's own deadline and fail mode
-apply first, and a Defender-only emitter keeps its timeout. Its `parallel/strictest` profile gives every
-interceptor the same context and lets a deny from either one block. agent-hooks 0.1 runs the interceptors of a
-parallel profile one after the other, so at `input` the latency is Defender's plus Purview's. With an emitter
-of your own, set its timeout above the Purview timeout too.
+apply first, and a Defender-only emitter keeps its timeout. An explicit `interceptor_timeout_seconds` must
+exceed those timeouts, or `create_protection_emitter` raises `ValueError`. Its `parallel/strictest` profile
+gives every interceptor the same context and lets a deny from either one block. agent-hooks 0.1 runs the
+interceptors of a parallel profile one after the other, so at `input` the latency is Defender's plus
+Purview's. With an emitter of your own, set its timeout above the Purview timeout too.
 
 ### Purview decisions
 
@@ -372,8 +376,9 @@ its result (evaluated or not) goes to `on_evaluated`. The fail mode applies to a
 **Long content.** Content longer than `A365_PURVIEW_DLP_MAX_CONTENT_CHARACTERS` (default 100000) is cut and
 sent with `isTruncated: true`. A block still blocks, but an allow doesn't cover what was cut, so it follows the
 fail mode (`PurviewDlpEvaluationResult.truncated` is true). Structured content is read only until its text is
-past the limit; when the text read so far is blank but the content goes on, Purview is not called and the fail
-mode applies, since the rest was never read. Strings are always sent as valid Unicode.
+past the limit, a long value cut where the limit needs it, so the work stays bounded; when the text read so far
+is blank but the content goes on, Purview is not called and the fail mode applies, since the rest was never
+read. Strings are always sent as valid Unicode.
 
 **The request.** Each call sends one new id as the `client-request-id` header and as the content entry's
 `identifier`, returned as `correlation_id` (Graph logs the request under it); the conversation (`session.id`)
