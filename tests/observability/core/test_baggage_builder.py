@@ -11,6 +11,7 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_AGENT_BLUEPRINT_ID_KEY,
     GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
+    GEN_AI_AGENT_TYPE_KEY,
     GEN_AI_AGENT_VERSION_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
     SERVER_ADDRESS_KEY,
@@ -86,6 +87,7 @@ class TestBaggageBuilder(unittest.TestCase):
             BaggageBuilder()
             .tenant_id("tenant-1")
             .agent_id("agent-1")
+            .agent_type("Foundry")
             .agentic_user_id("auid-1")
             .agentic_user_email("upn-1")
             .agent_blueprint_id("blueprint-1")
@@ -96,6 +98,7 @@ class TestBaggageBuilder(unittest.TestCase):
             current_baggage = baggage.get_all()
             self.assertEqual(current_baggage.get(TENANT_ID_KEY), "tenant-1")
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_ID_KEY), "agent-1")
+            self.assertEqual(current_baggage.get(GEN_AI_AGENT_TYPE_KEY), "Foundry")
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_AUID_KEY), "auid-1")
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_EMAIL_KEY), "upn-1")
             self.assertEqual(current_baggage.get(GEN_AI_AGENT_BLUEPRINT_ID_KEY), "blueprint-1")

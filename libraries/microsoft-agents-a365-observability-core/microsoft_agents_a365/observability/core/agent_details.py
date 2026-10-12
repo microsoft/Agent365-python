@@ -30,6 +30,9 @@ class AgentDetails:
     agent_platform_id: Optional[str] = None
     """Platform ID for the agent."""
 
+    agent_type: Optional[str] = None
+    """Type classification for the agent."""
+
     tenant_id: Optional[str] = None
     """Tenant ID for the agent."""
 

@@ -121,13 +121,23 @@ with InvokeAgentScope.start(
 Traces LLM/AI model inference calls:
 
 ```python
-from microsoft_agents_a365.observability.core import InferenceScope, InferenceCallDetails, Request
+from microsoft_agents_a365.observability.core import (
+    InferenceCallDetails,
+    InferenceOperationType,
+    InferenceScope,
+    Request,
+    ServiceEndpoint,
+)
 
 with InferenceScope.start(
     request=Request(content="Hello"),
     details=InferenceCallDetails(
-        model_name="gpt-4",
-        provider="openai"
+        operationName=InferenceOperationType.CHAT,
+        model="gpt-4",
+        providerName="openai",
+        responseModel="gpt-4-2025-04-14",
+        cacheReadInputTokens=20,
+        endpoint=ServiceEndpoint(hostname="models.example.com", port=443),
     ),
     agent_details=agent_details,
 ) as scope:
@@ -317,10 +327,20 @@ class SpanDetails:
 ```python
 @dataclass
 class InferenceCallDetails:
-    model_name: str | None
-    provider: str | None
-    # Additional inference metadata
+    operationName: InferenceOperationType
+    model: str | None
+    providerName: str
+    responseModel: str | None
+    inputTokens: int | None
+    outputTokens: int | None
+    cacheReadInputTokens: int | None
+    cacheWriteInputTokens: int | None
+    endpoint: ServiceEndpoint | None
 ```
+
+At least one of `model` or `responseModel` must be present. Inference spans use
+the lowercase `chat` operation required by the OpenTelemetry schema and Agent365
+model observation pipeline. Endpoint ports and token counts are emitted as integers.
 
 ### ToolCallDetails
 

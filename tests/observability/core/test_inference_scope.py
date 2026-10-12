@@ -13,6 +13,7 @@ from microsoft_agents_a365.observability.core import (
     InferenceOperationType,
     InferenceScope,
     Request,
+    ServiceEndpoint,
     SpanDetails,
     configure,
     extract_context_from_headers,
@@ -23,6 +24,18 @@ from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
+    CHAT_OPERATION_NAME,
+    GEN_AI_AGENT_ID_KEY,
+    GEN_AI_AGENT_TYPE_KEY,
+    GEN_AI_OPERATION_NAME_KEY,
+    GEN_AI_PROVIDER_NAME_KEY,
+    GEN_AI_RESPONSE_MODEL_KEY,
+    GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
+    SERVER_ADDRESS_KEY,
+    SERVER_PORT_KEY,
 )
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -108,6 +121,51 @@ class TestInferenceScope(unittest.TestCase):
         self.assertEqual(details.inputTokens, 150)
         self.assertEqual(details.outputTokens, 75)
         self.assertEqual(details.finishReasons, ["stop"])
+
+    def test_inference_call_details_requires_request_or_response_model(self):
+        """Test that an inference call always has model identity."""
+        with self.assertRaisesRegex(ValueError, "model or responseModel"):
+            InferenceCallDetails(
+                operationName=InferenceOperationType.CHAT,
+                model=None,
+                providerName="openai",
+            )
+
+    def test_inference_scope_emits_model_observation_attributes(self):
+        """Test the attributes required by the model observation pipeline."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.TEXT_COMPLETION,
+            model=None,
+            responseModel="gpt-4.1-2025-04-14",
+            providerName="openai",
+            inputTokens=150,
+            outputTokens=75,
+            cacheReadInputTokens=30,
+            cacheWriteInputTokens=10,
+            endpoint=ServiceEndpoint(hostname="models.example.com", port=443),
+        )
+        agent_details = AgentDetails(
+            agent_id="test-inference-agent",
+            agent_type="Foundry",
+        )
+
+        scope = InferenceScope.start(Request(), details, agent_details)
+        scope.dispose()
+
+        span = self.span_exporter.get_finished_spans()[-1]
+        attributes = span.attributes or {}
+
+        self.assertEqual(attributes[GEN_AI_OPERATION_NAME_KEY], CHAT_OPERATION_NAME)
+        self.assertEqual(attributes[GEN_AI_PROVIDER_NAME_KEY], "openai")
+        self.assertEqual(attributes[GEN_AI_RESPONSE_MODEL_KEY], "gpt-4.1-2025-04-14")
+        self.assertEqual(attributes[GEN_AI_AGENT_ID_KEY], "test-inference-agent")
+        self.assertEqual(attributes[GEN_AI_AGENT_TYPE_KEY], "Foundry")
+        self.assertEqual(attributes[SERVER_ADDRESS_KEY], "models.example.com")
+        self.assertEqual(attributes[SERVER_PORT_KEY], 443)
+        self.assertEqual(attributes[GEN_AI_USAGE_INPUT_TOKENS_KEY], 150)
+        self.assertEqual(attributes[GEN_AI_USAGE_OUTPUT_TOKENS_KEY], 75)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 30)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY], 10)
 
     def test_inference_scope_start_method(self):
         """Test InferenceScope.start() static method."""

@@ -6,9 +6,50 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from microsoft_agents_a365.observability.core import configure
+from microsoft_agents_a365.observability.core.constants import (
+    GEN_AI_REQUEST_MODEL_KEY,
+    GEN_AI_RESPONSE_MODEL_KEY,
+    GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY,
+)
 from microsoft_agents_a365.observability.extensions.langchain.tracer_instrumentor import (
     CustomLangChainInstrumentor,
 )
+from microsoft_agents_a365.observability.extensions.langchain.utils import model_name, token_counts
+
+
+class TestLangChainModelObservationAttributes(unittest.TestCase):
+    """Unit tests for model observation attribute mapping."""
+
+    def test_request_and_response_models_are_distinct(self):
+        """Test that requested and served model names use distinct attributes."""
+        outputs = {"llm_output": {"model_name": "gpt-4.1-2025-04-14"}}
+        extra = {"metadata": {"ls_model_name": "gpt-4.1"}}
+
+        attributes = dict(model_name(outputs, extra))
+
+        self.assertEqual(attributes[GEN_AI_REQUEST_MODEL_KEY], "gpt-4.1")
+        self.assertEqual(attributes[GEN_AI_RESPONSE_MODEL_KEY], "gpt-4.1-2025-04-14")
+
+    def test_cache_token_counts_use_standard_attributes(self):
+        """Test that cache token counts use model observation attributes."""
+        outputs = {
+            "llm_output": {
+                "token_usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "input_token_details": {
+                        "cache_read": 40,
+                        "cache_creation": 10,
+                    },
+                }
+            }
+        }
+
+        attributes = dict(token_counts(outputs))
+
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 40)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY], 10)
 
 
 class TestInstrumentorLangChain(unittest.TestCase):

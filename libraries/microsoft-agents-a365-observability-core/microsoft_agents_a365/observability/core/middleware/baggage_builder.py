@@ -17,6 +17,7 @@ from ..constants import (
     GEN_AI_AGENT_EMAIL_KEY,
     GEN_AI_AGENT_ID_KEY,
     GEN_AI_AGENT_NAME_KEY,
+    GEN_AI_AGENT_TYPE_KEY,
     GEN_AI_AGENT_VERSION_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
@@ -95,6 +96,11 @@ class BaggageBuilder:
             Self for method chaining
         """
         self._set(GEN_AI_AGENT_ID_KEY, value)
+        return self
+
+    def agent_type(self, value: str | None) -> "BaggageBuilder":
+        """Set the agent type baggage value."""
+        self._set(GEN_AI_AGENT_TYPE_KEY, value)
         return self
 
     def agentic_user_id(self, value: str | None) -> "BaggageBuilder":

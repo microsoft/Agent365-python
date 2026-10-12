@@ -2,9 +2,51 @@
 # Licensed under the MIT License.
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from microsoft_agents_a365.observability.core import configure
+from microsoft_agents_a365.observability.core.constants import (
+    GEN_AI_RESPONSE_MODEL_KEY,
+    GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+)
 from microsoft_agents_a365.observability.extensions.openai import OpenAIAgentsTraceInstrumentor
+from microsoft_agents_a365.observability.extensions.openai.utils import (
+    get_attributes_from_response,
+    get_attributes_from_usage,
+)
+
+
+class TestOpenAIModelObservationAttributes(unittest.TestCase):
+    """Unit tests for model observation attribute mapping."""
+
+    def test_response_model_uses_response_attribute(self):
+        """Test that the served model is emitted as the response model."""
+        response = MagicMock()
+        response.tools = []
+        response.usage = None
+        response.output = []
+        response.instructions = None
+        response.model = "gpt-4.1-2025-04-14"
+        response.model_dump.return_value = {}
+
+        attributes = dict(get_attributes_from_response(response))
+
+        self.assertEqual(attributes[GEN_AI_RESPONSE_MODEL_KEY], "gpt-4.1-2025-04-14")
+
+    def test_cached_tokens_use_standard_attribute(self):
+        """Test that cached input tokens use the model observation attribute."""
+        usage = SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            total_tokens=120,
+            input_tokens_details=SimpleNamespace(cached_tokens=40),
+            output_tokens_details=SimpleNamespace(reasoning_tokens=5),
+        )
+
+        attributes = dict(get_attributes_from_usage(usage))
+
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 40)
 
 
 class TestOpenAIAgentsTraceInstrumentor(unittest.TestCase):

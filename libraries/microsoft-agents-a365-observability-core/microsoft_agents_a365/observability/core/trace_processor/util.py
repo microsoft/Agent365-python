@@ -12,6 +12,7 @@ COMMON_ATTRIBUTES = [
     consts.GEN_AI_CONVERSATION_ITEM_LINK_KEY,  # microsoft.conversation.item.link
     consts.GEN_AI_OPERATION_NAME_KEY,  # gen_ai.operation.name
     consts.GEN_AI_AGENT_ID_KEY,  # gen_ai.agent.id
+    consts.GEN_AI_AGENT_TYPE_KEY,  # gen_ai.agent.type
     consts.GEN_AI_AGENT_NAME_KEY,  # gen_ai.agent.name
     consts.GEN_AI_AGENT_DESCRIPTION_KEY,  # gen_ai.agent.description
     consts.GEN_AI_AGENT_VERSION_KEY,  # gen_ai.agent.version

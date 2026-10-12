@@ -17,6 +17,7 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_REQUEST_MODEL_KEY,
     GEN_AI_RESPONSE_FINISH_REASONS_KEY,
     GEN_AI_RESPONSE_ID_KEY,
+    GEN_AI_RESPONSE_MODEL_KEY,
     GEN_AI_SYSTEM_INSTRUCTIONS_KEY,
     GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
@@ -24,6 +25,8 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_TOOL_DESCRIPTION_KEY,
     GEN_AI_TOOL_NAME_KEY,
     GEN_AI_TOOL_TYPE_KEY,
+    GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY,
     GEN_AI_USAGE_INPUT_TOKENS_KEY,
     GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
     INVOKE_AGENT_OPERATION_NAME,
@@ -299,8 +302,8 @@ def model_name(
     ):
         for key in "model_name", "model":
             if name := str(llm_output.get(key) or "").strip():
-                yield GEN_AI_REQUEST_MODEL_KEY, name
-                return
+                yield GEN_AI_RESPONSE_MODEL_KEY, name
+                break
     if not extra:
         return
     if not isinstance(extra, Mapping):
@@ -349,6 +352,11 @@ def token_counts(outputs: Mapping[str, Any] | None) -> Iterator[tuple[str, int]]
     # OpenAI
     for attribute_name, details_key, keys in [
         (
+            GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+            "prompt_tokens_details",
+            ("cached_tokens",),
+        ),
+        (
             GEN_AI_RESPONSE_FINISH_REASONS_KEY,
             "completion_tokens_details",
             ("reasoning_tokens",),
@@ -362,6 +370,16 @@ def token_counts(outputs: Mapping[str, Any] | None) -> Iterator[tuple[str, int]]
     for attribute_name, details_key_or_none, keys in [
         (GEN_AI_USAGE_INPUT_TOKENS_KEY, None, ("input_tokens",)),
         (GEN_AI_USAGE_OUTPUT_TOKENS_KEY, None, ("output_tokens",)),
+        (
+            GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+            "input_token_details",
+            ("cache_read", "cached_tokens"),
+        ),
+        (
+            GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY,
+            "input_token_details",
+            ("cache_write", "cache_creation"),
+        ),
         (
             GEN_AI_RESPONSE_FINISH_REASONS_KEY,
             "output_token_details",

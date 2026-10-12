@@ -28,10 +28,12 @@ from microsoft_agents_a365.observability.core.constants import (
     GEN_AI_PROVIDER_NAME_KEY,
     GEN_AI_REQUEST_MODEL_KEY,
     GEN_AI_RESPONSE_FINISH_REASONS_KEY,
+    GEN_AI_RESPONSE_MODEL_KEY,
     GEN_AI_TOOL_ARGS_KEY,
     GEN_AI_TOOL_CALL_ID_KEY,
     GEN_AI_TOOL_CALL_RESULT_KEY,
     GEN_AI_TOOL_NAME_KEY,
+    GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
     GEN_AI_USAGE_INPUT_TOKENS_KEY,
     GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
 )
@@ -389,7 +391,7 @@ def get_attributes_from_response(obj: Response) -> Iterator[tuple[str, Attribute
         yield from _get_attributes_from_response_instruction(obj.instructions)
     else:
         pass  # TODO: handle list instructions
-    yield GEN_AI_REQUEST_MODEL_KEY, obj.model
+    yield GEN_AI_RESPONSE_MODEL_KEY, obj.model
     param = obj.model_dump(
         exclude_none=True,
         exclude={"object", "tools", "usage", "output", "error", "status"},
@@ -512,6 +514,11 @@ def get_attributes_from_usage(
     yield GEN_AI_USAGE_INPUT_TOKENS_KEY, obj.input_tokens
     yield GEN_AI_LLM_TOKEN_COUNT_TOTAL, obj.total_tokens
     yield GEN_AI_LLM_TOKEN_COUNT_PROMPT_DETAILS_CACHED_READ, obj.input_tokens_details.cached_tokens
+    if obj.input_tokens_details.cached_tokens is not None:
+        yield (
+            GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+            obj.input_tokens_details.cached_tokens,
+        )
     yield (
         GEN_AI_LLM_TOKEN_COUNT_COMPLETION_DETAILS_REASONING,
         obj.output_tokens_details.reasoning_tokens,
