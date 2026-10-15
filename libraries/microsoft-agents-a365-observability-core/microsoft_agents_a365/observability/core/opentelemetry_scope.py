@@ -190,7 +190,13 @@ class OpenTelemetryScope:
                     self.set_tag_maybe(
                         GEN_AI_AGENT_PLATFORM_ID_KEY, agent_details.agent_platform_id
                     )
-                    self.set_tag_maybe(GEN_AI_AGENT_TYPE_KEY, agent_details.agent_type)
+                    # Accept either an `AgentType` enum member or a plain string;
+                    # emit the string `.value` so OTel doesn't silently drop
+                    # non-primitive attribute values.
+                    self.set_tag_maybe(
+                        GEN_AI_AGENT_TYPE_KEY,
+                        getattr(agent_details.agent_type, "value", agent_details.agent_type),
+                    )
                     self.set_tag_maybe(TENANT_ID_KEY, agent_details.tenant_id)
                     self.set_tag_maybe(GEN_AI_ICON_URI_KEY, agent_details.icon_uri)
                     # Set provider name dynamically from agent details

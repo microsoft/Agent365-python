@@ -326,8 +326,11 @@ def model_name(
 @stop_on_exception
 def token_counts(outputs: Mapping[str, Any] | None) -> Iterator[tuple[str, int]]:
     """Yields token count information if present."""
-    if not (token_usage := (parse_token_usage_for_non_streaming_outputs(outputs))):
+    token_usage = parse_token_usage_for_non_streaming_outputs(outputs)
+    message_usage = _message_usage_metadata(outputs)
+    if not token_usage and not message_usage:
         return
+
     for attribute_name, keys in [
         (
             GEN_AI_USAGE_INPUT_TOKENS_KEY,
@@ -346,27 +349,44 @@ def token_counts(outputs: Mapping[str, Any] | None) -> Iterator[tuple[str, int]]
             ),
         ),
     ]:
-        if (token_count := get_first_value(token_usage, keys)) is not None:
+        if token_usage is not None and (token_count := get_first_value(token_usage, keys)) is not None:
             yield attribute_name, token_count
 
-    # OpenAI
-    for attribute_name, details_key, keys in [
-        (
-            GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
-            "prompt_tokens_details",
-            ("cached_tokens",),
-        ),
-        (
-            GEN_AI_RESPONSE_FINISH_REASONS_KEY,
-            "completion_tokens_details",
-            ("reasoning_tokens",),
-        ),
-    ]:
-        if (details := token_usage.get(details_key)) is not None:
-            if (token_count := get_first_value(details, keys)) is not None:
+    if token_usage is not None:
+        # OpenAI
+        for attribute_name, details_key, keys in [
+            (
+                GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+                "prompt_tokens_details",
+                ("cached_tokens",),
+            ),
+            (
+                GEN_AI_RESPONSE_FINISH_REASONS_KEY,
+                "completion_tokens_details",
+                ("reasoning_tokens",),
+            ),
+        ]:
+            if (details := token_usage.get(details_key)) is not None:
+                if (token_count := get_first_value(details, keys)) is not None:
+                    yield attribute_name, token_count
+
+        # Anthropic's raw (non-normalized) usage payload places cache counts
+        # as flat fields instead of nesting them under `input_token_details`,
+        # e.g. llm_output["usage"]["cache_read_input_tokens"].
+        for attribute_name, keys in [
+            (GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY, ("cache_read_input_tokens",)),
+            (GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY, ("cache_creation_input_tokens",)),
+        ]:
+            if (token_count := get_first_value(token_usage, keys)) is not None:
                 yield attribute_name, token_count
 
-    # maps langchain_core.messages.ai.UsageMetadata object
+    # maps langchain_core.messages.ai.UsageMetadata object. For some providers
+    # (e.g. OpenAI with stream_usage) this ends up merged into llm_output's
+    # token usage, but others (e.g. ChatAnthropic) only normalize cache
+    # details onto the generated AIMessage itself (message.usage_metadata),
+    # so prefer the message's own usage_metadata when present and fall back
+    # to the llm_output-based token_usage otherwise.
+    usage_metadata_sources = [source for source in (message_usage, token_usage) if source is not None]
     for attribute_name, details_key_or_none, keys in [
         (GEN_AI_USAGE_INPUT_TOKENS_KEY, None, ("input_tokens",)),
         (GEN_AI_USAGE_OUTPUT_TOKENS_KEY, None, ("output_tokens",)),
@@ -386,10 +406,11 @@ def token_counts(outputs: Mapping[str, Any] | None) -> Iterator[tuple[str, int]]
             ("reasoning",),
         ),
     ]:
-        details = token_usage.get(details_key_or_none) if details_key_or_none else token_usage
-        if details is not None:
-            if (token_count := get_first_value(details, keys)) is not None:
+        for source in usage_metadata_sources:
+            details = source.get(details_key_or_none) if details_key_or_none else source
+            if details is not None and (token_count := get_first_value(details, keys)) is not None:
                 yield attribute_name, token_count
+                break
 
 
 def parse_token_usage_for_non_streaming_outputs(
@@ -415,6 +436,50 @@ def parse_token_usage_for_non_streaming_outputs(
         )
     ):
         return token_usage
+    return None
+
+
+def _message_usage_metadata(outputs: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    """
+    Extracts the normalized `usage_metadata` (LangChain's `UsageMetadata`)
+    from the first generated message in `outputs["generations"]`, if present.
+
+    LangChain attaches its normalized token/cache usage directly to the
+    generated `AIMessage` (`message.usage_metadata`) rather than always
+    surfacing it on `llm_output` - for example, ChatAnthropic's raw
+    `llm_output["usage"]` only has flat, non-normalized fields, while the
+    normalized cache details live on the message. Handles both an actual
+    `BaseMessage` instance (attribute access) and LangChain's `dumpd`-style
+    serialized dict form (`{"type": "constructor", "kwargs": {...}}`).
+    """
+    if not outputs or not isinstance(outputs, Mapping):
+        return None
+    generations = outputs.get("generations")
+    if not generations or not isinstance(generations, Iterable):
+        return None
+    first_generations = next(iter(generations), None)
+    if not first_generations or not isinstance(first_generations, Iterable):
+        return None
+
+    for generation in first_generations:
+        message = (
+            generation.get("message") if isinstance(generation, Mapping) else getattr(generation, "message", None)
+        )
+        if message is None:
+            continue
+
+        if isinstance(message, BaseMessage):
+            usage_metadata = getattr(message, "usage_metadata", None)
+        elif isinstance(message, Mapping):
+            kwargs = message.get("kwargs")
+            usage_metadata = kwargs.get("usage_metadata") if isinstance(kwargs, Mapping) else None
+            if usage_metadata is None:
+                usage_metadata = message.get("usage_metadata")
+        else:
+            usage_metadata = None
+
+        if usage_metadata:
+            return usage_metadata
     return None
 
 

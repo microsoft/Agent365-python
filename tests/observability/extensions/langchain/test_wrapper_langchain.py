@@ -51,6 +51,80 @@ class TestLangChainModelObservationAttributes(unittest.TestCase):
         self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 40)
         self.assertEqual(attributes[GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY], 10)
 
+    def test_cache_token_counts_read_from_generated_message_usage_metadata(self):
+        """
+        Test that cache token counts are extracted from the generated
+        message's normalized `usage_metadata` (LangChain's `dumpd`-style
+        serialized AIMessage), not just from a synthetic `llm_output`
+        location. This mirrors the actual shape LangChain produces for
+        providers such as ChatAnthropic, where the raw `llm_output["usage"]`
+        only carries flat (non-normalized) fields while the message itself
+        carries the normalized `input_token_details`.
+        """
+        outputs = {
+            "llm_output": {
+                # Anthropic's raw usage payload: flat cache fields, no
+                # normalized input_token_details.
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "cache_read_input_tokens": 40,
+                    "cache_creation_input_tokens": 10,
+                }
+            },
+            "generations": [
+                [
+                    {
+                        "message": {
+                            "lc": 1,
+                            "type": "constructor",
+                            "id": ["langchain", "schema", "messages", "AIMessage"],
+                            "kwargs": {
+                                "content": "hello",
+                                "usage_metadata": {
+                                    "input_tokens": 100,
+                                    "output_tokens": 20,
+                                    "total_tokens": 120,
+                                    "input_token_details": {
+                                        "cache_read": 40,
+                                        "cache_creation": 10,
+                                    },
+                                },
+                            },
+                        }
+                    }
+                ]
+            ],
+        }
+
+        attributes = dict(token_counts(outputs))
+
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 40)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY], 10)
+
+    def test_cache_token_counts_fall_back_to_raw_anthropic_flat_fields(self):
+        """
+        Test that cache token counts fall back to Anthropic's raw, flat
+        `llm_output["usage"]` fields when no normalized `usage_metadata` is
+        available on the generated message.
+        """
+        outputs = {
+            "llm_output": {
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "cache_read_input_tokens": 40,
+                    "cache_creation_input_tokens": 10,
+                }
+            },
+            "generations": [[{"message": {"lc": 1, "type": "constructor", "kwargs": {"content": "hello"}}}]],
+        }
+
+        attributes = dict(token_counts(outputs))
+
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 40)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY], 10)
+
 
 class TestInstrumentorLangChain(unittest.TestCase):
     """Unit tests for InstrumentorForLangChain class."""

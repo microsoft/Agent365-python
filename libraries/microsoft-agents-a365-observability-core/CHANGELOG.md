@@ -4,6 +4,30 @@ All notable changes to this package will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`InferenceScope` span name and `gen_ai.operation.name` now reflect the actual operation** —
+  Previously every inference span was hardcoded to `chat`, regardless of
+  `InferenceCallDetails.operationName`. The span name and the
+  `gen_ai.operation.name` attribute are now derived from the canonical
+  lowercase semconv value of the operation (e.g. `chat`, `text_completion`,
+  `generate_content`), matching the pre-existing Node.js/.NET behavior.
+- **Agent 365 exporter's `GEN_AI_OPERATION_NAMES` allowlist now recognizes the
+  canonical lowercase operation names** (`chat`, `text_completion`,
+  `generate_content`) in addition to the existing aliases, since spans can now
+  legitimately report these values.
+- **`AgentDetails.agent_type` and `InferenceCallDetails.responseModel`/cache
+  fields are appended at the end of their dataclasses** instead of being
+  inserted in the middle, preserving positional-argument compatibility for
+  existing callers.
+- **Whitespace-only `model`/`responseModel` values are now normalized to
+  `None`** in `InferenceCallDetails.__post_init__`, preventing blank span
+  names/`gen_ai.request.model` attributes when a non-blank `responseModel` is
+  also supplied.
+- **`AgentDetails.agent_type` now accepts `AgentType` enum members** — the
+  enum's `.value` is emitted on the span/baggage instead of the enum object,
+  which OpenTelemetry would otherwise silently drop.
+
 ### Breaking Changes
 
 - **OBS exports always use `/observabilityService`** — The `use_s2s_endpoint`

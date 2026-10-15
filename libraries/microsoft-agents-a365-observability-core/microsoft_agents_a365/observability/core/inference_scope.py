@@ -7,7 +7,6 @@ from .agent_details import AgentDetails
 from .constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
-    CHAT_OPERATION_NAME,
     GEN_AI_AGENT_THOUGHT_PROCESS_KEY,
     GEN_AI_CALLER_CLIENT_IP_KEY,
     GEN_AI_CONVERSATION_ID_KEY,
@@ -98,9 +97,10 @@ class InferenceScope(OpenTelemetryScope):
         )
 
         model_name = details.model or details.responseModel
+        operation_name = details.operationName.canonical_name
         super().__init__(
-            operation_name=CHAT_OPERATION_NAME,
-            activity_name=f"{CHAT_OPERATION_NAME} {model_name}",
+            operation_name=operation_name,
+            activity_name=f"{operation_name} {model_name}",
             agent_details=agent_details,
             span_details=resolved_span_details,
         )
@@ -109,7 +109,7 @@ class InferenceScope(OpenTelemetryScope):
             self.record_input_messages(request.content)
         self.set_tag_maybe(GEN_AI_CONVERSATION_ID_KEY, request.conversation_id)
 
-        self.set_tag_maybe(GEN_AI_OPERATION_NAME_KEY, CHAT_OPERATION_NAME)
+        self.set_tag_maybe(GEN_AI_OPERATION_NAME_KEY, operation_name)
         self.set_tag_maybe(GEN_AI_REQUEST_MODEL_KEY, details.model)
         self.set_tag_maybe(GEN_AI_RESPONSE_MODEL_KEY, details.responseModel)
         self.set_tag_maybe(GEN_AI_PROVIDER_NAME_KEY, details.providerName)

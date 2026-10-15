@@ -32,6 +32,7 @@ from ..constants import (
     USER_ID_KEY,
     USER_NAME_KEY,
 )
+from ..models.agent_type import AgentType
 from ..utils import validate_and_normalize_ip
 
 logger = logging.getLogger(__name__)
@@ -98,9 +99,14 @@ class BaggageBuilder:
         self._set(GEN_AI_AGENT_ID_KEY, value)
         return self
 
-    def agent_type(self, value: str | None) -> "BaggageBuilder":
-        """Set the agent type baggage value."""
-        self._set(GEN_AI_AGENT_TYPE_KEY, value)
+    def agent_type(self, value: AgentType | str | None) -> "BaggageBuilder":
+        """Set the agent type baggage value.
+
+        Accepts either an `AgentType` enum member or a plain string; enum
+        members are normalized to their string `.value` since OTel baggage
+        values must be primitive strings.
+        """
+        self._set(GEN_AI_AGENT_TYPE_KEY, getattr(value, "value", value))
         return self
 
     def agentic_user_id(self, value: str | None) -> "BaggageBuilder":

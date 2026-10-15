@@ -286,9 +286,9 @@ class AgentDetails:
     agent_auid: str | None        # Agent unique identifier
     agent_email: str | None       # Agent email address
     agent_blueprint_id: str | None
-    agent_type: AgentType | None
     tenant_id: str | None
     icon_uri: str | None
+    agent_type: AgentType | str | None  # appended last for positional compat
 ```
 
 ### UserDetails
@@ -330,17 +330,23 @@ class InferenceCallDetails:
     operationName: InferenceOperationType
     model: str | None
     providerName: str
-    responseModel: str | None
     inputTokens: int | None
     outputTokens: int | None
-    cacheReadInputTokens: int | None
-    cacheWriteInputTokens: int | None
+    finishReasons: list[str] | None
+    thoughtProcess: str | None
     endpoint: ServiceEndpoint | None
+    responseModel: str | None            # appended last for positional compat
+    cacheReadInputTokens: int | None     # appended last for positional compat
+    cacheWriteInputTokens: int | None    # appended last for positional compat
 ```
 
-At least one of `model` or `responseModel` must be present. Inference spans use
-the lowercase `chat` operation required by the OpenTelemetry schema and Agent365
-model observation pipeline. Endpoint ports and token counts are emitted as integers.
+At least one of `model` or `responseModel` must be present (whitespace-only
+values are normalized to `None`). The `gen_ai.operation.name` attribute and the
+span name prefix are derived from `operationName` via its canonical lowercase
+form (`InferenceOperationType.CHAT` -> `chat`, `TEXT_COMPLETION` ->
+`text_completion`, `GENERATE_CONTENT` -> `generate_content`), matching the
+OpenTelemetry GenAI semantic conventions and the Agent365 model observation
+pipeline. Endpoint ports and token counts are emitted as integers.
 
 ### ToolCallDetails
 
