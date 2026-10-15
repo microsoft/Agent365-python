@@ -349,7 +349,10 @@ def token_counts(outputs: Mapping[str, Any] | None) -> Iterator[tuple[str, int]]
             ),
         ),
     ]:
-        if token_usage is not None and (token_count := get_first_value(token_usage, keys)) is not None:
+        if (
+            token_usage is not None
+            and (token_count := get_first_value(token_usage, keys)) is not None
+        ):
             yield attribute_name, token_count
 
     if token_usage is not None:
@@ -386,7 +389,9 @@ def token_counts(outputs: Mapping[str, Any] | None) -> Iterator[tuple[str, int]]
     # details onto the generated AIMessage itself (message.usage_metadata),
     # so prefer the message's own usage_metadata when present and fall back
     # to the llm_output-based token_usage otherwise.
-    usage_metadata_sources = [source for source in (message_usage, token_usage) if source is not None]
+    usage_metadata_sources = [
+        source for source in (message_usage, token_usage) if source is not None
+    ]
     for attribute_name, details_key_or_none, keys in [
         (GEN_AI_USAGE_INPUT_TOKENS_KEY, None, ("input_tokens",)),
         (GEN_AI_USAGE_OUTPUT_TOKENS_KEY, None, ("output_tokens",)),
@@ -400,11 +405,9 @@ def token_counts(outputs: Mapping[str, Any] | None) -> Iterator[tuple[str, int]]
             "input_token_details",
             ("cache_write", "cache_creation"),
         ),
-        (
-            GEN_AI_RESPONSE_FINISH_REASONS_KEY,
-            "output_token_details",
-            ("reasoning",),
-        ),
+        # Note: `output_token_details.reasoning` is intentionally not mapped
+        # here - it is a reasoning *token count*, not a finish reason, and
+        # there is no dedicated reasoning-tokens attribute defined yet.
     ]:
         for source in usage_metadata_sources:
             details = source.get(details_key_or_none) if details_key_or_none else source
@@ -439,10 +442,30 @@ def parse_token_usage_for_non_streaming_outputs(
     return None
 
 
+def _merge_usage_metadata(aggregate: dict[str, Any], usage_metadata: Mapping[str, Any]) -> None:
+    """
+    Merges `usage_metadata` into `aggregate` in place, summing numeric token
+    counts (including nested detail mappings like `input_token_details`) so
+    that usage from multiple batch entries is aggregated rather than
+    overwritten.
+    """
+    for key, value in usage_metadata.items():
+        if isinstance(value, Mapping):
+            nested = aggregate.get(key)
+            if not isinstance(nested, dict):
+                nested = {}
+                aggregate[key] = nested
+            _merge_usage_metadata(nested, value)
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            aggregate[key] = aggregate.get(key, 0) + value
+        elif key not in aggregate:
+            aggregate[key] = value
+
+
 def _message_usage_metadata(outputs: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
     """
     Extracts the normalized `usage_metadata` (LangChain's `UsageMetadata`)
-    from the first generated message in `outputs["generations"]`, if present.
+    from the generated messages in `outputs["generations"]`, if present.
 
     LangChain attaches its normalized token/cache usage directly to the
     generated `AIMessage` (`message.usage_metadata`) rather than always
@@ -451,36 +474,61 @@ def _message_usage_metadata(outputs: Mapping[str, Any] | None) -> Mapping[str, A
     normalized cache details live on the message. Handles both an actual
     `BaseMessage` instance (attribute access) and LangChain's `dumpd`-style
     serialized dict form (`{"type": "constructor", "kwargs": {...}}`).
+
+    `outputs["generations"]` is a list of batches, each containing one or
+    more alternative completions for the same input (e.g. when `n > 1`).
+    Alternative completions for the same input share the same usage
+    accounting, so only the first completion per batch entry is used; usage
+    is then summed across batch entries so multi-input batch calls aren't
+    under-reported.
     """
     if not outputs or not isinstance(outputs, Mapping):
         return None
     generations = outputs.get("generations")
     if not generations or not isinstance(generations, Iterable):
         return None
-    first_generations = next(iter(generations), None)
-    if not first_generations or not isinstance(first_generations, Iterable):
-        return None
 
-    for generation in first_generations:
-        message = (
-            generation.get("message") if isinstance(generation, Mapping) else getattr(generation, "message", None)
-        )
-        if message is None:
+    aggregate: dict[str, Any] | None = None
+    for batch_entry in generations:
+        if not batch_entry or not isinstance(batch_entry, Iterable):
             continue
 
-        if isinstance(message, BaseMessage):
-            usage_metadata = getattr(message, "usage_metadata", None)
-        elif isinstance(message, Mapping):
-            kwargs = message.get("kwargs")
-            usage_metadata = kwargs.get("usage_metadata") if isinstance(kwargs, Mapping) else None
-            if usage_metadata is None:
-                usage_metadata = message.get("usage_metadata")
-        else:
-            usage_metadata = None
+        usage_metadata = None
+        for generation in batch_entry:
+            message = (
+                generation.get("message")
+                if isinstance(generation, Mapping)
+                else getattr(generation, "message", None)
+            )
+            if message is None:
+                continue
 
-        if usage_metadata:
-            return usage_metadata
-    return None
+            if isinstance(message, BaseMessage):
+                usage_metadata = getattr(message, "usage_metadata", None)
+            elif isinstance(message, Mapping):
+                kwargs = message.get("kwargs")
+                usage_metadata = (
+                    kwargs.get("usage_metadata") if isinstance(kwargs, Mapping) else None
+                )
+                if usage_metadata is None:
+                    usage_metadata = message.get("usage_metadata")
+            else:
+                usage_metadata = None
+
+            if usage_metadata:
+                # Only the first completion with usage data in this batch
+                # entry is used - alternative completions (n > 1) for the
+                # same input would otherwise be double-counted.
+                break
+
+        if not usage_metadata:
+            continue
+
+        if aggregate is None:
+            aggregate = {}
+        _merge_usage_metadata(aggregate, usage_metadata)
+
+    return aggregate
 
 
 @stop_on_exception
