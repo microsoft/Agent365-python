@@ -93,10 +93,15 @@ The SDK produces three core span kinds. Your backend should show them in this ty
 | `gen_ai.operation.name` | Produced by                                       | Typical parent | Span name (default) | Notes |
 |-------------------------|---------------------------------------------------|----------------|---------------------|-------|
 | `invoke_agent`          | `InvokeAgentScope` (one per user turn)            | (root or app)  | `invoke_agent <agent_name>` when set, else `invoke_agent` | |
-| (varies — see notes) | `InferenceScope` (one per LLM call) | `invoke_agent` | `<operation> <model>` | **Manual instrumentation** uses `InferenceOperationType.value` (currently `Chat` / `TextCompletion` / `GenerateContent`, capitalized). **Auto-instrumentation** (e.g. `OpenAIAgentsTraceInstrumentor`) uses lowercase per the [OTel GenAI semconv](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) (e.g. `chat`). The two are inconsistent today. |
+| `chat` / `text_completion` / `generate_content` | `InferenceScope` (one per LLM call) | `invoke_agent` | `<operation> <model>` | Manual inference scopes use canonical lowercase [OTel GenAI operation names](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/), matching auto-instrumentation for the corresponding operation. |
 | `execute_tool`          | `ExecuteToolScope` (one per tool invocation)      | `invoke_agent` | `execute_tool <tool_name>` (always includes the tool name) | Records tool name, args, and result. |
 
-Filter your backend by the `gen_ai.operation.name` attribute or by span name. Note that `inference` is *not* the literal attribute value — manual instrumentation produces `Chat` / `TextCompletion` / `GenerateContent` (the `InferenceOperationType.value`), while auto-instrumentation extension packages produce the lowercase OTel-spec form (e.g. `chat`). This casing discrepancy is tracked as an SDK issue.
+Filter your backend by the `gen_ai.operation.name` attribute or by span name.
+`InferenceScope` emits `chat`, `text_completion`, or `generate_content` according
+to the selected `InferenceOperationType`, with span names such as `chat gpt-4`.
+`inference` is not a literal operation value. When upgrading, update case-sensitive
+filters that matched the previous `Chat`, `TextCompletion`, or `GenerateContent`
+values and span-name prefixes, or compare case-insensitively.
 
 ## Verifying the integration
 
@@ -110,7 +115,11 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
 ```
 
-Run a single turn. If you see `invoke_agent` / `Chat` (or `chat`) / `execute_tool` JSON dumps on stdout, the SDK is producing spans correctly — the issue is in your backend exporter (network, auth, sampling). If you don't see them, the integration itself is wrong; check the pitfalls below.
+Run a single turn. If you see `invoke_agent`, the inference operation
+(`chat`, `text_completion`, or `generate_content`), and any invoked `execute_tool`
+spans as JSON dumps on stdout, the SDK is producing spans correctly - investigate
+your backend exporter (network, auth, sampling). If expected spans are missing
+from stdout too, check the integration pitfalls below.
 
 ## Common pitfalls
 

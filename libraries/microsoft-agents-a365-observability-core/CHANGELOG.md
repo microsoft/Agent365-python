@@ -6,12 +6,6 @@ All notable changes to this package will be documented in this file.
 
 ### Fixed
 
-- **`InferenceScope` span name and `gen_ai.operation.name` now reflect the actual operation** —
-  Previously every inference span was hardcoded to `chat`, regardless of
-  `InferenceCallDetails.operationName`. The span name and the
-  `gen_ai.operation.name` attribute are now derived from the canonical
-  lowercase semconv value of the operation (e.g. `chat`, `text_completion`,
-  `generate_content`), matching the pre-existing Node.js/.NET behavior.
 - **Agent 365 exporter's `GEN_AI_OPERATION_NAMES` allowlist now recognizes the
   canonical lowercase operation names** (`chat`, `text_completion`,
   `generate_content`) in addition to the existing aliases, since spans can now
@@ -30,6 +24,16 @@ All notable changes to this package will be documented in this file.
 
 ### Breaking Changes
 
+- **Manual inference operation names and span-name prefixes now use canonical
+  OpenTelemetry values** — `Chat`, `TextCompletion`, and `GenerateContent`
+  become `chat`, `text_completion`, and `generate_content`, respectively.
+  For example, `Chat gpt-4` becomes `chat gpt-4`. Text-completion and
+  generate-content spans that were previously filtered out are now exported
+  to Agent 365.
+- **`InferenceCallDetails` now validates model identity during construction** —
+  If both `model` and `responseModel` are missing, empty, or whitespace-only,
+  construction raises `ValueError`. Previously these values were accepted
+  without validation. This happens before an `InferenceScope` is created.
 - **OBS exports always use `/observabilityService`** — The `use_s2s_endpoint`
   option is deprecated and ignored, even when `False`. Exports no longer select
   or fall back to `/observability`. Provide an app-only OBS token independently
@@ -44,6 +48,11 @@ All notable changes to this package will be documented in this file.
 
 ### Migration
 
+- Update case-sensitive operation-name and span-name filters, dashboards, and
+  alerts to the canonical values above, or compare case-insensitively.
+- Supply a non-blank `model` or `responseModel` when constructing
+  `InferenceCallDetails`; validate optional configuration before constructing
+  the telemetry object so missing model identity does not interrupt a request.
 - Request the OBS resource `/.default` scope
   (`api://9b975845-388f-4429-889e-eab1ef63949c/.default`) for the exporting
   agent identity. Do not use delegated `Agent365.Observability.OtelWrite` tokens
