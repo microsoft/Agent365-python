@@ -48,6 +48,32 @@ class TestMCPServerConfig:
         with pytest.raises(ValueError, match="mcp_server_unique_name cannot be empty"):
             MCPServerConfig(mcp_server_name="test", mcp_server_unique_name="")
 
+    def test_mcp_server_config_connection_fields_default_none(self):
+        """Connection fields default to None for backward compatibility."""
+        config = MCPServerConfig(
+            mcp_server_name="TestServer",
+            mcp_server_unique_name="test_server",
+        )
+        assert config.id is None
+        assert config.all_connections_url is None
+        assert config.missing_connections_url is None
+        assert config.connectivity_status is None
+
+    def test_mcp_server_config_connection_fields_set(self):
+        """Connection fields are stored when provided."""
+        config = MCPServerConfig(
+            mcp_server_name="TestServer",
+            mcp_server_unique_name="test_server",
+            id="3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            all_connections_url="https://make.example/all",
+            missing_connections_url="https://make.example/missing",
+            connectivity_status="Pending",
+        )
+        assert config.id == "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        assert config.all_connections_url == "https://make.example/all"
+        assert config.missing_connections_url == "https://make.example/missing"
+        assert config.connectivity_status == "Pending"
+
 
 class TestMcpToolServerConfigurationService:
     """Tests for McpToolServerConfigurationService."""
@@ -159,6 +185,42 @@ class TestMcpToolServerConfigurationService:
         # Uses mcp_server_name if available, otherwise falls back to mcp_server_unique_name
         assert config.url == "https://default.server/agents/servers/GatewayServer"
         mock_build_url.assert_called_once_with("GatewayServer")
+
+    def test_parse_server_config_populates_connection_fields(self, service):
+        """Per-server connection fields are parsed from a V2 gateway element."""
+        server_element = {
+            "mcpServerName": "mcp_Salesforce",
+            "mcpServerUniqueName": "mcp_Salesforce",
+            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "url": "https://gw.example/agents/v2/servers/mcp_Salesforce",
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Pending",
+        }
+
+        config = service._parse_server_config(server_element)
+
+        assert config is not None
+        assert config.id == "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        assert config.all_connections_url == "https://make.example/all"
+        assert config.missing_connections_url == "https://make.example/missing"
+        assert config.connectivity_status == "Pending"
+
+    def test_parse_server_config_connection_fields_absent(self, service):
+        """Manifest elements without connection fields yield None."""
+        server_element = {
+            "mcpServerName": "DevServer",
+            "mcpServerUniqueName": "dev_server",
+            "url": "https://dev.server/mcp",
+        }
+
+        config = service._parse_server_config(server_element)
+
+        assert config is not None
+        assert config.id is None
+        assert config.all_connections_url is None
+        assert config.missing_connections_url is None
+        assert config.connectivity_status is None
 
     @patch.dict(os.environ, {"ENVIRONMENT": "Development"})
     def test_is_development_scenario(self, service):
@@ -321,6 +383,57 @@ class TestMcpToolServerConfigurationService:
 
         assert len(servers) == 1
         assert servers[0].mcp_server_name == "V1Server"
+
+    @pytest.mark.asyncio
+    async def test_parse_gateway_response_wrapped_returns_servers(self, service):
+        """Wrapped responses return a List[MCPServerConfig] with per-server metadata."""
+        payload = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "mcp_Salesforce",
+                    "mcpServerUniqueName": "mcp_Salesforce",
+                    "url": "https://gw.example/agents/v2/servers/mcp_Salesforce",
+                    "connectivityStatus": "Pending",
+                    "allConnectionsUrl": "https://make.example/all/salesforce",
+                    "missingConnectionsUrl": "https://make.example/missing/salesforce",
+                }
+            ],
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Pending",
+        }
+        mock_response = MagicMock()
+        mock_response.json = AsyncMock(return_value=payload)
+
+        servers = await service._parse_gateway_response(mock_response)
+
+        assert isinstance(servers, list)
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "mcp_Salesforce"
+        assert servers[0].connectivity_status == "Pending"
+        assert servers[0].all_connections_url == "https://make.example/all/salesforce"
+        assert servers[0].missing_connections_url == "https://make.example/missing/salesforce"
+
+    @pytest.mark.asyncio
+    async def test_parse_gateway_response_raw_array_returns_servers(self, service):
+        """Legacy raw-array responses return a list; per-server metadata is None."""
+        payload = [
+            {
+                "mcpServerName": "V1Server",
+                "mcpServerUniqueName": "v1_server",
+                "url": "https://v1.example.com/mcp",
+            }
+        ]
+        mock_response = MagicMock()
+        mock_response.json = AsyncMock(return_value=payload)
+
+        servers = await service._parse_gateway_response(mock_response)
+
+        assert isinstance(servers, list)
+        assert len(servers) == 1
+        assert servers[0].connectivity_status is None
+        assert servers[0].all_connections_url is None
+        assert servers[0].missing_connections_url is None
 
 
 class TestResolveTokenScopeForServer:
@@ -878,3 +991,147 @@ class TestResolveAgentIdForHeader:
 
         result = service._resolve_agent_id_for_header(token, mock_context)
         assert result == "token-appid"
+
+
+class TestConnectionGating:
+    """Core no longer gates on connectivityStatus — it parses the per-server
+    connection metadata onto each MCPServerConfig and returns the servers
+    unchanged. Gating is the responsibility of the framework extensions."""
+
+    @pytest.fixture
+    def service(self):
+        return McpToolServerConfigurationService()
+
+    @staticmethod
+    def _gateway_response(payload):
+        """Build a patched aiohttp.ClientSession context manager returning payload."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value=payload)
+        mock_response_cm = MagicMock()
+        mock_response_cm.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response_cm.__aexit__ = AsyncMock(return_value=None)
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_response_cm)
+        mock_session_cm = MagicMock()
+        mock_session_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_cm.__aexit__ = AsyncMock(return_value=None)
+        return patch("aiohttp.ClientSession", return_value=mock_session_cm)
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_pending_servers_returned_without_raising(self, service):
+        """Pending servers flow through ``list_tool_servers`` unchanged.
+
+        Connection gating has been removed from the core service.  It is now
+        the responsibility of framework-specific extensions (see e.g.
+        ``microsoft-agents-a365-tooling-extensions-agentframework``), which register
+        a non-blocking placeholder tool for each Pending server.  Core simply returns
+        the configs with their per-server connection metadata intact.
+        """
+        payload = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "mcp_Salesforce",
+                    "mcpServerUniqueName": "mcp_Salesforce",
+                    "url": "https://gw.example/mcp_Salesforce",
+                    "connectivityStatus": "Pending",
+                    "missingConnectionsUrl": "https://make.example/missing/salesforce",
+                }
+            ],
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Pending",
+        }
+        with self._gateway_response(payload):
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id", auth_token="test-token"
+            )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "mcp_Salesforce"
+        assert servers[0].connectivity_status == "Pending"
+        assert servers[0].missing_connections_url == "https://make.example/missing/salesforce"
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_gate_passes_when_ready(self, service):
+        payload = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "mcp_Salesforce",
+                    "mcpServerUniqueName": "mcp_Salesforce",
+                    "url": "https://gw.example/mcp_Salesforce",
+                    "connectivityStatus": "Ready",
+                }
+            ],
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Ready",
+        }
+        with self._gateway_response(payload):
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id", auth_token="test-token"
+            )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "mcp_Salesforce"
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_gate_passes_for_legacy_raw_array(self, service):
+        payload = [
+            {
+                "mcpServerName": "V1Server",
+                "mcpServerUniqueName": "v1_server",
+                "url": "https://v1.example.com/mcp",
+            }
+        ]
+        with self._gateway_response(payload):
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id", auth_token="test-token"
+            )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "V1Server"
+
+    @patch.dict(os.environ, {"ENVIRONMENT": "Production"})
+    @pytest.mark.asyncio
+    async def test_aggregate_pending_returns_servers_without_raising(self, service):
+        """Even when the response-level aggregate is Pending, ``list_tool_servers``
+        returns the servers without raising — core does not act on the aggregate
+        (or per-server) connection metadata.
+        """
+        payload = {
+            "mcpServers": [
+                {
+                    "mcpServerName": "mcp_Salesforce",
+                    "mcpServerUniqueName": "mcp_Salesforce",
+                    "url": "https://gw.example/mcp_Salesforce",
+                    "connectivityStatus": "Ready",
+                }
+            ],
+            "allConnectionsUrl": "https://make.example/all",
+            "missingConnectionsUrl": "https://make.example/missing",
+            "connectivityStatus": "Pending",
+        }
+        with self._gateway_response(payload):
+            servers = await service.list_tool_servers(
+                agentic_app_id="test-app-id", auth_token="test-token"
+            )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "mcp_Salesforce"
+
+    @patch.object(McpToolServerConfigurationService, "_load_servers_from_manifest")
+    @patch.dict(os.environ, {"ENVIRONMENT": "Development"})
+    @pytest.mark.asyncio
+    async def test_gate_not_applied_in_dev_mode(self, mock_load_manifest, service):
+        mock_load_manifest.return_value = [
+            MCPServerConfig(
+                mcp_server_name="DevServer",
+                mcp_server_unique_name="dev_server",
+                url="https://dev.server/mcp",
+            )
+        ]
+        servers = await service.list_tool_servers(
+            agentic_app_id="test-app-id", auth_token="test-token"
+        )
+        assert len(servers) == 1
+        assert servers[0].mcp_server_name == "DevServer"

@@ -21,8 +21,10 @@ This module includes implementations for:
 __version__ = "1.0.0"
 
 # Import services from the services module
+from .exceptions import McpConnectionsRequiredError
 from .services import McpToolRegistrationService
 
 __all__ = [
     "McpToolRegistrationService",
+    "McpConnectionsRequiredError",
 ]
