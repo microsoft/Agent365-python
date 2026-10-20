@@ -2,7 +2,7 @@
 
 All notable changes to this package will be documented in this file.
 
-## [Unreleased]
+## [2.0.0] - 2026-10-20
 
 ### Added
 
@@ -26,4 +26,17 @@ All notable changes to this package will be documented in this file.
   tokens reports 150 instead of 100. Do not add cache-token counts to this
   normalized total again. Batched generations retain aggregate `llm_output`
   usage rather than replacing it with a single message's usage.
+- **Depends on `langchain-core` instead of the `langchain` meta-package** — the
+  package no longer installs `langchain`. Install it separately if your
+  application needs it.
+
+### Security
+
+- Raised minimum versions: `langchain-core >= 1.3.3`, `langsmith >= 0.8.18`,
+  and `anyio >= 4.14.2`.
+
+## [1.0.0] - 2026-05-01
+
+### Changed
+
 - Removed `set_execution_type()` function and all `ExecutionType` / `GEN_AI_EXECUTION_TYPE_KEY` usage.

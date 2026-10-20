@@ -2,7 +2,7 @@
 
 All notable changes to this package will be documented in this file.
 
-## [Unreleased]
+## [2.0.0] - 2026-10-20
 
 ### Breaking Changes
 
@@ -18,12 +18,24 @@ All notable changes to this package will be documented in this file.
   logs one error and stores no token. It never calls `Authorization.exchange_token`
   and never acquires a delegated OBS token.
 
+### Changed
+
+- The package now declares a direct dependency on
+  `microsoft-agents-a365-runtime`.
+
+### Fixed
+
+- Channel scope helpers now fall back to `channel_data.productContext` for the
+  sub-channel when the activity's `ChannelId` does not carry one.
+
 ### Migration
 
 - Call and return `refresh_observability_token(agent_id, tenant_id, app_only_token_resolver)`
   from the exporter `token_resolver`.
 - Keep workload MCP/Graph/OBO authentication unchanged; only OBS export
   authentication moves to app-only S2S.
+
+## [1.0.0] - 2026-05-01
 
 ### Changed
 
