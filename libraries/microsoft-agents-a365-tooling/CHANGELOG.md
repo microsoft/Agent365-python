@@ -5,7 +5,13 @@ All notable changes to the `microsoft-agents-a365-tooling` package will be docum
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-10-20
+
+### Security
+
+- Raised the minimum `PyJWT` version to `>= 2.14.0`.
+
+## [1.0.0] - 2026-05-01
 
 ### Added
 
@@ -17,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `audience`, `scope`, `publisher`, and `headers` fields to `MCPServerConfig`
 - Gateway discovery endpoint bumped to `/agents/v2/{id}/mcpServers`
 - `_parse_gateway_server_config()` and `_parse_manifest_server_config()` merged into a single `_parse_server_config()` method — both gateway and manifest payloads share the same JSON field schema; the unified method maps `audience`, `scope`, and `publisher` fields from either source into `MCPServerConfig`
+- Added `send_chat_history` method to `McpToolServerConfigurationService` for sending chat conversation history to the MCP platform for real-time threat protection analysis
+- Added `ChatHistoryMessage` Pydantic model for representing individual messages in chat history
+- Added `ChatMessageRequest` Pydantic model for the chat history API request payload
+- Added `py.typed` marker for PEP 561 compliance, enabling type checker support
 
 ### Changed
 
@@ -30,8 +40,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Backward compatible**: agents with V1 manifests (null audience or shared ATG AppId) work identically with the new SDK — no token exchange behaviour changes
 - **Migration required for V2**: agents upgraded to V2 blueprint permissions (per-audience MCP servers) require this SDK version. Running a V2 blueprint with the old SDK will result in MCP tool auth failures (401/403)
 - **Local dev token flow**: run `a365 develop get-token` before starting the agent locally; the CLI writes `BEARER_TOKEN` (shared fallback) and `BEARER_TOKEN_<MCP_SERVER_NAME_UPPER>` (per-server, keyed on the server's `mcpServerName` value uppercased) to the environment, which the SDK reads automatically during manifest-based discovery
-
-- Added `send_chat_history` method to `McpToolServerConfigurationService` for sending chat conversation history to the MCP platform for real-time threat protection analysis
-- Added `ChatHistoryMessage` Pydantic model for representing individual messages in chat history
-- Added `ChatMessageRequest` Pydantic model for the chat history API request payload
-- Added `py.typed` marker for PEP 561 compliance, enabling type checker support

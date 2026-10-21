@@ -121,13 +121,23 @@ with InvokeAgentScope.start(
 Traces LLM/AI model inference calls:
 
 ```python
-from microsoft_agents_a365.observability.core import InferenceScope, InferenceCallDetails, Request
+from microsoft_agents_a365.observability.core import (
+    InferenceCallDetails,
+    InferenceOperationType,
+    InferenceScope,
+    Request,
+    ServiceEndpoint,
+)
 
 with InferenceScope.start(
     request=Request(content="Hello"),
     details=InferenceCallDetails(
-        model_name="gpt-4",
-        provider="openai"
+        operationName=InferenceOperationType.CHAT,
+        model="gpt-4",
+        providerName="openai",
+        responseModel="gpt-4-2025-04-14",
+        cacheReadInputTokens=20,
+        endpoint=ServiceEndpoint(hostname="models.example.com", port=443),
     ),
     agent_details=agent_details,
 ) as scope:
@@ -276,9 +286,9 @@ class AgentDetails:
     agent_auid: str | None        # Agent unique identifier
     agent_email: str | None       # Agent email address
     agent_blueprint_id: str | None
-    agent_type: AgentType | None
     tenant_id: str | None
     icon_uri: str | None
+    agent_type: AgentType | str | None  # appended last for positional compat
 ```
 
 ### UserDetails
@@ -317,10 +327,26 @@ class SpanDetails:
 ```python
 @dataclass
 class InferenceCallDetails:
-    model_name: str | None
-    provider: str | None
-    # Additional inference metadata
+    operationName: InferenceOperationType
+    model: str | None
+    providerName: str
+    inputTokens: int | None
+    outputTokens: int | None
+    finishReasons: list[str] | None
+    thoughtProcess: str | None
+    endpoint: ServiceEndpoint | None
+    responseModel: str | None            # appended last for positional compat
+    cacheReadInputTokens: int | None     # appended last for positional compat
+    cacheWriteInputTokens: int | None    # appended last for positional compat
 ```
+
+At least one of `model` or `responseModel` must be present (whitespace-only
+values are normalized to `None`). The `gen_ai.operation.name` attribute and the
+span name prefix are derived from `operationName` via its canonical lowercase
+form (`InferenceOperationType.CHAT` -> `chat`, `TEXT_COMPLETION` ->
+`text_completion`, `GENERATE_CONTENT` -> `generate_content`), matching the
+OpenTelemetry GenAI semantic conventions and the Agent365 model observation
+pipeline. Endpoint ports and token counts are emitted as integers.
 
 ### ToolCallDetails
 

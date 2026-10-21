@@ -34,6 +34,12 @@ MAX_SPAN_SIZE_BYTES = 250 * 1024
 # Operation names that identify a span as eligible for export to the Agent 365
 # observability ingest service. Only spans whose gen_ai.operation.name matches
 # one of these values are included; all other spans are filtered out.
+#
+# Inference spans now emit the canonical lowercase operation name for their
+# InferenceOperationType (e.g. "chat", "text_completion", "generate_content" -
+# see InferenceOperationType.canonical_name), so all three are recognized here.
+# The legacy PascalCase "Chat" value is kept for back-compat with any
+# previously-emitted/non-Python spans that still use the raw enum value.
 GEN_AI_OPERATION_NAMES: frozenset[str] = frozenset(
     {
         INVOKE_AGENT_OPERATION_NAME,
@@ -42,6 +48,9 @@ GEN_AI_OPERATION_NAMES: frozenset[str] = frozenset(
         APPLY_GUARDRAIL_OPERATION_NAME,
         CHAT_OPERATION_NAME,
         InferenceOperationType.CHAT.value,
+        InferenceOperationType.CHAT.canonical_name,
+        InferenceOperationType.TEXT_COMPLETION.canonical_name,
+        InferenceOperationType.GENERATE_CONTENT.canonical_name,
     }
 )
 

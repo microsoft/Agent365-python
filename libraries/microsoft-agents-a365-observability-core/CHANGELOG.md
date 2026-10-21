@@ -2,7 +2,7 @@
 
 All notable changes to this package will be documented in this file.
 
-## [Unreleased]
+## [2.0.0] - 2026-10-20
 
 ### Breaking Changes
 
@@ -17,6 +17,59 @@ All notable changes to this package will be documented in this file.
   failures fail export without an HTTP request or delegated fallback. The
   exporter invokes the resolver on every export batch/identity group, so
   resolvers must cache the acquired token and refresh only near expiry.
+- **Manual inference operation names and span-name prefixes now use canonical
+  OpenTelemetry values** — `Chat`, `TextCompletion`, and `GenerateContent`
+  become `chat`, `text_completion`, and `generate_content`, respectively.
+  For example, `Chat gpt-4` becomes `chat gpt-4`. The Agent 365 exporter
+  recognizes the canonical names (the legacy `Chat` value is still accepted),
+  so text-completion and generate-content spans that were previously filtered
+  out are now exported to Agent 365.
+- **`InferenceCallDetails` now validates model identity during construction** —
+  `model` and `responseModel` are stripped and whitespace-only values are
+  treated as `None`. If both are missing, empty, or whitespace-only,
+  construction raises `ValueError`. Previously these values were accepted
+  without validation. This happens before an `InferenceScope` is created.
+- **Message payloads serialize as a plain JSON array** — `gen_ai.input.messages`
+  and `gen_ai.output.messages` are now serialized per the OpenTelemetry GenAI
+  semantic conventions as `[{"role": ..., "parts": [...]}]` instead of the
+  `{"version": "0.1.0", "messages": [...]}` wrapper. The
+  `A365_MESSAGE_SCHEMA_VERSION` constant and the `version` field on
+  `InputMessages`/`OutputMessages` are removed, and `OutputMessage.finish_reason`
+  now defaults to `"stop"` instead of `None`.
+
+### Added
+
+- **`ApplyGuardrailScope`** for tracing security guardrail evaluations
+  (`apply_guardrail` operation), with supporting `GuardrailDetails`,
+  `GuardrailFinding`, `GuardrailDecisionType`, `GuardrailRiskSeverity`, and
+  `GuardrailTargetType` types and `microsoft.guardian.*` /
+  `microsoft.security.*` attribute constants. `apply_guardrail` spans are
+  exported to Agent 365.
+- **`AgentDetails.agent_type`** and **`BaggageBuilder.agent_type()`** emit
+  `gen_ai.agent.type`. Both accept an `AgentType` enum member or a string;
+  enum members are emitted as their string `.value`. The new dataclass field is
+  appended after existing fields, preserving positional-argument compatibility.
+- **`InferenceCallDetails.responseModel`**, **`cacheReadInputTokens`**, and
+  **`cacheWriteInputTokens`** emit `gen_ai.response.model`,
+  `gen_ai.usage.cache_read.input_tokens`, and
+  `gen_ai.usage.cache_write.input_tokens`. `model` is now optional when
+  `responseModel` is supplied. The new fields are appended after existing
+  fields, preserving positional-argument compatibility.
+- **`InferenceScope.record_cache_read_input_tokens()`** and
+  **`record_cache_write_input_tokens()`**.
+- **`InferenceOperationType.canonical_name`** returns the canonical lowercase
+  OpenTelemetry operation name.
+
+### Changed
+
+- `InferenceScope` emits `server.port` as an integer instead of a string.
+
+### Fixed
+
+- Scopes and the Agent 365 exporter no longer raise `AttributeError` when the
+  tracer returns a `NonRecordingSpan` (for example, when the token resolver
+  returns `None` on the first turn); span context is read via
+  `get_span_context()`.
 
 ### Migration
 
@@ -28,8 +81,17 @@ All notable changes to this package will be documented in this file.
   `idtyp` other than `app`; when `idtyp` is absent, accept only a non-empty
   `roles` array or a non-empty `oid` equal to `sub`; verify `aud` is the OBS
   resource and the token is not expired.
+- Update case-sensitive operation-name and span-name filters, dashboards, and
+  alerts to the canonical values above, or compare case-insensitively.
+- Supply a non-blank `model` or `responseModel` when constructing
+  `InferenceCallDetails`; validate optional configuration before constructing
+  the telemetry object so missing model identity does not interrupt a request.
+- Update consumers that parse `gen_ai.input.messages` /
+  `gen_ai.output.messages` to expect a JSON array rather than a
+  `{version, messages}` object, and remove references to
+  `A365_MESSAGE_SCHEMA_VERSION`.
 
-## [0.3.0]
+## [1.0.0] - 2026-05-01
 
 ### Breaking Changes
 

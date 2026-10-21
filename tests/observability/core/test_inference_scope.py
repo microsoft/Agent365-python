@@ -13,6 +13,7 @@ from microsoft_agents_a365.observability.core import (
     InferenceOperationType,
     InferenceScope,
     Request,
+    ServiceEndpoint,
     SpanDetails,
     configure,
     extract_context_from_headers,
@@ -23,7 +24,20 @@ from microsoft_agents_a365.observability.core.config import _telemetry_manager
 from microsoft_agents_a365.observability.core.constants import (
     CHANNEL_LINK_KEY,
     CHANNEL_NAME_KEY,
+    GEN_AI_AGENT_ID_KEY,
+    GEN_AI_AGENT_TYPE_KEY,
+    GEN_AI_OPERATION_NAME_KEY,
+    GEN_AI_PROVIDER_NAME_KEY,
+    GEN_AI_REQUEST_MODEL_KEY,
+    GEN_AI_RESPONSE_MODEL_KEY,
+    GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
+    SERVER_ADDRESS_KEY,
+    SERVER_PORT_KEY,
 )
+from microsoft_agents_a365.observability.core.models.agent_type import AgentType
 from microsoft_agents_a365.observability.core.opentelemetry_scope import OpenTelemetryScope
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -108,6 +122,121 @@ class TestInferenceScope(unittest.TestCase):
         self.assertEqual(details.inputTokens, 150)
         self.assertEqual(details.outputTokens, 75)
         self.assertEqual(details.finishReasons, ["stop"])
+
+    def test_inference_call_details_requires_request_or_response_model(self):
+        """Test that an inference call always has model identity."""
+        with self.assertRaisesRegex(ValueError, "model or responseModel"):
+            InferenceCallDetails(
+                operationName=InferenceOperationType.CHAT,
+                model=None,
+                providerName="openai",
+            )
+
+    def test_inference_scope_emits_model_observation_attributes(self):
+        """Test the attributes required by the model observation pipeline."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.TEXT_COMPLETION,
+            model=None,
+            responseModel="gpt-4.1-2025-04-14",
+            providerName="openai",
+            inputTokens=150,
+            outputTokens=75,
+            cacheReadInputTokens=30,
+            cacheWriteInputTokens=10,
+            endpoint=ServiceEndpoint(hostname="models.example.com", port=443),
+        )
+        agent_details = AgentDetails(
+            agent_id="test-inference-agent",
+            agent_type="Foundry",
+        )
+
+        scope = InferenceScope.start(Request(), details, agent_details)
+        scope.dispose()
+
+        span = self.span_exporter.get_finished_spans()[-1]
+        attributes = span.attributes or {}
+
+        self.assertEqual(attributes[GEN_AI_OPERATION_NAME_KEY], "text_completion")
+        self.assertEqual(attributes[GEN_AI_PROVIDER_NAME_KEY], "openai")
+        self.assertEqual(attributes[GEN_AI_RESPONSE_MODEL_KEY], "gpt-4.1-2025-04-14")
+        self.assertEqual(attributes[GEN_AI_AGENT_ID_KEY], "test-inference-agent")
+        self.assertEqual(attributes[GEN_AI_AGENT_TYPE_KEY], "Foundry")
+        self.assertEqual(attributes[SERVER_ADDRESS_KEY], "models.example.com")
+        self.assertEqual(attributes[SERVER_PORT_KEY], 443)
+        self.assertEqual(attributes[GEN_AI_USAGE_INPUT_TOKENS_KEY], 150)
+        self.assertEqual(attributes[GEN_AI_USAGE_OUTPUT_TOKENS_KEY], 75)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 30)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY], 10)
+
+    def test_inference_scope_operation_name_mapping_per_type(self):
+        """Each InferenceOperationType maps to its canonical lowercase semconv value,
+        used for both the span name prefix and gen_ai.operation.name - not hardcoded
+        to 'chat' for every operation type."""
+        cases = [
+            (InferenceOperationType.CHAT, "chat"),
+            (InferenceOperationType.TEXT_COMPLETION, "text_completion"),
+            (InferenceOperationType.GENERATE_CONTENT, "generate_content"),
+        ]
+        for operation_type, expected_name in cases:
+            with self.subTest(operation_type=operation_type):
+                details = InferenceCallDetails(
+                    operationName=operation_type,
+                    model="gemini-2.0-flash",
+                    providerName="gcp.gemini",
+                )
+
+                scope = InferenceScope.start(Request(), details, self.agent_details)
+                scope.dispose()
+
+                span = self.span_exporter.get_finished_spans()[-1]
+                attributes = span.attributes or {}
+
+                self.assertEqual(attributes[GEN_AI_OPERATION_NAME_KEY], expected_name)
+                self.assertEqual(span.name, f"{expected_name} gemini-2.0-flash")
+
+    def test_whitespace_only_model_is_normalized_when_response_model_present(self):
+        """A whitespace-only `model` is normalized to None (not treated as present)
+        when a valid `responseModel` is also provided."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.CHAT,
+            model="   ",
+            providerName="openai",
+            responseModel="gpt-4.1",
+        )
+
+        self.assertIsNone(details.model)
+        self.assertEqual(details.responseModel, "gpt-4.1")
+
+        scope = InferenceScope.start(Request(), details, self.agent_details)
+        scope.dispose()
+
+        span = self.span_exporter.get_finished_spans()[-1]
+        attributes = span.attributes or {}
+
+        self.assertEqual(span.name, "chat gpt-4.1")
+        self.assertNotIn(GEN_AI_REQUEST_MODEL_KEY, attributes)
+        self.assertEqual(attributes[GEN_AI_RESPONSE_MODEL_KEY], "gpt-4.1")
+
+    def test_agent_type_enum_member_emits_string_value(self):
+        """Passing an AgentType enum member for agent_type emits its string
+        `.value` as the span attribute, instead of being silently dropped by OTel."""
+        details = InferenceCallDetails(
+            operationName=InferenceOperationType.CHAT,
+            model="gpt-4",
+            providerName="openai",
+        )
+        agent_details = AgentDetails(
+            agent_id="test-inference-agent",
+            agent_type=AgentType.FOUNDRY,
+        )
+
+        scope = InferenceScope.start(Request(), details, agent_details)
+        scope.dispose()
+
+        span = self.span_exporter.get_finished_spans()[-1]
+        attributes = span.attributes or {}
+
+        self.assertEqual(attributes[GEN_AI_AGENT_TYPE_KEY], "Foundry")
 
     def test_inference_scope_start_method(self):
         """Test InferenceScope.start() static method."""

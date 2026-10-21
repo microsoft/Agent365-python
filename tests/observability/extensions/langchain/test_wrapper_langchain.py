@@ -6,9 +6,221 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from microsoft_agents_a365.observability.core import configure
+from microsoft_agents_a365.observability.core.constants import (
+    GEN_AI_REQUEST_MODEL_KEY,
+    GEN_AI_RESPONSE_FINISH_REASONS_KEY,
+    GEN_AI_RESPONSE_MODEL_KEY,
+    GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_INPUT_TOKENS_KEY,
+    GEN_AI_USAGE_OUTPUT_TOKENS_KEY,
+)
 from microsoft_agents_a365.observability.extensions.langchain.tracer_instrumentor import (
     CustomLangChainInstrumentor,
 )
+from microsoft_agents_a365.observability.extensions.langchain.utils import model_name, token_counts
+
+
+class TestLangChainModelObservationAttributes(unittest.TestCase):
+    """Unit tests for model observation attribute mapping."""
+
+    def test_request_and_response_models_are_distinct(self):
+        """Test that requested and served model names use distinct attributes."""
+        outputs = {"llm_output": {"model_name": "gpt-4.1-2025-04-14"}}
+        extra = {"metadata": {"ls_model_name": "gpt-4.1"}}
+
+        attributes = dict(model_name(outputs, extra))
+
+        self.assertEqual(attributes[GEN_AI_REQUEST_MODEL_KEY], "gpt-4.1")
+        self.assertEqual(attributes[GEN_AI_RESPONSE_MODEL_KEY], "gpt-4.1-2025-04-14")
+
+    def test_cache_token_counts_use_standard_attributes(self):
+        """Test that cache token counts use model observation attributes."""
+        outputs = {
+            "llm_output": {
+                "token_usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "input_token_details": {
+                        "cache_read": 40,
+                        "cache_creation": 10,
+                    },
+                }
+            }
+        }
+
+        attributes = dict(token_counts(outputs))
+
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 40)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY], 10)
+
+    def test_cache_token_counts_read_from_generated_message_usage_metadata(self):
+        """
+        Test that cache token counts are extracted from the generated
+        message's normalized `usage_metadata` (LangChain's `dumpd`-style
+        serialized AIMessage), not just from a synthetic `llm_output`
+        location. This mirrors the actual shape LangChain produces for
+        providers such as ChatAnthropic, where the raw `llm_output["usage"]`
+        only carries flat (non-normalized) fields while the message itself
+        carries the normalized `input_token_details`.
+        """
+        outputs = {
+            "llm_output": {
+                # Anthropic's raw usage payload: flat cache fields, no
+                # normalized input_token_details.
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "cache_read_input_tokens": 40,
+                    "cache_creation_input_tokens": 10,
+                }
+            },
+            "generations": [
+                [
+                    {
+                        "message": {
+                            "lc": 1,
+                            "type": "constructor",
+                            "id": ["langchain", "schema", "messages", "AIMessage"],
+                            "kwargs": {
+                                "content": "hello",
+                                "usage_metadata": {
+                                    "input_tokens": 100,
+                                    "output_tokens": 20,
+                                    "total_tokens": 120,
+                                    "input_token_details": {
+                                        "cache_read": 40,
+                                        "cache_creation": 10,
+                                    },
+                                },
+                            },
+                        }
+                    }
+                ]
+            ],
+        }
+
+        attributes = dict(token_counts(outputs))
+
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 40)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY], 10)
+
+    def test_cache_token_counts_fall_back_to_raw_anthropic_flat_fields(self):
+        """
+        Test that cache token counts fall back to Anthropic's raw, flat
+        `llm_output["usage"]` fields when no normalized `usage_metadata` is
+        available on the generated message.
+        """
+        outputs = {
+            "llm_output": {
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "cache_read_input_tokens": 40,
+                    "cache_creation_input_tokens": 10,
+                }
+            },
+            "generations": [
+                [{"message": {"lc": 1, "type": "constructor", "kwargs": {"content": "hello"}}}]
+            ],
+        }
+
+        attributes = dict(token_counts(outputs))
+
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 40)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_WRITE_INPUT_TOKENS_KEY], 10)
+
+    def test_reasoning_tokens_from_message_usage_metadata_are_not_emitted_as_finish_reasons(self):
+        """
+        Test that a reasoning *token count* sourced only from the generated
+        message's normalized `usage_metadata` (no `llm_output` present) is
+        never emitted under `GEN_AI_RESPONSE_FINISH_REASONS_KEY` - that
+        attribute is reserved for actual finish reasons, not token counts.
+        """
+        outputs = {
+            "generations": [
+                [
+                    {
+                        "message": {
+                            "lc": 1,
+                            "type": "constructor",
+                            "id": ["langchain", "schema", "messages", "AIMessage"],
+                            "kwargs": {
+                                "content": "hello",
+                                "usage_metadata": {
+                                    "input_tokens": 100,
+                                    "output_tokens": 20,
+                                    "total_tokens": 120,
+                                    "output_token_details": {
+                                        "reasoning": 8,
+                                    },
+                                },
+                            },
+                        }
+                    }
+                ]
+            ],
+        }
+
+        attributes = dict(token_counts(outputs))
+
+        self.assertNotIn(GEN_AI_RESPONSE_FINISH_REASONS_KEY, attributes)
+        self.assertEqual(attributes[GEN_AI_USAGE_INPUT_TOKENS_KEY], 100)
+        self.assertEqual(attributes[GEN_AI_USAGE_OUTPUT_TOKENS_KEY], 20)
+
+    def test_token_counts_are_aggregated_across_batch_entries(self):
+        """
+        Test that `token_counts` sums usage across every batch entry in
+        `outputs["generations"]` (one entry per input in a batched call),
+        rather than only reading the first batch entry and silently
+        dropping usage for the rest.
+        """
+        outputs = {
+            "generations": [
+                [
+                    {
+                        "message": {
+                            "lc": 1,
+                            "type": "constructor",
+                            "id": ["langchain", "schema", "messages", "AIMessage"],
+                            "kwargs": {
+                                "content": "first",
+                                "usage_metadata": {
+                                    "input_tokens": 10,
+                                    "output_tokens": 2,
+                                    "total_tokens": 12,
+                                    "input_token_details": {"cache_read": 1},
+                                },
+                            },
+                        }
+                    }
+                ],
+                [
+                    {
+                        "message": {
+                            "lc": 1,
+                            "type": "constructor",
+                            "id": ["langchain", "schema", "messages", "AIMessage"],
+                            "kwargs": {
+                                "content": "second",
+                                "usage_metadata": {
+                                    "input_tokens": 100,
+                                    "output_tokens": 20,
+                                    "total_tokens": 120,
+                                    "input_token_details": {"cache_read": 4},
+                                },
+                            },
+                        }
+                    }
+                ],
+            ],
+        }
+
+        attributes = dict(token_counts(outputs))
+
+        self.assertEqual(attributes[GEN_AI_USAGE_INPUT_TOKENS_KEY], 110)
+        self.assertEqual(attributes[GEN_AI_USAGE_OUTPUT_TOKENS_KEY], 22)
+        self.assertEqual(attributes[GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS_KEY], 5)
 
 
 class TestInstrumentorLangChain(unittest.TestCase):
