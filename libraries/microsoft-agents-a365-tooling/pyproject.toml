@@ -23,6 +23,7 @@ classifiers = [
 ]
 license = {text = "MIT"}
 dependencies = [
+    "aiohttp",
     "pydantic",
     "typing-extensions",
     "microsoft-agents-hosting-core",
