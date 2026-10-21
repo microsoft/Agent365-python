@@ -8,7 +8,7 @@ dynamic = ["version"]
 authors = [
     { name = "Microsoft", email = "support@microsoft.com" },
 ]
-description = "agent-hooks integration for Agent 365 Tooling SDK: Microsoft Defender for AI real-time protection"
+description = "agent-hooks integration for Agent 365 Tooling SDK: Microsoft Defender for AI real-time protection and Microsoft Purview data loss prevention"
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [

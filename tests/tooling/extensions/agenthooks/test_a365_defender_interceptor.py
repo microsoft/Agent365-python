@@ -444,10 +444,10 @@ async def test_a_slow_evaluation_callback_does_not_hold_up_or_change_the_verdict
         release.wait(5)
         seen.append(result)
 
-    options = DefenderRtpOptions(enabled=True, endpoint=ENDPOINT)
+    options = DefenderRtpOptions(enabled=True, endpoint=ENDPOINT, timeout_seconds=0.25)
     agent = DefenderRtpAgentContext(agent_id=AGENT_ID, tenant_id=TENANT_ID)
     emitter = add_a365_defender(
-        create_protection_emitter(interceptor_timeout_seconds=0.5),
+        create_protection_emitter(interceptor_timeout_seconds=0.5, defender=options),
         A365DefenderInterceptor(
             DefenderRtpClient(options, FakeDefenderSession(allow)),  # type: ignore[arg-type]
             lambda _context: A365DefenderCall(agent, TokenSource().resolve),
@@ -794,7 +794,21 @@ def test_creates_an_enforcing_strictest_emitter_with_room_for_the_defender_timeo
     assert emitter.composition == CompositionConfig.strictest(SynthesisPolicy.DENY)
     assert emitter._timeout == 5.0
     assert create_protection_emitter()._timeout == 12.0
-    assert create_protection_emitter(interceptor_timeout_seconds=1.5)._timeout == 1.5
+    explicit = create_protection_emitter(
+        interceptor_timeout_seconds=1.5, defender=DefenderRtpOptions(timeout_seconds=1)
+    )
+    assert explicit._timeout == 1.5
+
+
+@pytest.mark.parametrize(
+    ("timeout", "defender"),
+    [(1.5, None), (10.0, None), (3, DefenderRtpOptions(timeout_seconds=3)), (0.5, None)],
+)
+def test_rejects_an_interceptor_timeout_that_does_not_exceed_the_defender_timeout(
+    timeout: float, defender: DefenderRtpOptions | None
+) -> None:
+    with pytest.raises(ValueError, match=r"must exceed the Defender timeout"):
+        create_protection_emitter(interceptor_timeout_seconds=timeout, defender=defender)
 
 
 @pytest.mark.parametrize("timeout", [float("nan"), float("inf"), 0, -1.0, True])
