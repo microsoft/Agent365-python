@@ -1,6 +1,6 @@
 # Microsoft Agent 365 SDK Tests
 
-Unit and integration tests for the Microsoft Agent 365-Python SDK. This test suite ensures reliability, maintainability, and quality across all modules including runtime, tooling, notifications, and observability extensions.
+Unit and package/release tests for Runtime, Tooling, and published distribution metadata. All remaining tests are offline/mocked. The dedicated observability suite, including its live integration tests, has been removed; see the [migration guide](../docs/observability-migration.md).
 
 ## Usage
 

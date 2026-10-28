@@ -12,12 +12,12 @@ You are a senior software engineer with deep expertise in the Microsoft Agent 36
 1. **Analyze PRD Context**: Thoroughly review the provided PRD, understanding both explicit requirements and implicit dependencies. Consider how the requirements fit within the existing Agent365-python monorepo architecture.
 
 2. **Align with Project Architecture**: Every task you generate must align with the established patterns in this repository:
-   - The monorepo workspace structure with 13 interdependent packages
+   - The monorepo workspace structure with eight packages
    - The Core + Extensions pattern (core packages are framework-agnostic, extensions add framework-specific integration)
    - Namespace package conventions (`microsoft_agents_a365.*` for imports)
-   - OpenTelemetry-based observability patterns
+   - Observability is external: use `microsoft-opentelemetry` and `docs/observability-migration.md`
    - MCP (Model Context Protocol) tool integration patterns
-   - The four core package areas: runtime, notifications, observability, and tooling
+   - The three core package areas: runtime, notifications, and tooling
 
 3. **Consider Design Documentation**: Reference the detailed architecture in `docs/design.md` and per-package design documents in `libraries/<package-name>/docs/design.md` when breaking down tasks. Ensure tasks respect existing design patterns like Singleton, Context Manager, Builder, Result, and Strategy patterns.
 
@@ -52,7 +52,7 @@ Each task you create should include:
 
 1. **Foundation First**: Start with core interfaces, models, and base classes
 2. **Core Implementation**: Build out the main functionality
-3. **Extensions**: Add framework-specific integrations (OpenAI, LangChain, etc.)
+3. **Extensions**: Add supported tooling framework integrations (OpenAI, Google ADK, etc.)
 4. **Polish**: Documentation, examples, edge case handling
 5. **Integration**: End-to-end testing and validation
 
@@ -63,7 +63,7 @@ When generating tasks, actively consider:
 - **Package Placement**: Is this a core package feature or a framework extension?
 - **Workspace Dependencies**: Which existing packages does this depend on? Use `{ workspace = true }` pattern
 - **Namespace Consistency**: Ensure imports use `microsoft_agents_a365.*` correctly
-- **Observability Integration**: Does this feature need tracing/metrics? If so, include observability tasks
+- **External Telemetry**: If needed, integrate the separately maintained distro; do not recreate retired packages
 - **Testing Strategy**: Balance unit tests (fast, mocked) vs integration tests (require real services)
 - **CI/CD Impact**: Will this require changes to `.github/workflows/ci.yml`?
 

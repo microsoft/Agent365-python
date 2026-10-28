@@ -22,8 +22,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_PREFIX = "microsoft-agents-a365-"
 SECURITY_FLOORS = {
     "anyio": "4.14.2",
-    "langchain-core": "1.3.3",
-    "langsmith": "0.8.18",
     "mcp": "1.28.1",
     "pyasn1": "0.6.4",
     "pyjwt": "2.14.0",
@@ -32,12 +30,6 @@ SECURITY_FLOORS = {
 MCP_REQUIREMENTS = {"mcp", "anyio", "python-multipart", "pyjwt"}
 EXPECTED_REQUIREMENTS = {
     "notifications": {"pyjwt"},
-    "observability-core": {"pyjwt"},
-    "observability-extensions-agent-framework": {"pyjwt"},
-    "observability-extensions-langchain": {"langchain-core", "langsmith", "anyio", "pyjwt"},
-    "observability-extensions-openai": MCP_REQUIREMENTS,
-    "observability-extensions-semantic-kernel": MCP_REQUIREMENTS,
-    "observability-hosting": {"pyjwt"},
     "runtime": {"pyjwt"},
     "tooling": {"pyjwt"},
     "tooling-extensions-agentframework": MCP_REQUIREMENTS | {"pyasn1"},
@@ -112,6 +104,17 @@ def published_requirements(
 
     assert set(requirements) == {PACKAGE_PREFIX + suffix for suffix in EXPECTED_REQUIREMENTS}
     return requirements
+
+
+def test_no_retired_distribution_dependencies(
+    published_requirements: dict[str, list[Requirement]],
+) -> None:
+    for package, requirements in published_requirements.items():
+        assert not package.startswith(PACKAGE_PREFIX + "observability")
+        for requirement in requirements:
+            assert not canonicalize_name(requirement.name).startswith(
+                PACKAGE_PREFIX + "observability"
+            ), f"{package} still depends on {requirement}"
 
 
 def _runtime_requirements(

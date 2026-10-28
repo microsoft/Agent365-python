@@ -2,6 +2,34 @@
 
 This document describes how to manage versioning for the Microsoft Agent 365 Python SDK, whether you're creating development builds or official releases.
 
+**Observability is retired.** Only the eight active workspace distributions may
+be released. Follow the [migration and package-owner checklist](docs/observability-migration.md)
+for PyPI archival and external/old-branch publishing controls.
+
+## Mandatory fresh build and artifact verification
+
+Never upload a reusable `dist/*` directory or an old artifact drop. Each build
+below creates a fresh `SDK_DIST_DIR` and verifies the exact wheel set, version,
+metadata dependencies, and absence of retired code. Set the version and build
+backend path before invoking a build:
+
+```bash
+export PYTHONPATH="$PWD/versioning/helper"
+export AGENT365_PYTHON_SDK_PACKAGE_VERSION="$(cd versioning && python -m setuptools_git_versioning)"
+```
+
+For PowerShell:
+
+```powershell
+$env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
+Push-Location versioning
+$env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = python -m setuptools_git_versioning
+Pop-Location
+$output = Join-Path $env:TEMP ("agent365-wheels-" + [guid]::NewGuid())
+uv build --all-packages --wheel --out-dir $output
+uv run --frozen --no-sync python scripts\verify_release_artifacts.py $output --version $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION
+```
+
 ## Branch Strategy
 
 The repository follows a specific branch strategy for releases:
@@ -65,8 +93,9 @@ A development version is generated in these scenarios:
 
 2. **Build packages with the dev version:**
    ```bash
-   # The version is automatically calculated during build
-   uv build --all-packages --wheel
+   SDK_DIST_DIR="$(mktemp -d)"
+   uv build --all-packages --wheel --out-dir "$SDK_DIST_DIR"
+   uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION"
    ```
 
 3. **Example output:**
@@ -166,7 +195,11 @@ Official releases must be done from a `release/*` branch:
    git push origin v0.2.0
    ```
 
-> **Note:** The CI pipeline will only publish packages when tags are pushed on `release/*` branches.
+> **Important:** The workflow has branch-push triggers, not a tag-push trigger.
+> SDK-changing pushes to `release/*` may publish development versions without a
+> tag. Tags control version calculation; pushing a tag alone does not start this
+> workflow. Coordinate the tagged build/publication through the approved release
+> pipeline rather than relying on a tag to gate publishing.
 
 #### Step 3: Verify the Release Version
 
@@ -184,7 +217,9 @@ Official releases must be done from a `release/*` branch:
 
 3. **Build packages:**
    ```bash
-   uv build --all-packages --wheel
+   SDK_DIST_DIR="$(mktemp -d)"
+   uv build --all-packages --wheel --out-dir "$SDK_DIST_DIR"
+   uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION"
    ```
    
    **Expected output:**
@@ -195,12 +230,15 @@ Official releases must be done from a `release/*` branch:
 
 #### Step 4: Publish to Package Repository
 
-Once the official build is created, the CI pipeline will automatically publish to your package repository when the tag is pushed on a `release/*` branch.
+The checked-in workflow verifies and uploads only the fresh wheel directory on
+SDK-changing `release/*` branch pushes, using one Python matrix job. Its target
+is the externally configured `.pypirc` repository `Agent365`; downstream
+promotion to PyPI must be audited separately. Tags alone do not trigger it.
 
 ```bash
-# The CI pipeline does this automatically for release/* branches with tags
-# To manually publish (if needed):
-uv run twine upload dist/*.whl
+# Only for an explicitly approved manual release, after a fresh build:
+uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION"
+uv run --frozen --no-sync --with twine twine upload --config-file .pypirc -r Agent365 "$SDK_DIST_DIR"/*.whl
 ```
 
 #### Step 5: Merge Release Branch Back (Optional)
@@ -284,7 +322,9 @@ You need to create a hotfix `0.2.1` after `0.2.0` has been released:
 cd versioning
 export AGENT365_PYTHON_SDK_PACKAGE_VERSION=$(python -m setuptools_git_versioning)
 cd ..
-uv build --all-packages --wheel
+SDK_DIST_DIR="$(mktemp -d)"
+uv build --all-packages --wheel --out-dir "$SDK_DIST_DIR"
+uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION"
 ```
 
 ### Problem: Version doesn't match expectations
@@ -359,7 +399,7 @@ git tag -l "v0.2.0"
 | List release branches | `git branch -r \| grep release/` |
 | Delete local tag | `git tag -d v0.2.0` |
 | Delete remote tag | `git push origin :refs/tags/v0.2.0` |
-| Build packages | `uv build --all-packages --wheel` |
+| Build and verify packages | Follow [the fresh-directory build procedure](#mandatory-fresh-build-and-artifact-verification) |
 | View tag details | `git show v0.2.0` |
 | Merge release to main | `git checkout main && git merge release/0.2.0` |
 
@@ -381,4 +421,3 @@ If you encounter issues with versioning:
 2. Verify your Git setup with `git log` and `git describe`
 3. Check CI logs for version calculation errors
 4. Open an issue with version output and Git status
-

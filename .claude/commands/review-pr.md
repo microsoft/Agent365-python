@@ -204,15 +204,15 @@ The following fields are **required** for posting inline comments on the PR:
 
 **Example:**
 ```diff
-@@ -45,6 +45,9 @@ def initialize_telemetry(self):
-         tracer = get_tracer()
-+        # Configure span processor
-+        span_processor = BatchSpanProcessor(exporter)
-+        tracer_provider.add_span_processor(span_processor)
-         return tracer_provider
+@@ -45,6 +45,9 @@ def resolve_endpoint(self):
+         endpoint = get_endpoint()
++        if endpoint is None:
++            raise ValueError("Missing endpoint")
++        validate_endpoint(endpoint)
+         return endpoint
 ```
-For a comment on the `tracer_provider.add_span_processor` line:
-- **File**: `libraries/microsoft-agents-a365-observability-core/src/microsoft_agents_a365/observability/core/telemetry.py`
+For a comment on the `validate_endpoint` line:
+- **File**: `libraries/microsoft-agents-a365-runtime/microsoft_agents_a365/runtime/power_platform_api_discovery.py`
 - **Diff Line**: `48` (line 45 + 3 new lines)
 - **Diff Side**: `RIGHT` (it's an addition)
 

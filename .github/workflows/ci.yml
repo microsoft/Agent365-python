@@ -70,7 +70,7 @@ jobs:
     - id: check_python_sdk
       name: Check Python SDK changes
       run: |
-        if git diff --name-only "${{ steps.git_refs.outputs.base }}" "${{ steps.git_refs.outputs.head }}" -- 'libraries/**' 'setup.py' 'pyproject.toml' 'versioning/**' | grep -q .; then
+        if git diff --name-only "${{ steps.git_refs.outputs.base }}" "${{ steps.git_refs.outputs.head }}" -- 'libraries/**' 'setup.py' 'pyproject.toml' 'uv.lock' 'versioning/**' 'scripts/verify_release_artifacts.py' '.github/workflows/ci.yml' | grep -q .; then
           echo "Python SDK changes detected"
           echo "changed=true" >> $GITHUB_OUTPUT
         else
@@ -106,7 +106,7 @@ jobs:
         cache-dependency-glob: "./pyproject.toml"
     
     - name: Install the project
-      run: uv lock && uv sync --locked --all-extras --dev
+      run: uv sync --locked --all-extras --dev
 
     - name: Verify centralized version constraints
       run: uv run --frozen tox -e verify-constraints
@@ -119,48 +119,44 @@ jobs:
 
     - name: Build package
       run: |
-        AGENT365_PYTHON_SDK_PACKAGE_VERSION=${{ needs.version-number.outputs.PACKAGE_VERSION }} uv build --all-packages --wheel
+        build_dir=$(mktemp -d "$RUNNER_TEMP/agent365-wheels.XXXXXX")
+        echo "SDK_DIST_DIR=$build_dir" >> "$GITHUB_ENV"
+        uv build --all-packages --wheel --out-dir "$build_dir"
+        uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$build_dir" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION"
       env:
         AGENT365_PYTHON_SDK_PACKAGE_VERSION: ${{ needs.version-number.outputs.PACKAGE_VERSION }}
 
     - name: Run unit tests
       run: uv run --frozen tox -e py3${{ matrix.python-version == '3.11' && '11' || '12' }}
 
-    - name: Run integration tests
-      # Only run integration tests if secrets are available
-      if: ${{ vars.RUN_INTEGRATION_TESTS == 'true' }}
-      run: uv run --frozen tox -e integration
-      env:
-        AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-        AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
-        AZURE_OPENAI_DEPLOYMENT: ${{ vars.AZURE_OPENAI_DEPLOYMENT }}
-        AZURE_OPENAI_API_VERSION: ${{ vars.AZURE_OPENAI_API_VERSION }}        
-        ENABLE_OBSERVABILITY: true
-
     # Copy package and samples to drop folder
     - name: Copy package and samples to drop folder
       run: |
-        mkdir -p ~/drop/python-${{ matrix.python-version }}/dist && cp -v dist/*.whl $_
+        drop_dir=$(mktemp -d "$RUNNER_TEMP/agent365-drop.XXXXXX")
+        echo "SDK_DROP_DIR=$drop_dir" >> "$GITHUB_ENV"
+        mkdir "$drop_dir/dist"
+        cp -v "$SDK_DIST_DIR"/*.whl "$drop_dir/dist/"
 
     # Zip files since upload-artifact does not seem like to like folders
     - name: Create zip
-      run: cd ~/drop/python-${{ matrix.python-version }} && zip -r ~/drop/python-${{ matrix.python-version }}.zip .
+      run: cd "$SDK_DROP_DIR" && zip -r "$SDK_DROP_DIR.zip" .
 
     - name: Upload package and samples as artifacts
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: python-${{ matrix.python-version }}
-        path: ~/drop/python-${{ matrix.python-version }}.zip
+        path: ${{ env.SDK_DROP_DIR }}.zip
 
     - name: Publish
       # Only publish when:
       # 1. It's a push event (not a PR)
       # 2. The branch is a release/* branch
       # 3. There are SDK changes
-      if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && needs.changed-sdks.outputs.python-sdk == 'true'
+      # 4. Only one matrix job uploads the platform-independent wheels
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && needs.changed-sdks.outputs.python-sdk == 'true' && matrix.python-version == '3.11'
       run: |
-        uv run twine upload --config-file .pypirc -r Agent365 dist/*
-      continue-on-error: true
+        uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "${{ needs.version-number.outputs.PACKAGE_VERSION }}"
+        uv run --frozen --no-sync --with twine twine upload --config-file .pypirc -r Agent365 "$SDK_DIST_DIR"/*.whl
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.AZURE_DEVOPS_TOKEN }}
