@@ -57,6 +57,7 @@ def test_release_gate(release_dir: Path, problem: str) -> None:
             dependency='microsoft_agents_a365_observability_core; extra == "legacy"',
         )
     elif problem == "stale-version":
+        next(release_dir.glob("microsoft_agents_a365_runtime-*.whl")).unlink()
         _wheel(release_dir, runtime, version="1.2.2")
     elif problem == "missing":
         next(release_dir.glob("*.whl")).unlink()
@@ -83,3 +84,6 @@ def test_release_gate(release_dir: Path, problem: str) -> None:
     else:
         assert result.returncode != 0
         assert "Release artifact verification failed" in result.stderr
+        if problem == "stale-version":
+            assert "Stale version in" in result.stderr
+            assert "expected 1.2.3" in result.stderr

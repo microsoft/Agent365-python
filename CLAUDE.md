@@ -34,11 +34,24 @@ uv lock && uv sync --locked --all-extras --dev
 
 ### Building
 
+Bash (macOS/Linux):
+
+```bash
+# Build all packages into a fresh output directory
+export AGENT365_PYTHON_SDK_PACKAGE_VERSION="0.1.0"
+export PYTHONPATH="$PWD/versioning/helper"
+output="$(mktemp -d)"
+uv build --all-packages --wheel --out-dir "$output"
+uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$output" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION"
+```
+
+PowerShell (Windows):
+
 ```powershell
 # Build all packages (requires version environment variable)
 $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = "0.1.0"
 $env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
-$output = Join-Path $env:TEMP ("agent365-wheels-" + [guid]::NewGuid())
+$output = Join-Path ([System.IO.Path]::GetTempPath()) ("agent365-wheels-" + [guid]::NewGuid())
 uv build --all-packages --wheel --out-dir $output
 uv run --frozen --no-sync python scripts\verify_release_artifacts.py $output --version $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION
 ```

@@ -25,7 +25,7 @@ $env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
 Push-Location versioning
 $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = python -m setuptools_git_versioning
 Pop-Location
-$output = Join-Path $env:TEMP ("agent365-wheels-" + [guid]::NewGuid())
+$output = Join-Path ([System.IO.Path]::GetTempPath()) ("agent365-wheels-" + [guid]::NewGuid())
 uv build --all-packages --wheel --out-dir $output
 uv run --frozen --no-sync python scripts\verify_release_artifacts.py $output --version $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION
 ```
