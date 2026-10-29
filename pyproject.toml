@@ -240,6 +240,7 @@ requires = ["tox>=4.23", "tox-uv>=1.18"]
 [tool.tox.env_run_base]
 runner = "uv-venv-lock-runner"
 uv_sync_flags = ["--all-extras", "--dev"]
+set_env = { PYTHONPATH = "{tox_root}/versioning/helper" }
 commands = [["pytest", "tests/", "-v", "--tb=short", "-m", "not integration", { replace = "posargs", default = "", extend = true }]]
 
 [tool.tox.env.py311]
