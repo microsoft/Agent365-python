@@ -21,13 +21,13 @@ export AGENT365_PYTHON_SDK_PACKAGE_VERSION="$(cd versioning && python -m setupto
 For PowerShell:
 
 ```powershell
-$env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
+$env:PYTHONPATH = Join-Path (Get-Location) "versioning/helper"
 Push-Location versioning
 $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = python -m setuptools_git_versioning
 Pop-Location
 $output = Join-Path ([System.IO.Path]::GetTempPath()) ("agent365-wheels-" + [guid]::NewGuid())
 uv build --all-packages --wheel --out-dir $output
-uv run --frozen --no-sync python scripts\verify_release_artifacts.py $output --version $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION
+uv run --frozen --no-sync python scripts/verify_release_artifacts.py $output --version $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION
 ```
 
 ## Branch Strategy
@@ -244,8 +244,8 @@ and supply the appropriate `TWINE_USERNAME` and `TWINE_PASSWORD` credentials.
 
 ```bash
 # Only for an explicitly approved manual release, after a fresh build:
-: "${TWINE_REPOSITORY_URL:?Set the approved package-upload endpoint}"
-uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION"
+: "${TWINE_REPOSITORY_URL:?Set the approved package-upload endpoint}" &&
+uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION" &&
 uv run --frozen --no-sync --with twine twine upload --non-interactive --repository-url "$TWINE_REPOSITORY_URL" "$SDK_DIST_DIR"/*.whl
 ```
 
