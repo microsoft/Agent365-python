@@ -286,11 +286,15 @@ wheel builds too. Never upload an old checkout's `dist/*` or replay old artifact
   historical workflow reruns from using live retired-project credentials.
   Remove unused observability integration-test credentials and
   `RUN_INTEGRATION_TESTS` configuration after checking other workflows' needs.
+- [ ] Before enabling release uploads, set the repository variable
+  `AGENT365_PACKAGE_REPOSITORY_URL` to the approved package-upload endpoint and
+  configure the `AZURE_DEVOPS_TOKEN` secret with the appropriate feed permissions.
+  The workflow passes this URL directly to Twine and fails explicitly if it is
+  missing; no `.pypirc` is required and there is no default public PyPI target.
 - [ ] Audit external Azure DevOps/release definitions, approvals, service connections,
-  artifact promotion/retention, and package-feed-to-PyPI mirroring. This repository's
-  workflow uploads to a configured `.pypirc` repository named `Agent365`, using
-  `AZURE_DEVOPS_TOKEN`; that is not proof it publishes directly to public PyPI.
-  The external configuration and downstream promotions are not defined here.
+  artifact promotion/retention, and package-feed-to-PyPI mirroring. A configured
+  upload endpoint is not proof of direct public PyPI publishing. The external
+  configuration and downstream promotions are not defined here.
 - [ ] Remove retired artifacts from pending release inputs/caches/staging drops
   without deleting public releases or unrelated artifacts. Require the active
   distribution allowlist at every external upload/promotion boundary.

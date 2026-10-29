@@ -155,8 +155,10 @@ jobs:
       # 4. Only one matrix job uploads the platform-independent wheels
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && needs.changed-sdks.outputs.python-sdk == 'true' && matrix.python-version == '3.11'
       run: |
+        : "${TWINE_REPOSITORY_URL:?Set the AGENT365_PACKAGE_REPOSITORY_URL repository variable to the approved upload endpoint}"
         uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "${{ needs.version-number.outputs.PACKAGE_VERSION }}"
-        uv run --frozen --no-sync --with twine twine upload --config-file .pypirc -r Agent365 "$SDK_DIST_DIR"/*.whl
+        uv run --frozen --no-sync --with twine twine upload --non-interactive --repository-url "$TWINE_REPOSITORY_URL" "$SDK_DIST_DIR"/*.whl
       env:
+        TWINE_REPOSITORY_URL: ${{ vars.AGENT365_PACKAGE_REPOSITORY_URL }}
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.AZURE_DEVOPS_TOKEN }}

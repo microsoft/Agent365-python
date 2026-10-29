@@ -152,9 +152,9 @@ See [versioning and safe builds](../HOW_TO_SET_A_VERSION.md).
 Use Python 3.11+ and uv. From the repository root in PowerShell:
 
 ```powershell
-$env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
+$env:PYTHONPATH = Join-Path (Get-Location) "versioning/helper"
 uv sync --locked --all-extras --dev
-uv run --frozen python scripts\verify_constraints.py
+uv run --frozen python scripts/verify_constraints.py
 uv run --frozen ruff check .
 uv run --frozen ruff format --check .
 uv run --frozen pytest tests -v --tb=short -m "not integration"
@@ -171,9 +171,9 @@ and verify it before any promotion or upload:
 
 ```powershell
 $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = "0.1.0"
-$output = Join-Path $env:TEMP ("agent365-wheels-" + [guid]::NewGuid())
+$output = Join-Path ([System.IO.Path]::GetTempPath()) ("agent365-wheels-" + [guid]::NewGuid())
 uv build --all-packages --wheel --out-dir $output
-uv run --frozen --no-sync python scripts\verify_release_artifacts.py $output --version $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION
+uv run --frozen --no-sync python scripts/verify_release_artifacts.py $output --version $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION
 ```
 
 All Python source needs Microsoft copyright headers, type annotations, explicit
