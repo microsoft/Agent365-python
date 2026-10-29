@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit", "packaging"]
+requires = ["setuptools>=83.0.0", "wheel", "tzdata", "tomlkit", "packaging"]
 build-backend = "build_backend"
 
 [project]
