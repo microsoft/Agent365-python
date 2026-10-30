@@ -11,7 +11,7 @@
 ## Overview
 
 ### Current State
-- ✅ Unit tests exist for `observability` and `runtime` modules
+- ✅ Unit tests exist for `runtime` modules; observability has [moved out of this repository](../docs/observability-migration.md)
 - ❌ Missing tests for `tooling` and `notifications` modules
 - ❌ No integration tests or CI/CD automation
 
@@ -41,7 +41,6 @@
 | 1.1 | Runtime unit tests | ✅ Complete |
 | 1.2 | Tooling unit tests | HIGH |
 | 1.3 | Notifications unit tests | HIGH |
-| 1.4 | Expand observability tests | MEDIUM |
 | 1.5 | Tooling extension tests | LOW |
 | 2 | Integration tests | MEDIUM |
 | 3 | CI/CD automation | HIGH |
@@ -85,18 +84,6 @@
 
 ---
 
-### 1.4 Observability Extensions
-**Priority:** MEDIUM
-
-| Extension | Status |
-|-----------|--------|
-| `agentframework` | ✅ Expand existing |
-| `langchain` | ✅ Expand existing |
-| `openai` | ✅ Expand existing |
-| `semantickernel` | ✅ Expand existing |
-
----
-
 ### 1.5 Tooling Extensions
 **Priority:** LOW
 
@@ -115,11 +102,9 @@
 
 | Integration | Status |
 |-------------|--------|
-| Runtime + Observability | ❌ Missing |
 | Tooling + Runtime | ❌ Missing |
 | Notifications + Runtime | ❌ Missing |
 | Agent Framework full flow | ❌ Missing |
-| LangChain full flow | ❌ Missing |
 
 ---
 

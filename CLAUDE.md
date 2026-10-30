@@ -4,14 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Microsoft Agent 365 SDK for Python - Enterprise-grade extensions for building production-ready AI agents for M365, Teams, Copilot Studio, and Webchat. This is a multi-package monorepo organized as a uv workspace with 13 interdependent packages.
+Microsoft Agent 365 SDK for Python - Enterprise-grade extensions for building production-ready AI agents for M365, Teams, Copilot Studio, and Webchat. This is a uv workspace with eight packages for Notifications, Runtime, and Tooling.
+
+**Observability is retired from this repository.** Do not reintroduce its packages,
+sources, imports, or release dependencies. Use the separately maintained
+`microsoft-opentelemetry` distro; see [migration and owner actions](docs/observability-migration.md).
 
 **Python Version**: 3.11+ (3.11 and 3.12 tested in CI)
 
 **For detailed architecture and design documentation**, see [docs/design.md](docs/design.md), which includes:
 - Complete package descriptions and usage examples
-- Design patterns (Singleton, Context Manager, Builder, Result, Strategy)
-- Data flow diagrams for agent invocation tracing and MCP tool discovery
+- Design patterns for operation results and environment-based configuration
+- MCP tool discovery and chat-history data flows
 - Configuration options and environment variables
 - Per-package design documents in `libraries/<package-name>/docs/design.md`
 
@@ -30,12 +34,26 @@ uv lock && uv sync --locked --all-extras --dev
 
 ### Building
 
-```bash
-# Build all packages (requires version environment variable)
-export AGENT365_PYTHON_SDK_PACKAGE_VERSION="0.1.0"  # Windows: $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = "0.1.0"
-uv build --all-packages --wheel
+Bash (macOS/Linux):
 
-# Built wheels are output to dist/
+```bash
+# Build all packages into a fresh output directory
+export AGENT365_PYTHON_SDK_PACKAGE_VERSION="0.1.0"
+export PYTHONPATH="$PWD/versioning/helper"
+output="$(mktemp -d)"
+uv build --all-packages --wheel --out-dir "$output"
+uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$output" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION"
+```
+
+PowerShell (Windows):
+
+```powershell
+# Build all packages (requires version environment variable)
+$env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = "0.1.0"
+$env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
+$output = Join-Path ([System.IO.Path]::GetTempPath()) ("agent365-wheels-" + [guid]::NewGuid())
+uv build --all-packages --wheel --out-dir $output
+uv run --frozen --no-sync python scripts\verify_release_artifacts.py $output --version $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION
 ```
 
 ### Testing
@@ -50,16 +68,13 @@ uv run --frozen pytest tests/runtime/test_environment_utils.py -v
 # Run tests matching pattern
 uv run --frozen pytest tests/ -k "environment" -v
 
-# Run integration tests (requires secrets/environment variables)
-uv run --frozen pytest -m integration -v --tb=short
-
 # Run with coverage report
 pytest tests/ --cov=libraries --cov-report=html -v
 ```
 
 **Test markers:**
 - `unit`: Fast, mocked tests (default)
-- `integration`: Slow tests requiring real services/API keys
+- `integration`: Reserved for real-service tests; none remain after observability retirement
 
 ### Running with tox
 
@@ -72,9 +87,6 @@ uv run tox -e lint
 uv run tox -e format
 uv run tox -e py311
 uv run tox -e py312
-
-# Run integration tests (requires env vars)
-uv run tox -e integration
 
 # Verify centralized dependency constraints
 uv run tox -e verify-constraints
@@ -111,28 +123,22 @@ uv run --frozen ruff format .
 
 ### Package Structure
 
-The repository follows a **monorepo workspace** pattern with 13 packages organized into 4 core areas:
+The repository follows a **monorepo workspace** pattern with eight packages in three core areas:
 
 ```
 libraries/
 ├── Core Packages (foundation)
 │   ├── microsoft-agents-a365-runtime           # Core utilities and extensions
 │   ├── microsoft-agents-a365-notifications     # Notification services and models
-│   ├── microsoft-agents-a365-observability-core    # OpenTelemetry-based tracing
 │   └── microsoft-agents-a365-tooling           # Tool definitions and MCP integration
 │
 └── Framework Extensions (integrate with specific AI frameworks)
-    ├── Observability Extensions
-    │   ├── *-observability-extensions-openai
-    │   ├── *-observability-extensions-langchain
-    │   ├── *-observability-extensions-semantickernel
-    │   └── *-observability-extensions-agentframework
-    │
     └── Tooling Extensions
         ├── *-tooling-extensions-openai
         ├── *-tooling-extensions-semantickernel
         ├── *-tooling-extensions-agentframework
-        └── *-tooling-extensions-azureaifoundry
+        ├── *-tooling-extensions-azureaifoundry
+        └── *-tooling-extensions-googleadk
 ```
 
 ### Key Architectural Patterns
@@ -142,8 +148,8 @@ libraries/
    - Python imports: `microsoft_agents_a365.*` (underscores)
 
 2. **Core + Extensions Pattern**:
-   - Core packages (runtime, observability-core, tooling) provide framework-agnostic base functionality
-   - Extension packages add framework-specific integrations (OpenAI, LangChain, Semantic Kernel, Agent Framework)
+   - Runtime, Notifications, and Tooling provide framework-agnostic base functionality
+   - Tooling extensions integrate OpenAI, Semantic Kernel, Agent Framework, Azure AI Foundry, and Google ADK
    - Extensions depend on core packages but cores are independent
 
 3. **Workspace Dependencies**:
@@ -151,12 +157,7 @@ libraries/
    - Packages reference each other using `{ workspace = true }`
    - All packages built and versioned together
 
-4. **Observability**:
-   - Built on OpenTelemetry (traces, spans, metrics)
-   - Core provides base functionality; extensions add framework-specific instrumentation
-   - Azure Monitor and Jaeger export options available
-
-5. **Tooling**:
+4. **Tooling**:
    - Tool definitions for agent capabilities
    - MCP (Model Context Protocol) integration
    - Framework-specific adapters for tool execution
@@ -196,9 +197,8 @@ Tests mirror the library structure:
 ```
 tests/
 ├── runtime/          # Runtime package tests
-├── observability/    # Observability core and extension tests
 ├── tooling/          # Tooling core and extension tests
-└── notifications/    # Notifications package tests
+└── test_*.py         # Build, metadata, constraints, and release-artifact tests
 ```
 
 ## Code Standards
@@ -219,17 +219,14 @@ Place it before imports with one blank line after.
 - **Never** use the keyword "Kairo" in code - it's a legacy reference that must be removed/replaced
 - If found during code review, flag for removal
 
-### Observability Export Configuration — Coordinated Review Required
+### Retired Package Release Guard
 
-The following three constants must stay in sync. If a PR changes **any one** of them, the reviewer (human or Copilot) **must** ask the author to confirm the other two are still correct:
-
-| Constant | Location |
-|---|---|
-| `PROD_OBSERVABILITY_SCOPE` | `libraries/microsoft-agents-a365-runtime/microsoft_agents_a365/runtime/environment_utils.py` |
-| `DEFAULT_ENDPOINT_URL` | `libraries/microsoft-agents-a365-observability-core/microsoft_agents_a365/observability/core/exporters/agent365_exporter.py` |
-| Export URL path pattern | `build_export_url()` in `libraries/microsoft-agents-a365-observability-core/microsoft_agents_a365/observability/core/exporters/utils.py` |
-
-Snapshot tests in `tests/observability/core/test_export_config_consistency.py` will fail if any value drifts, but the developer must also verify the values are correct for the target environment — the tests only catch accidental drift, not intentional-but-incomplete updates.
+Build wheels into a fresh output directory and run `scripts/verify_release_artifacts.py`
+before copying, promoting, or uploading them. The guard requires the exact active
+workspace package set and version, and rejects retired distributions, dependencies,
+and bundled observability source. Never upload a reusable `dist/*` directory.
+Keep historical changelog entries unchanged. External release branches, credentials,
+and artifact promoters require the owner controls in the migration guide.
 
 ### Python Conventions
 
@@ -279,13 +276,14 @@ The `.github/workflows/ci.yml` pipeline:
 - Runs on pushes to `main` and `release/*` branches
 - Tests both Python 3.11 and 3.12
 - Uses **tox** (via `uv run --frozen tox -e <env>`) to run lint, format, test, and constraint verification steps
-- Executes: verify-constraints → lint → format → build → unit tests → integration tests (if secrets available)
+- Executes: verify-constraints → lint → format → build → unit tests
 - Only publishes packages on `release/*` branches when SDK changes detected
+- Publication is gated by fresh-wheel verification, not by tag presence
 - Uses git-based versioning (tags on release branches = official versions, others = dev versions)
 
 ## Important Notes
 
 - When installing packages for development, use `-e` (editable) installs: `uv pip install -e libraries/microsoft-agents-a365-runtime`
 - The `AGENT365_PYTHON_SDK_PACKAGE_VERSION` environment variable must be set before building
-- Integration tests require Azure OpenAI credentials (secrets not available in PRs from forks)
+- All remaining tests are offline/mocked; the retired suite contained the live integration tests
 - All packages are published to PyPI with prefix `microsoft-agents-a365-*`

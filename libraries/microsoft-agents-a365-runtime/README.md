@@ -3,7 +3,9 @@
 [![PyPI](https://img.shields.io/pypi/v/microsoft-agents-a365-runtime?label=PyPI&logo=pypi)](https://pypi.org/project/microsoft-agents-a365-runtime)
 [![PyPI Downloads](https://img.shields.io/pypi/dm/microsoft-agents-a365-runtime?label=Downloads&logo=pypi)](https://pypi.org/project/microsoft-agents-a365-runtime)
 
-Core runtime utilities and environment management for AI agent applications. This package provides essential Power Platform API discovery, environment configuration, and authentication scope resolution.
+Core runtime utilities and environment management for AI agent applications. This package provides Power Platform API discovery, environment configuration, JWT and agent identity utilities, and operation results.
+
+The observability-specific authentication scope helper has been removed. See the [Observability migration guide](https://github.com/microsoft/Agent365-python/blob/main/docs/observability-migration.md) for the separately maintained Microsoft OpenTelemetry Distro.
 
 ## Installation
 
