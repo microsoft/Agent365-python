@@ -140,8 +140,9 @@ requires the exact active wheel set and build version, rejects retired payloads
 and dependencies, and runs before publication. Do not copy or upload stale
 `dist/*`, old drops, or outputs from historical checkouts.
 
-Publishing is restricted to SDK-changing pushes on `release/*`, with one matrix
-job uploading the platform-independent wheels. Tags influence versioning but are
+Publishing is restricted to SDK-changing pushes on `release/*`. A downstream
+job waits for both Python matrix jobs, downloads the Python 3.11 artifact, and
+re-verifies those wheels before upload. Tags influence versioning but are
 not themselves the workflow's publication trigger. External promotion pipelines,
 old branch permissions, and PyPI project retirement require
 [owner action](observability-migration.md#release-controls-and-external-actions).
