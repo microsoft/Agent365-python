@@ -231,7 +231,9 @@ Official releases must be done from a `release/*` branch:
 #### Step 4: Publish to Package Repository
 
 The checked-in workflow verifies and uploads only the fresh wheel directory on
-SDK-changing `release/*` branch pushes, using one Python matrix job. Before
+SDK-changing `release/*` branch pushes, using one downstream job after both
+Python 3.11 and 3.12 jobs succeed. It downloads the verified Python 3.11 artifact
+and re-verifies its wheels immediately before uploading. Before
 publishing, owners must set the repository variable
 `AGENT365_PACKAGE_REPOSITORY_URL` to the approved package-upload endpoint and
 configure the `AZURE_DEVOPS_TOKEN` secret for that feed. The workflow passes the
@@ -239,14 +241,16 @@ URL directly to Twine; it does not require a `.pypirc` or default to public PyPI
 A missing URL fails explicitly before any upload. Downstream promotion to PyPI
 must be audited separately. Tags alone do not trigger publication.
 
-For manual releases, set `TWINE_REPOSITORY_URL` to that same approved endpoint
-and supply the appropriate `TWINE_USERNAME` and `TWINE_PASSWORD` credentials.
+For manual releases, first install the locked tools with
+`uv sync --locked --all-extras --dev`, then set `TWINE_REPOSITORY_URL` to that same
+approved endpoint and supply the appropriate `TWINE_USERNAME` and
+`TWINE_PASSWORD` credentials.
 
 ```bash
 # Only for an explicitly approved manual release, after a fresh build:
 : "${TWINE_REPOSITORY_URL:?Set the approved package-upload endpoint}" &&
 uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION" &&
-uv run --frozen --no-sync --with twine twine upload --non-interactive --repository-url "$TWINE_REPOSITORY_URL" "$SDK_DIST_DIR"/*.whl
+uv run --frozen --no-sync twine upload --non-interactive --repository-url "$TWINE_REPOSITORY_URL" "$SDK_DIST_DIR"/*.whl
 ```
 
 #### Step 5: Merge Release Branch Back (Optional)

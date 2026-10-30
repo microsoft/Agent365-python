@@ -35,11 +35,13 @@ dev-dependencies = [
     "pytest",
     "pytest-asyncio",
     "pytest-mock",
+    "pytest-cov",
     "ruff",
     "tomlkit",
     "setuptools",
     "tox>=4.0",
     "tox-uv>=1.0",
+    "twine",
     "python-dotenv",
     "openai",
     "agent-framework",
@@ -115,6 +117,7 @@ constraint-dependencies = [
     "pytest-mock >= 3.10.0",
     "python-dotenv >= 1.0.0",
     "ruff >= 0.1.0",
+    "twine == 6.2.0",
 ]
 
 # Test configuration

@@ -43,10 +43,23 @@ def release_dir(tmp_path: Path) -> Path:
 
 
 @pytest.mark.parametrize(
-    "problem",
-    ["none", "retired", "dependency", "stale-version", "missing", "extra-file", "payload"],
+    ("problem", "expected_error"),
+    [
+        ("none", None),
+        ("sentinel", None),
+        ("retired", "Unexpected or duplicate distribution"),
+        ("dependency", "depends on retired distribution"),
+        ("stale-version", "Stale version in"),
+        ("missing", "Missing distributions"),
+        ("extra-file", "Unexpected release artifact"),
+        ("payload", "Retired observability payload"),
+        ("duplicate", "Unexpected or duplicate distribution"),
+        ("filename-name", "Filename and metadata disagree"),
+        ("filename-version", "Filename and metadata disagree"),
+        ("corrupt-zip", "File is not a zip file"),
+    ],
 )
-def test_release_gate(release_dir: Path, problem: str) -> None:
+def test_release_gate(release_dir: Path, problem: str, expected_error: str | None) -> None:
     runtime = "microsoft-agents-a365-runtime"
     if problem == "retired":
         _wheel(release_dir, "microsoft-agents-a365-observability-core")
@@ -66,6 +79,18 @@ def test_release_gate(release_dir: Path, problem: str) -> None:
     elif problem == "payload":
         with ZipFile(next(release_dir.glob("*.whl")), "a") as archive:
             archive.writestr("microsoft_agents_a365/observability/core/__init__.py", "")
+    elif problem == "duplicate":
+        path = _wheel(release_dir, runtime)
+        path.with_name(path.name.replace("-py3-", "-py2-")).write_bytes(path.read_bytes())
+    elif problem == "filename-name":
+        _wheel(release_dir, runtime).rename(release_dir / "not_runtime-1.2.3-py3-none-any.whl")
+    elif problem == "filename-version":
+        path = _wheel(release_dir, runtime)
+        path.rename(path.with_name(path.name.replace("1.2.3", "1.2.4")))
+    elif problem == "corrupt-zip":
+        _wheel(release_dir, runtime).write_bytes(b"not a zip archive")
+    elif problem == "sentinel":
+        (release_dir / ".gitignore").write_text("*\n")
 
     result = subprocess.run(
         [
@@ -79,11 +104,11 @@ def test_release_gate(release_dir: Path, problem: str) -> None:
         text=True,
         check=False,
     )
-    if problem == "none":
+    if expected_error is None:
         assert result.returncode == 0, result.stdout + result.stderr
     else:
         assert result.returncode != 0
         assert "Release artifact verification failed" in result.stderr
+        assert expected_error in result.stderr
         if problem == "stale-version":
-            assert "Stale version in" in result.stderr
             assert "expected 1.2.3" in result.stderr

@@ -81,6 +81,12 @@ framework packages just because observability used them. Keep those needed by
 your application. Choose and lock a tested distro version rather than assuming
 the latest source API is available in every historical PyPI release.
 
+**Override upstream migration Step 1 for applications using Tooling,
+Notifications, or Runtime directly:** keep `microsoft-agents-a365-runtime` and
+its generic imports; do not follow the upstream Runtime uninstall/import rewrite
+for those usages. The distro's Runtime utilities are not a replacement for the
+Runtime dependency of the retained Agent365 packages.
+
 ## Imports, APIs, and initialization
 
 | Old surface | Migration |
@@ -90,7 +96,7 @@ the latest source API is available in every historical PyPI release.
 | `token_resolver`, `exporter_options` | Use documented `a365_*` options, such as `a365_token_resolver`; old options objects are not accepted. |
 | `microsoft_agents_a365.observability.hosting` | Use `microsoft.opentelemetry.a365.hosting` with the `[hosting]` extra; explicitly configure middleware. |
 | Manual framework instrumentors and `.instrument()` calls | Remove retired instrumentor imports and use distro auto-instrumentation; see framework notes below. |
-| Runtime observability scope helper | Select authentication for the chosen distro route; no helper is retained here. |
+| Runtime observability scope helper | Use `microsoft.opentelemetry.a365.runtime.get_observability_authentication_scope()` only for the matching delegated route; its default differs from the removed app-only helper. See authentication below. |
 | `extract_context_from_headers`, `get_traceparent` | Use standard OTel propagation APIs, preserving the required trust boundary and baggage policy. |
 | `is_configured()`, exporter options, old enricher registry/processor APIs | No compatible public substitute is promised. Redesign using documented distro options and supported OTel processors. |
 
@@ -134,6 +140,16 @@ route, not an automatic S2S authentication implementation. The official
 [S2S resolver sample](https://github.com/microsoft/opentelemetry-distro-python/blob/main/samples/a365/s2s/token_resolver.py)
 uses `api://9b975845-388f-4429-889e-eab1ef63949c/.default`.
 
+The replacement helper is
+`microsoft.opentelemetry.a365.runtime.get_observability_authentication_scope()`.
+Without an environment override, it returns a `list[str]` containing
+`api://9b975845-388f-4429-889e-eab1ef63949c/Agent365.Observability.OtelWrite`
+for the default delegated/agentic route. **Do not use that default as-is in an
+app-only S2S resolver.** Acquire the app-only `/.default` scope shown above instead.
+An explicit `a365_observability_scope_override` must match that route; a custom
+resolver must use the matching scope itself. The helper reads
+`A365_OBSERVABILITY_SCOPE_OVERRIDE`, not the initialization keyword argument.
+
 By contrast, the verified distro default FIC resolver requests
 `api://9b975845-388f-4429-889e-eab1ef63949c/Agent365.Observability.OtelWrite`
 through a delegated `user_fic` exchange, requiring service-connection
@@ -141,6 +157,16 @@ configuration, agent instance identity, and agentic-user identity. It is not
 equivalent to the old SDK's app-only scope. Consult the official documentation
 for required `CONNECTIONS__SERVICE_CONNECTION__SETTINGS__*`,
 `A365_AGENT_APP_INSTANCE_ID`, and `A365_AGENTIC_USER_ID` configuration and consent.
+When no explicit token resolver is supplied, the distro selects FIC when its
+required environment variables are present; otherwise it falls back to
+`DefaultAzureCredential`. It does not retry failed FIC exchanges through that
+credential chain. The fallback uses the identity selected by the chain, not
+necessarily the intended agent identity. Use an explicit, route-appropriate
+resolver in production rather than relying on implicit credential selection.
+This selection and the scope helper were verified against upstream
+[`utils.py`](https://github.com/microsoft/opentelemetry-distro-python/blob/22d129d379060aa38ca7b54f91582a860c4eb0cf/src/microsoft/opentelemetry/a365/core/exporters/utils.py)
+and
+[`environment_utils.py`](https://github.com/microsoft/opentelemetry-distro-python/blob/22d129d379060aa38ca7b54f91582a860c4eb0cf/src/microsoft/opentelemetry/a365/runtime/environment_utils.py).
 
 The distro also supports `a365_contextual_token_resolver` with a
 `TokenResolverContext`; it takes precedence over the simple resolver.
@@ -268,7 +294,9 @@ branch. Do not promise support timelines without the package owners' approval.
 
 The checked-in CI builds into a fresh per-job directory, validates the exact
 workspace wheel set, version, wheel metadata, dependencies (including extras),
-and payload, then copies/uploads only those wheels. The verifier runs again
+and payload, then copies/uploads only those wheels. The sole publishing job waits
+for both Python matrix jobs to succeed and downloads their verified Python 3.11
+artifact into a fresh directory. The verifier runs again
 immediately before publication and rejects stale versions, extra files, retired
 distributions, retired dependencies, and bundled retired source. Upload failures
 are no longer ignored. The build remains wheel-only; no sdist upload path is added.

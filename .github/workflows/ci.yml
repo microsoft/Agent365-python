@@ -147,17 +147,49 @@ jobs:
         name: python-${{ matrix.python-version }}
         path: ${{ env.SDK_DROP_DIR }}.zip
 
+  publish:
+    name: Publish verified packages
+    needs: [version-number, changed-sdks, python-sdk]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && needs.changed-sdks.outputs.python-sdk == 'true'
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/versioning/helper
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Set up uv and Python
+      uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      with:
+        version: '0.6.x'
+        python-version: '3.11'
+
+    - name: Install locked release tools
+      run: uv sync --locked --all-extras --dev
+
+    - name: Create fresh artifact directory
+      run: |
+        download_dir=$(mktemp -d "$RUNNER_TEMP/agent365-download.XXXXXX")
+        echo "SDK_ARTIFACT_DIR=$download_dir" >> "$GITHUB_ENV"
+
+    - name: Download verified Python 3.11 artifact
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        name: python-3.11
+        path: ${{ env.SDK_ARTIFACT_DIR }}
+
+    - name: Extract release wheels
+      run: |
+        publish_dir=$(mktemp -d "$RUNNER_TEMP/agent365-publish.XXXXXX")
+        unzip -q "$SDK_ARTIFACT_DIR"/*.zip -d "$publish_dir"
+        echo "SDK_DIST_DIR=$publish_dir/dist" >> "$GITHUB_ENV"
+
     - name: Publish
-      # Only publish when:
-      # 1. It's a push event (not a PR)
-      # 2. The branch is a release/* branch
-      # 3. There are SDK changes
-      # 4. Only one matrix job uploads the platform-independent wheels
-      if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && needs.changed-sdks.outputs.python-sdk == 'true' && matrix.python-version == '3.11'
       run: |
         : "${TWINE_REPOSITORY_URL:?Set the AGENT365_PACKAGE_REPOSITORY_URL repository variable to the approved upload endpoint}"
         uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$SDK_DIST_DIR" --version "${{ needs.version-number.outputs.PACKAGE_VERSION }}"
-        uv run --frozen --no-sync --with twine twine upload --non-interactive --repository-url "$TWINE_REPOSITORY_URL" "$SDK_DIST_DIR"/*.whl
+        uv run --frozen --no-sync twine upload --non-interactive --repository-url "$TWINE_REPOSITORY_URL" "$SDK_DIST_DIR"/*.whl
       env:
         TWINE_REPOSITORY_URL: ${{ vars.AGENT365_PACKAGE_REPOSITORY_URL }}
         TWINE_USERNAME: __token__
