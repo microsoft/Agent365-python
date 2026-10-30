@@ -81,11 +81,12 @@ framework packages just because observability used them. Keep those needed by
 your application. Choose and lock a tested distro version rather than assuming
 the latest source API is available in every historical PyPI release.
 
-**Override upstream migration Step 1 for applications using Tooling,
-Notifications, or Runtime directly:** keep `microsoft-agents-a365-runtime` and
+**Override upstream migration Step 1 for applications using Tooling (including
+its extensions) or Runtime directly:** keep `microsoft-agents-a365-runtime` and
 its generic imports; do not follow the upstream Runtime uninstall/import rewrite
 for those usages. The distro's Runtime utilities are not a replacement for the
-Runtime dependency of the retained Agent365 packages.
+Runtime dependency of Tooling. Notifications remains supported independently;
+it does not require Runtime unless your application uses Runtime separately.
 
 ## Imports, APIs, and initialization
 

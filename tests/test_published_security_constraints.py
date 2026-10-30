@@ -117,6 +117,19 @@ def test_no_retired_distribution_dependencies(
             ), f"{package} still depends on {requirement}"
 
 
+def test_tooling_publishes_required_runtime_dependency(
+    published_requirements: dict[str, list[Requirement]],
+) -> None:
+    requirements = [
+        requirement
+        for requirement in published_requirements[PACKAGE_PREFIX + "tooling"]
+        if canonicalize_name(requirement.name) == PACKAGE_PREFIX + "runtime"
+    ]
+    assert len(requirements) == 1, "Tooling must install Runtime without observability packages"
+    assert requirements[0].marker is None
+    assert str(requirements[0].specifier) == "==0.0.0"
+
+
 def _runtime_requirements(
     name: str, published: dict[str, list[Requirement]]
 ) -> Iterator[Requirement]:

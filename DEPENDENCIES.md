@@ -15,6 +15,7 @@ graph LR
     microsoft_agents_a365_tooling_extensions_googleadk["microsoft-agents-a365-tooling-extensions-googleadk"]
 
     %% Dependencies
+    microsoft_agents_a365_tooling --> microsoft_agents_a365_runtime
     microsoft_agents_a365_tooling_extensions_azureaifoundry --> microsoft_agents_a365_tooling
     microsoft_agents_a365_tooling_extensions_openai --> microsoft_agents_a365_tooling
     microsoft_agents_a365_tooling_extensions_semantickernel --> microsoft_agents_a365_tooling

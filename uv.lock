@@ -3146,6 +3146,7 @@ provides-extras = ["dev", "test"]
 name = "microsoft-agents-a365-tooling"
 source = { editable = "libraries/microsoft-agents-a365-tooling" }
 dependencies = [
+    { name = "microsoft-agents-a365-runtime" },
     { name = "microsoft-agents-hosting-core" },
     { name = "pydantic" },
     { name = "pyjwt" },
@@ -3164,6 +3165,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'" },
+    { name = "microsoft-agents-a365-runtime", editable = "libraries/microsoft-agents-a365-runtime" },
     { name = "microsoft-agents-hosting-core" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pydantic" },

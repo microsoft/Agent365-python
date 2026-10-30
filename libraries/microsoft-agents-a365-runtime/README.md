@@ -5,7 +5,7 @@
 
 Core runtime utilities and environment management for AI agent applications. This package provides Power Platform API discovery, environment configuration, JWT and agent identity utilities, and operation results.
 
-The observability-specific authentication scope helper has been removed. See the [Observability migration guide](../../docs/observability-migration.md) for the separately maintained Microsoft OpenTelemetry Distro.
+The observability-specific authentication scope helper has been removed. See the [Observability migration guide](https://github.com/microsoft/Agent365-python/blob/main/docs/observability-migration.md) for the separately maintained Microsoft OpenTelemetry Distro.
 
 ## Installation
 
