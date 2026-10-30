@@ -17,6 +17,7 @@ graph LR
     microsoft_agents_a365_tooling_extensions_openai["microsoft-agents-a365-tooling-extensions-openai"]
     microsoft_agents_a365_tooling_extensions_semantickernel["microsoft-agents-a365-tooling-extensions-semantickernel"]
     microsoft_agents_a365_tooling_extensions_agentframework["microsoft-agents-a365-tooling-extensions-agentframework"]
+    microsoft_agents_a365_tooling_extensions_agenthooks["microsoft-agents-a365-tooling-extensions-agenthooks"]
 
     %% Dependencies
     microsoft_agents_a365_observability_core --> microsoft_agents_a365_runtime
@@ -28,6 +29,7 @@ graph LR
     microsoft_agents_a365_tooling_extensions_openai --> microsoft_agents_a365_tooling
     microsoft_agents_a365_tooling_extensions_semantickernel --> microsoft_agents_a365_tooling
     microsoft_agents_a365_tooling_extensions_agentframework --> microsoft_agents_a365_tooling
+    microsoft_agents_a365_tooling_extensions_agenthooks --> microsoft_agents_a365_tooling
 
     %% Styling
     classDef notifications fill:#ffcdd2,stroke:#c62828,color:#280505,stroke-width:2px
@@ -41,7 +43,7 @@ graph LR
     classDef tooling fill:#ffe0b2,stroke:#e65100,color:#331a00,stroke-width:2px
     class microsoft_agents_a365_tooling tooling
     classDef tooling_extensions fill:#fff3e0,stroke:#fb8c00,color:#4d2600,stroke-width:2px
-    class microsoft_agents_a365_tooling_extensions_azureaifoundry,microsoft_agents_a365_tooling_extensions_openai,microsoft_agents_a365_tooling_extensions_semantickernel,microsoft_agents_a365_tooling_extensions_agentframework tooling_extensions
+    class microsoft_agents_a365_tooling_extensions_azureaifoundry,microsoft_agents_a365_tooling_extensions_openai,microsoft_agents_a365_tooling_extensions_semantickernel,microsoft_agents_a365_tooling_extensions_agentframework,microsoft_agents_a365_tooling_extensions_agenthooks tooling_extensions
 ```
 
 ## Package Types
