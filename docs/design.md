@@ -229,7 +229,7 @@ Framework-specific adapters for MCP tool integration:
 | Package | Purpose | Design Doc |
 |---------|---------|------------|
 | `extensions-agentframework` | Adapt MCP tools to Microsoft Agents SDK | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-agentframework/docs/design.md) |
-| `extensions-agenthooks` | Microsoft Defender for AI real-time protection as an agent-hooks interceptor | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-agenthooks/docs/design.md) |
+| `extensions-agenthooks` | Microsoft Defender for AI real-time protection and Microsoft Purview data loss prevention as agent-hooks interceptors | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-agenthooks/docs/design.md) |
 | `extensions-azureaifoundry` | Azure AI Foundry tool integration | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-azureaifoundry/docs/design.md) |
 | `extensions-openai` | OpenAI function calling integration and chat history | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-openai/docs/design.md) |
 | `extensions-semantickernel` | Semantic Kernel plugin integration | [design.md](../libraries/microsoft-agents-a365-tooling-extensions-semantickernel/docs/design.md) |
