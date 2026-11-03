@@ -25,14 +25,9 @@ uv venv
 ### 3. Install Dependencies
 
 ```powershell
-# Test framework and reporting
-uv pip install pytest pytest-asyncio pytest-mock pytest-cov pytest-html wrapt
-
-# SDK core libraries
-uv pip install -e libraries/microsoft-agents-a365-runtime -e libraries/microsoft-agents-a365-notifications -e libraries/microsoft-agents-a365-observability-core -e libraries/microsoft-agents-a365-tooling
-
-# Framework extension libraries
-uv pip install -e libraries/microsoft-agents-a365-observability-extensions-langchain -e libraries/microsoft-agents-a365-observability-extensions-openai -e libraries/microsoft-agents-a365-observability-extensions-semantickernel -e libraries/microsoft-agents-a365-observability-extensions-agentframework -e libraries/microsoft-agents-a365-tooling-extensions-agentframework -e libraries/microsoft-agents-a365-tooling-extensions-azureaifoundry -e libraries/microsoft-agents-a365-tooling-extensions-openai -e libraries/microsoft-agents-a365-tooling-extensions-semantickernel -e libraries/microsoft-agents-a365-tooling-extensions-googleadk
+# Install all eight remaining workspace libraries and their test/development extras.
+$env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
+uv sync --locked --all-extras --dev
 ```
 
 ---
@@ -44,10 +39,14 @@ uv pip install -e libraries/microsoft-agents-a365-observability-extensions-langc
 ```plaintext
 tests/
 ├── runtime/                           # Runtime tests
-├── observability/                     # Observability tests
 ├── tooling/                           # Tooling tests
-└── notifications/                     # Notifications tests
+└── test_*.py                          # Build, distribution metadata, constraints, release gates
 ```
+
+All remaining tests are offline/mocked. The retired observability suite contained
+the live integration tests, so its credential-only examples and CI/tox integration
+job have been removed. The `integration` marker is reserved for future real-service
+tests; selecting it currently collects no tests.
 
 ---
 
@@ -131,7 +130,7 @@ start coverage.xml
 |-------|----------|
 | **Test loading failed** | Clean pyproject.toml, reinstall packages, restart VS Code |
 | **ImportError: No module named 'pytest'** | `uv pip install pytest pytest-asyncio pytest-mock` |
-| **ImportError: No module named 'microsoft_agents_a365'** | `uv pip install -e .` |
+| **ImportError: No module named 'microsoft_agents_a365'** | `uv sync --locked --all-extras --dev` |
 | **Tests not discovered** | Refresh Test Explorer or restart VS Code |
 
 ### Fix Steps
@@ -149,7 +148,7 @@ $fixed | Set-Content "pyproject.toml" -NoNewline
 **2. Reinstall packages**
 
 ```powershell
-uv pip install -e .
+uv sync --locked --all-extras --dev
 ```
 
 **3. Restart VS Code**

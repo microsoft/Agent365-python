@@ -1,5 +1,10 @@
 # Product Requirements Document: Centralized Package Version Constraints
 
+> **Historical design:** Package inventories and observability examples below
+> describe the original proposal, not current onboarding or release inputs.
+> Observability is retired; use the [migration guide](../observability-migration.md)
+> and the [current architecture](../design.md).
+
 **Document Version:** 1.2
 **Created:** 2026-01-27
 **Status:** Draft
