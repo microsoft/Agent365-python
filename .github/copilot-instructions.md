@@ -1,5 +1,15 @@
 # GitHub Copilot Instructions for Agent365-python
 
+## Package and Release Scope
+
+This repository contains eight packages for Notifications, Runtime, Tooling, and
+five Tooling framework adapters. Observability is retired here; do not reintroduce
+its packages, imports, tests, or dependency edges. Follow the
+[migration guide](../docs/observability-migration.md) for `microsoft-opentelemetry`.
+Preserve historical changelogs. Build into a fresh directory and run
+`scripts/verify_release_artifacts.py DIRECTORY --version VERSION` before any
+artifact promotion or upload; never reuse old `dist/*` release inputs.
+
 ## Code Review Rules
 
 ### Rule 1: Check for "Kairo" Keyword

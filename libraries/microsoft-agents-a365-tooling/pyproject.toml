@@ -23,6 +23,7 @@ classifiers = [
 ]
 license = {text = "MIT"}
 dependencies = [
+    "microsoft-agents-a365-runtime",
     "pydantic",
     "typing-extensions",
     "microsoft-agents-hosting-core",

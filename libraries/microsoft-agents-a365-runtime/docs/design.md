@@ -45,7 +45,7 @@ discovery = PowerPlatformApiDiscovery("prod")
 endpoint = discovery.get_tenant_endpoint("tenant-id-123")
 # Returns: "tenantid12.3.tenant.api.powerplatform.com"
 
-# Get island cluster endpoint (for observability)
+# Get island cluster endpoint
 island_endpoint = discovery.get_tenant_island_cluster_endpoint("tenant-id-123")
 # Returns: "il-tenantid12.3.tenant.api.powerplatform.com"
 
@@ -163,17 +163,16 @@ print(error.exception)  # ValueError instance
 Environment-specific configuration utilities.
 
 ```python
-from microsoft_agents_a365.runtime import get_observability_authentication_scope
+from microsoft_agents_a365.runtime.environment_utils import is_development_environment
 
-# Get authentication scope for observability
-scope = get_observability_authentication_scope()
-# Returns ["api://9b975845-388f-4429-889e-eab1ef63949c/.default"]
+development = is_development_environment()
+# Checks PYTHON_ENVIRONMENT; defaults to production.
 ```
 
-Observability export is S2S-only. This helper returns the OBS resource
-`/.default` scope for app-only token acquisition by the exporting agent identity;
-it must not be used to acquire delegated `Agent365.Observability.OtelWrite`
-tokens for OBS export.
+The observability-only scope constants and `get_observability_authentication_scope()`
+were removed with the retired components. Generic environment detection and
+Power Platform endpoint discovery remain supported. See the
+[migration guide](../../../docs/observability-migration.md).
 
 ## Type Definitions
 
@@ -277,6 +276,5 @@ pytest tests/runtime/test_operation_result.py -v
 
 The runtime package is used by:
 
-- **observability-core**: `PowerPlatformApiDiscovery` for exporter endpoint resolution
 - **tooling**: `Utility` for agent identity resolution and User-Agent generation
 - **tooling**: `OperationResult` for `send_chat_history` return type

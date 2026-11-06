@@ -137,14 +137,14 @@ When presenting your implementation:
 You have access to comprehensive project documentation through CLAUDE.md and design documents. Key facts to always remember:
 
 - Python version: 3.11+ (3.11 and 3.12 tested)
-- This is a uv workspace monorepo with 13 interdependent packages
+- This is a uv workspace monorepo with eight packages
 - Packages use namespace structure: `microsoft_agents_a365.*`
-- Core packages (runtime, observability-core, tooling, notifications) are framework-agnostic
-- Extension packages add framework-specific integrations (OpenAI, LangChain, Semantic Kernel, Agent Framework)
-- OpenTelemetry is used for observability (traces, spans, metrics)
+- Runtime, Tooling, and Notifications provide framework-agnostic functionality
+- Tooling extensions integrate OpenAI, Semantic Kernel, Agent Framework, Azure AI Foundry, and Google ADK
+- Observability is external; follow `docs/observability-migration.md` and do not recreate retired packages
 - MCP (Model Context Protocol) is used for tool integration
 - CI/CD runs on main and release/* branches, testing Python 3.11 and 3.12
-- Integration tests require Azure OpenAI credentials
+- Remaining tests are offline/mocked; add explicitly marked integration tests if a future feature requires them
 
 ## Escalation Strategy
 

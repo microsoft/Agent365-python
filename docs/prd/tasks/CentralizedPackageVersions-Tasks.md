@@ -1,5 +1,10 @@
 # Task Breakdown: Centralized Package Version Constraints
 
+> **Historical task plan:** Observability package names and examples below are
+> retained as design history, not instructions to recreate or release them.
+> See the [migration guide](../../observability-migration.md) and
+> [current architecture](../../design.md) for the active workspace.
+
 **Parent PRD:** [PRD-CentralizedPackageVersions.md](../PRD-CentralizedPackageVersions.md)
 **Created:** 2026-01-27
 **Status:** Ready for Implementation

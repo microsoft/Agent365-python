@@ -2,6 +2,18 @@
 
 All notable changes to this package will be documented in this file.
 
+## [Unreleased]
+
+### Breaking Changes
+
+- Remove `get_observability_authentication_scope()` from
+  `microsoft_agents_a365.runtime` and remove `PROD_OBSERVABILITY_SCOPE` and
+  `PROD_OBSERVABILITY_CLUSTER_CATEGORY` from `runtime.environment_utils`.
+  Observability has moved to `microsoft-opentelemetry`; follow the
+  [migration guide](../../docs/observability-migration.md), including its
+  route-specific authentication guidance. Generic Runtime utilities remain
+  supported. The shared workspace release target is now `3.0.0`.
+
 ## [2.0.0] - 2026-10-20
 
 ### Breaking Changes

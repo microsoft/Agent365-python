@@ -51,12 +51,6 @@ def generate_mermaid_diagram(packages: list[PackageInfo]) -> str:
     colors = {
         "Notifications": {"fill": "#ffcdd2", "stroke": "#c62828", "color": "#280505"},  # Red
         "Runtime": {"fill": "#bbdefb", "stroke": "#1565c0", "color": "#0d1a26"},  # Blue
-        "Observability": {"fill": "#c8e6c9", "stroke": "#2e7d32", "color": "#142a14"},  # Green
-        "Observability Extensions": {
-            "fill": "#e8f5e9",
-            "stroke": "#66bb6a",
-            "color": "#1f3d1f",
-        },  # Light Green
         "Tooling": {"fill": "#ffe0b2", "stroke": "#e65100", "color": "#331a00"},  # Orange
         "Tooling Extensions": {
             "fill": "#fff3e0",
@@ -122,10 +116,6 @@ def determine_package_type(package_name: str) -> str:
         return "Notifications"
     elif "runtime" in package_name:
         return "Runtime"
-    elif "observability-extensions" in package_name:
-        return "Observability Extensions"
-    elif "observability" in package_name:
-        return "Observability"
     elif "tooling-extensions" in package_name:
         return "Tooling Extensions"
     elif "tooling" in package_name:
@@ -212,10 +202,6 @@ def main():
         f.write("## Package Types\n\n")
         f.write("- **Notifications** (Red): Notification and messaging extensions\n")
         f.write("- **Runtime** (Blue): Core runtime components\n")
-        f.write("- **Observability** (Green): Telemetry and monitoring core\n")
-        f.write(
-            "- **Observability Extensions** (Light Green): Framework-specific observability integrations\n"
-        )
         f.write("- **Tooling** (Orange): Agent tooling SDK core\n")
         f.write(
             "- **Tooling Extensions** (Light Orange): Framework-specific tooling integrations\n"
