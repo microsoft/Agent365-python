@@ -62,20 +62,26 @@ def published_requirements(
         )
     wheel_dir = workspace / "wheels"
     wheel_dir.mkdir()
-    env = {
-        **os.environ,
-        "PYTHONPATH": str(workspace / "versioning" / "helper"),
-        "AGENT365_PYTHON_SDK_PACKAGE_VERSION": "0.0.0",
-    }
+    # Build through each manifest's declared backend without PYTHONPATH, as frontends
+    # such as Dependabot's `uv lock` do.
+    env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    env["AGENT365_PYTHON_SDK_PACKAGE_VERSION"] = "0.0.0"
     requirements: dict[str, list[Requirement]] = {}
     for pyproject in sorted((workspace / "libraries").glob("*/pyproject.toml")):
         original = pyproject.read_bytes()
+        build_system = tomllib.loads(original.decode("utf-8"))["build-system"]
+        backend_paths = [
+            str((pyproject.parent / path).resolve()) for path in build_system["backend-path"]
+        ]
         result = subprocess.run(
             [
                 sys.executable,
                 "-c",
-                "import build_backend, sys; build_backend.build_wheel(sys.argv[1])",
+                "import importlib, sys; sys.path[:0] = sys.argv[3:]; "
+                "importlib.import_module(sys.argv[1]).build_wheel(sys.argv[2])",
+                build_system["build-backend"],
                 str(wheel_dir),
+                *backend_paths,
             ],
             cwd=pyproject.parent,
             env=env,

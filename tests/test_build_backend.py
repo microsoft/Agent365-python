@@ -14,12 +14,15 @@ Validates that:
 - Bare external deps with no root constraint emit a warning
 - _find_root_pyproject walks up the directory tree correctly
 - _parse_root_constraints parses constraint-dependencies from root
+- Every library resolves the shared backend through its in-tree shim without PYTHONPATH
 """
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import textwrap
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -522,3 +525,42 @@ class TestGetDynamicDependencies:
         assert len(result) == 1
         assert "microsoft-agents-a365-runtime >= 1.2.3" in result[0]
         assert "sys_platform" in result[0]
+
+
+class TestLibraryBackendShims:
+    """Each library must resolve the shared backend without PYTHONPATH (e.g. Dependabot)."""
+
+    REPO_ROOT = Path(__file__).resolve().parent.parent
+    LIBRARIES = sorted(path.parent for path in REPO_ROOT.glob("libraries/*/pyproject.toml"))
+
+    @pytest.mark.parametrize("library", LIBRARIES, ids=lambda path: path.name)
+    def test_declared_backend_resolves_shared_backend(self, library: Path) -> None:
+        """The in-tree shim is declared, shipped in sdists, and re-exports the shared hooks."""
+        build_system = tomllib.loads((library / "pyproject.toml").read_text(encoding="utf-8"))[
+            "build-system"
+        ]
+        assert build_system["backend-path"] == ["."]
+        shim = library / f"{build_system['build-backend']}.py"
+        reference = self.LIBRARIES[0] / shim.name
+        assert shim.read_bytes() == reference.read_bytes(), f"{shim} differs from {reference}"
+        manifest = (library / "MANIFEST.in").read_text(encoding="utf-8").split()
+        assert shim.name in manifest
+
+        # -I ignores PYTHONPATH and the working directory, like an isolated build frontend.
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-c",
+                "import importlib, sys; sys.path.insert(0, sys.argv[2]); "
+                "print(importlib.import_module(sys.argv[1]).build_wheel.__module__)",
+                build_system["build-backend"],
+                str(library),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "build_backend"

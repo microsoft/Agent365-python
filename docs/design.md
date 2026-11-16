@@ -33,9 +33,12 @@ docs/changelogs/             # Preserved retired-package changelogs
 
 Each library has a `pyproject.toml`, `setup.py`, README, and source under the
 shared `microsoft_agents_a365` namespace. Directory/distribution names use dashes;
-Python imports use underscores. The root manifest is the authoritative workspace
-inventory. See [the generated dependency diagrams](../DEPENDENCIES.md) for all
-internal and direct external dependencies.
+Python imports use underscores. Each library also carries an identical
+`build_backend_shim.py` (`backend-path = ["."]`) that loads the shared
+`versioning/helper` backend, so `uv lock` and `uv build` need no `PYTHONPATH`.
+The root manifest is the authoritative workspace inventory. See
+[the generated dependency diagrams](../DEPENDENCIES.md) for all internal and
+direct external dependencies.
 
 ## Remaining core packages
 
@@ -153,7 +156,6 @@ See [versioning and safe builds](../HOW_TO_SET_A_VERSION.md).
 Use Python 3.11+ and uv. From the repository root in PowerShell:
 
 ```powershell
-$env:PYTHONPATH = Join-Path (Get-Location) "versioning/helper"
 uv sync --locked --all-extras --dev
 uv run --frozen python scripts/verify_constraints.py
 uv run --frozen ruff check .

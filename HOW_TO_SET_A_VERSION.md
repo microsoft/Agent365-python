@@ -10,18 +10,15 @@ for PyPI archival and external/old-branch publishing controls.
 
 Never upload a reusable `dist/*` directory or an old artifact drop. Each build
 below creates a fresh `SDK_DIST_DIR` and verifies the exact wheel set, version,
-metadata dependencies, and absence of retired code. Set the version and build
-backend path before invoking a build:
+metadata dependencies, and absence of retired code. Set the version before invoking a build:
 
 ```bash
-export PYTHONPATH="$PWD/versioning/helper"
 export AGENT365_PYTHON_SDK_PACKAGE_VERSION="$(cd versioning && python -m setuptools_git_versioning)"
 ```
 
 For PowerShell:
 
 ```powershell
-$env:PYTHONPATH = Join-Path (Get-Location) "versioning/helper"
 Push-Location versioning
 $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = python -m setuptools_git_versioning
 Pop-Location

@@ -63,7 +63,6 @@ The best way to consume this SDK is via our PyPI packages found here: [pypi.org]
 
    ```bash
    export AGENT365_PYTHON_SDK_PACKAGE_VERSION="0.1.0"
-   export PYTHONPATH="$PWD/versioning/helper"
    uv sync --locked --all-extras --dev
    output="$(mktemp -d)"
    uv build --all-packages --wheel --out-dir "$output"
@@ -77,7 +76,6 @@ The best way to consume this SDK is via our PyPI packages found here: [pypi.org]
    $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = "0.1.0"
    
    # Use a new, empty output directory for each build (PowerShell)
-   $env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
    uv sync --locked --all-extras --dev
    $output = Join-Path ([System.IO.Path]::GetTempPath()) ("agent365-wheels-" + [guid]::NewGuid())
    uv build --all-packages --wheel --out-dir $output

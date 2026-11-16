@@ -11,14 +11,13 @@ wheels only from CI.
 Usage in package pyproject.toml:
   [build-system]
   requires = ["setuptools>=68", "wheel", "tzdata", "tomlkit", "packaging"]
-  build-backend = "build_backend"
+  build-backend = "build_backend_shim"
+  backend-path = ["."]
 
-The build backend module is resolved via PYTHONPATH, which must include the
-path to this directory (versioning/helper) when building. The CI pipeline sets
-this automatically. For local builds, use 'uv build' from the repo root, or
-set PYTHONPATH manually:
-  export PYTHONPATH="$(git rev-parse --show-toplevel)/versioning/helper:$PYTHONPATH"
-  python -m build --no-isolation --wheel
+PEP 517 only allows backend-path entries inside the project tree, so each
+library carries an identical in-tree build_backend_shim.py that adds this
+directory to sys.path and re-exports these hooks. Builds from a repository
+checkout (uv lock, uv build, python -m build) therefore need no PYTHONPATH.
 """
 
 from __future__ import annotations
