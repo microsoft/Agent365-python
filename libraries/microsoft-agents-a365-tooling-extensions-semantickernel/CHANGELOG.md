@@ -2,6 +2,13 @@
 
 All notable changes to this package will be documented in this file.
 
+## [Unreleased]
+
+### Security
+
+- Require `dnspython >= 2.9.2` to address excessive memory and CPU use
+  when parsing untrusted WKS records (CVE-2026-128089).
+
 ## [2.0.0] - 2026-10-20
 
 ### Security

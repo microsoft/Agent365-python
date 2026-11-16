@@ -22,6 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_PREFIX = "microsoft-agents-a365-"
 SECURITY_FLOORS = {
     "anyio": "4.14.2",
+    "dnspython": "2.9.2",
     "mcp": "1.28.1",
     "pyasn1": "0.6.4",
     "pyjwt": "2.14.0",
@@ -36,7 +37,7 @@ EXPECTED_REQUIREMENTS = {
     "tooling-extensions-azureaifoundry": {"pyjwt"},
     "tooling-extensions-googleadk": MCP_REQUIREMENTS | {"pyasn1"},
     "tooling-extensions-openai": MCP_REQUIREMENTS,
-    "tooling-extensions-semantickernel": MCP_REQUIREMENTS,
+    "tooling-extensions-semantickernel": MCP_REQUIREMENTS | {"dnspython"},
 }
 
 

@@ -27,6 +27,7 @@ dependencies = [
     "semantic-kernel",
     "aiohttp",
     # Publish security floors for the framework's transitive dependencies.
+    "dnspython",
     "mcp",
     "anyio",
     "python-multipart",
