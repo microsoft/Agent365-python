@@ -85,9 +85,6 @@ jobs:
     defaults:
       run:
         working-directory: ./
-    env:
-      PYTHONPATH: ${{ github.workspace }}/versioning/helper
-
     strategy:
       matrix:
         python-version: ['3.11', '3.12']
@@ -152,9 +149,6 @@ jobs:
     needs: [version-number, changed-sdks, python-sdk]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && needs.changed-sdks.outputs.python-sdk == 'true'
     runs-on: ubuntu-latest
-    env:
-      PYTHONPATH: ${{ github.workspace }}/versioning/helper
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

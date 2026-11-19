@@ -26,7 +26,6 @@ uv venv
 
 ```powershell
 # Install all eight remaining workspace libraries and their test/development extras.
-$env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
 uv sync --locked --all-extras --dev
 ```
 

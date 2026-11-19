@@ -39,7 +39,6 @@ Bash (macOS/Linux):
 ```bash
 # Build all packages into a fresh output directory
 export AGENT365_PYTHON_SDK_PACKAGE_VERSION="0.1.0"
-export PYTHONPATH="$PWD/versioning/helper"
 output="$(mktemp -d)"
 uv build --all-packages --wheel --out-dir "$output"
 uv run --frozen --no-sync python scripts/verify_release_artifacts.py "$output" --version "$AGENT365_PYTHON_SDK_PACKAGE_VERSION"
@@ -50,7 +49,6 @@ PowerShell (Windows):
 ```powershell
 # Build all packages (requires version environment variable)
 $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION = "0.1.0"
-$env:PYTHONPATH = Join-Path (Get-Location) "versioning\helper"
 $output = Join-Path ([System.IO.Path]::GetTempPath()) ("agent365-wheels-" + [guid]::NewGuid())
 uv build --all-packages --wheel --out-dir $output
 uv run --frozen --no-sync python scripts\verify_release_artifacts.py $output --version $env:AGENT365_PYTHON_SDK_PACKAGE_VERSION
@@ -184,6 +182,9 @@ This monorepo uses uv's `constraint-dependencies` feature to centralize version 
 **Internal workspace dependencies:**
 - Package pyproject.toml files list internal deps by name only (e.g., `microsoft-agents-a365-runtime`)
 - Root pyproject.toml `[tool.uv.sources]` maps them to `{ workspace = true }` for local development
+- Each library's `build-backend` is an identical in-tree `build_backend_shim.py` (`backend-path = ["."]`)
+  that loads the shared `versioning/helper/build_backend.py`, so `uv lock`/`uv build` (including
+  Dependabot) need no `PYTHONPATH`; new libraries must copy the shim and its `MANIFEST.in`
 - At build time, `setup.py` injects exact version matches (e.g., `== 1.2.3`) for published packages
 - This ensures all SDK packages require the exact same version of each other
 
