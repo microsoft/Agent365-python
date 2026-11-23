@@ -103,7 +103,7 @@ The best way to consume this SDK is via our PyPI packages found here: [pypi.org]
 
 ## Support
 
-For issues, questions, or feedback:
+For details on how to get help and the support policy for this project, see [SUPPORT.md](SUPPORT.md). For issues, questions, or feedback:
 
 - **Issues**: Please file issues in the [GitHub Issues](https://github.com/microsoft/Agent365-python/issues) section
 - **Documentation**: See the [Microsoft Agents 365 developer documentation](https://learn.microsoft.com/microsoft-agent-365/developer/)
