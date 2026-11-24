@@ -10,6 +10,7 @@ capabilities for Google ADK-based agents.
 
 # Standard library imports
 import logging
+import weakref
 from typing import List, Optional
 
 # Third-party imports
@@ -28,6 +29,20 @@ from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
     is_development_environment,
 )
+
+# MCP toolsets created by add_tool_servers_to_agent. Module-level so toolsets attached by
+# any service instance are recognized; entries are dropped when the toolset is garbage
+# collected.
+_sdk_managed_toolsets: "weakref.WeakSet[McpToolset]" = weakref.WeakSet()
+
+
+def _is_sdk_managed_toolset(tool: object) -> bool:
+    """Return True if the tool is an MCP toolset created by this service."""
+    try:
+        return tool in _sdk_managed_toolsets
+    except TypeError:
+        # Not hashable or weak-referenceable, so it was not created by this service.
+        return False
 
 
 class McpToolRegistrationService:
@@ -62,9 +77,17 @@ class McpToolRegistrationService:
         auth_token: Optional[str] = None,
     ) -> None:
         """
-        Add new MCP servers to the agent from MCP Platform.
+        Add the MCP servers discovered for the current turn to the agent.
 
         Note: Modifies the provided agent in place to add new MCP tool servers.
+
+        Each MCP toolset carries the current caller's Authorization token in its request
+        headers. Toolsets attached by an earlier call are removed from the agent before
+        anything else happens, and fresh toolsets are created for this turn. An agent that is
+        reused from one turn to the next therefore does not keep an earlier user's or agent
+        identity's token, even if this call fails. Tools the caller configured on the agent
+        are kept as-is. Because the agent is modified in place, turns that run concurrently
+        must each use their own agent, for example a ``clone()`` of a base agent.
 
         Args:
             agent: The existing agent to add servers to.
@@ -77,6 +100,17 @@ class McpToolRegistrationService:
         Returns:
             None
         """
+        # Remove toolsets attached by an earlier call before anything here can fail. They carry
+        # the token of whichever user or agent identity that call ran for.
+        previous_tools = list(agent.tools) if agent.tools else []
+        caller_tools = [tool for tool in previous_tools if not _is_sdk_managed_toolset(tool)]
+        if len(caller_tools) != len(previous_tools):
+            agent.tools = caller_tools
+            self._logger.info(
+                f"Removed {len(previous_tools) - len(caller_tools)} MCP toolsets "
+                "attached by an earlier call"
+            )
+
         is_dev = is_development_environment()
         if not auth_token and not is_dev:
             # Only exchange a token in production; dev mode uses BEARER_TOKEN* env vars instead.
@@ -100,7 +134,8 @@ class McpToolRegistrationService:
 
         self._logger.info(f"Loaded {len(mcp_server_configs)} MCP server configurations")
 
-        # Collect existing server URLs to prevent duplicates (use set for O(1) lookup)
+        # Collect URLs of MCP servers the caller configured; they take precedence over
+        # discovered servers at the same URL (use set for O(1) lookup)
         existing_server_urls = set()
         for tool in agent.tools:
             # Check if the tool is an McpToolset and has a connection_params.url
@@ -148,6 +183,7 @@ class McpToolRegistrationService:
                     )
                 )
 
+                _sdk_managed_toolsets.add(server_info)
                 mcp_servers_info.append(server_info)
                 self._connected_servers.append(server_info)
                 existing_server_urls.add(server_config.url)

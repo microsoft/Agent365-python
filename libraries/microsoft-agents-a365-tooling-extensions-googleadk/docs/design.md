@@ -37,6 +37,7 @@ List MCPServerConfig objects
        ▼
 McpToolRegistrationService.add_tool_servers_to_agent()
        │
+       ├── Remove MCP toolsets attached by an earlier call
        ├── Exchange token for MCP scope
        ├── Create McpToolset for each server
        └── Modify agent in place to add all tools
@@ -44,6 +45,16 @@ McpToolRegistrationService.add_tool_servers_to_agent()
        ▼
 Google ADK Agent with MCP tools
 ```
+
+### Reusing an agent across turns
+
+Each `McpToolset` carries the Authorization token of the turn it was created for. On every call,
+`add_tool_servers_to_agent` first removes the toolsets an earlier call added (tracked by object
+identity, across service instances), then creates toolsets for the current turn. An agent that is
+reused from one turn to the next does not keep an earlier user's or agent identity's token, even if
+the call fails. Tools you add to the agent yourself are kept as-is. Because the agent is modified in
+place, turns that run concurrently must each use their own agent, for example a `clone()` of a base
+agent.
 
 ### add_tool_servers_to_agent Parameters
 

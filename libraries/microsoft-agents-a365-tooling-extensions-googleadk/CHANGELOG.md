@@ -2,6 +2,16 @@
 
 All notable changes to this package will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- `McpToolRegistrationService.add_tool_servers_to_agent` now removes the MCP toolsets that an
+  earlier call added to the agent before it acquires tokens, then adds toolsets for the current
+  turn. Previously, toolsets from earlier calls stayed on an agent that was reused across turns.
+  Tools you configure on the agent yourself are unchanged. Turns that run concurrently must each
+  use their own agent.
+
 ## [2.0.0] - 2026-10-20
 
 ### Security

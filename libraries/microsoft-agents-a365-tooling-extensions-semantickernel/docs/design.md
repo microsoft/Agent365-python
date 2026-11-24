@@ -48,6 +48,20 @@ McpToolRegistrationService.get_plugins()
 Semantic Kernel with MCP plugins
 ```
 
+### Reusing a kernel across turns
+
+`add_tool_servers_to_agent` adds one MCP plugin per server, carrying the Authorization token of the
+current turn. On every call it first removes the plugins an earlier call added, including copies
+made by `Kernel.clone()` (tracked by object identity, across service instances). A kernel that is
+reused from one turn to the next does not keep an earlier user's or agent identity's plugin, even
+when a server is not rediscovered or fails to connect. Plugins you add to the kernel yourself are
+kept as-is. Because the kernel is modified in place, turns that run concurrently must each use their
+own kernel, for example a `clone()` of a base kernel without these plugins.
+
+`MCPPluginBase.connect()` waits for its background connection task to report that it is ready. When
+a server rejects the session (for example with HTTP 403), that task can end without reporting, so
+the service also watches the task and skips the server instead of waiting forever.
+
 ## File Structure
 
 ```

@@ -10,10 +10,13 @@ servers to agents.
 """
 
 # Standard library imports
+import asyncio
+import functools
 import logging
 import os
 import re
 import uuid
+import weakref
 from datetime import datetime, timezone
 from typing import List, Optional, Sequence
 
@@ -21,6 +24,7 @@ from typing import List, Optional, Sequence
 from semantic_kernel import kernel as sk
 from semantic_kernel.connectors.mcp import MCPStreamableHttpPlugin
 from semantic_kernel.contents import AuthorRole, ChatHistory, ChatMessageContent
+from semantic_kernel.functions import KernelPlugin
 
 # Local imports
 from microsoft_agents.hosting.core import Authorization, TurnContext
@@ -35,6 +39,87 @@ from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
     is_development_environment,
 )
+
+# Kernel plugins created by add_tool_servers_to_agent, keyed by id(). Module-level so plugins
+# added by any service instance are recognized; entries are dropped when the plugin is
+# garbage collected. KernelPlugin is unhashable, hence id() keys plus an identity check.
+_sdk_managed_plugins: "weakref.WeakValueDictionary[int, KernelPlugin]" = (
+    weakref.WeakValueDictionary()
+)
+
+# MCP plugins created by add_tool_servers_to_agent. Kernel.clone() copies KernelPlugin wrappers
+# but shares their functions, so cloned plugins are recognized by the MCP plugin that owns them.
+_sdk_managed_mcp_plugins: "weakref.WeakSet[MCPStreamableHttpPlugin]" = weakref.WeakSet()
+
+
+def _is_sdk_mcp_plugin(owner: object) -> bool:
+    """Return True if the object is an MCP plugin created by this service."""
+    try:
+        return owner in _sdk_managed_mcp_plugins
+    except TypeError:
+        # Not hashable or weak-referenceable, so it was not created by this service.
+        return False
+
+
+def _is_sdk_managed_plugin(plugin: KernelPlugin) -> bool:
+    """Return True if the kernel plugin was added by this service, or cloned from one that was."""
+    if _sdk_managed_plugins.get(id(plugin)) is plugin:
+        return True
+    functions = getattr(plugin, "functions", None)
+    if not isinstance(functions, dict):
+        return False
+    for function in functions.values():
+        method = getattr(function, "method", None)
+        # MCP tools are partial(mcp_plugin.call_tool, tool_name)
+        if isinstance(method, functools.partial):
+            method = method.func
+        owner = getattr(method, "__self__", None)
+        if owner is not None and _is_sdk_mcp_plugin(owner):
+            return True
+    return False
+
+
+def _register_sdk_managed_plugin(
+    kernel_plugin: Optional[KernelPlugin], mcp_plugin: MCPStreamableHttpPlugin
+) -> None:
+    """Record a kernel plugin added by this service and the MCP plugin behind it."""
+    try:
+        _sdk_managed_mcp_plugins.add(mcp_plugin)
+    except TypeError:
+        pass
+    try:
+        _sdk_managed_plugins[id(kernel_plugin)] = kernel_plugin
+    except TypeError:
+        # Not weak-referenceable (e.g. None from a custom kernel), so it cannot be tracked.
+        pass
+
+
+async def _connect_plugin(plugin: MCPStreamableHttpPlugin) -> None:
+    """Connect an MCP plugin, raising instead of waiting forever when the connection fails.
+
+    ``MCPPluginBase.connect()`` opens the connection in a background task and waits for that
+    task to report that it is ready. When the server rejects the session (for example with
+    HTTP 403), the background task can end without reporting, and ``connect()`` never returns.
+    """
+    connect_task = asyncio.ensure_future(plugin.connect())
+    try:
+        # connect() starts its background task before it first waits.
+        await asyncio.sleep(0)
+        connection_task = getattr(plugin, "_current_task", None)
+        pending = {connect_task}
+        if isinstance(connection_task, asyncio.Future):
+            pending.add(connection_task)
+        await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+    except BaseException:
+        connect_task.cancel()
+        raise
+    if not connect_task.done():
+        # The background task ended without reporting: the connection failed.
+        connect_task.cancel()
+        await asyncio.wait({connect_task})
+        error = None if connection_task.cancelled() else connection_task.exception()
+        raise ConnectionError(f"Failed to connect to MCP server '{plugin.name}'") from error
+    connect_task.result()
 
 
 class McpToolRegistrationService:
@@ -97,6 +182,16 @@ class McpToolRegistrationService:
         """
         Adds the A365 MCP Tool Servers to the specified kernel.
 
+        Each MCP plugin carries the current caller's Authorization token in its request
+        headers. Plugins added by an earlier call, including copies made by ``Kernel.clone()``,
+        are removed from the kernel before anything else happens, and fresh plugins are added
+        for this turn. A kernel that is reused from one turn to the next therefore does not
+        keep an earlier user's or agent identity's plugin, even when a server is not
+        rediscovered or fails to connect. A server that fails to connect, for example because
+        it rejects the caller, is skipped. Because the kernel is modified in place, turns that
+        run concurrently must each use their own kernel, for example a ``clone()`` of a base
+        kernel without these plugins.
+
         Args:
             kernel: The Semantic Kernel instance to which the tools will be added.
             auth: Authorization handler for token exchange.
@@ -108,6 +203,18 @@ class McpToolRegistrationService:
             ValueError: If kernel is None or required parameters are invalid.
             Exception: If there's an error connecting to or configuring MCP servers.
         """
+        # Remove plugins added by an earlier call before anything here can fail. They carry the
+        # token of whichever user or agent identity that call ran for.
+        if kernel is not None:
+            stale_plugin_names = [
+                name for name, plugin in kernel.plugins.items() if _is_sdk_managed_plugin(plugin)
+            ]
+            for name in stale_plugin_names:
+                del kernel.plugins[name]
+            if stale_plugin_names:
+                self._logger.info(
+                    f"Removed {len(stale_plugin_names)} MCP plugins added by an earlier call"
+                )
 
         is_dev = is_development_environment()
         if not auth_token and not is_dev:
@@ -168,10 +275,10 @@ class McpToolRegistrationService:
                 )
 
                 # Connect the plugin
-                await plugin.connect()
+                await _connect_plugin(plugin)
 
                 # Add plugin to kernel
-                kernel.add_plugin(plugin, server_name)
+                _register_sdk_managed_plugin(kernel.add_plugin(plugin, server_name), plugin)
 
                 # Store reference to keep plugin alive throughout application lifecycle.
                 # By storing plugin references in _connected_plugins, we prevent

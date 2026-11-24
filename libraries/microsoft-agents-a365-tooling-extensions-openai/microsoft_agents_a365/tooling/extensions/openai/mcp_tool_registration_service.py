@@ -8,15 +8,18 @@ This module provides OpenAI-specific extensions for MCP tool registration,
 including methods to send chat history from OpenAI Sessions and message lists.
 """
 
+import asyncio
 import logging
 import uuid
+import weakref
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from agents import Agent
 from agents.items import TResponseInputItem
 from agents.mcp import (
+    MCPServer,
     MCPServerStreamableHttp,
     MCPServerStreamableHttpParams,
 )
@@ -48,6 +51,103 @@ class MCPServerInfo:
     timeout: int = 30  # Timeout in seconds (will be converted to milliseconds for MCPServerStreamableHttpParams)
 
 
+# MCP servers created by add_tool_servers_to_agent, mapped to the URL and the exact request
+# headers (including the Authorization token) each one was connected with. Module-level so
+# servers attached by any service instance are recognized; entries are dropped when the
+# server object is garbage collected.
+_sdk_managed_servers: "weakref.WeakKeyDictionary[MCPServer, Tuple[str, Dict[str, str]]]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _get_sdk_managed_server_state(server: MCPServer) -> Optional[Tuple[str, Dict[str, str]]]:
+    """Return the (url, headers) an SDK-created server was connected with, or None."""
+    try:
+        return _sdk_managed_servers.get(server)
+    except TypeError:
+        # Not hashable or weak-referenceable, so it was not created by this service.
+        return None
+
+
+class _DedicatedTaskMCPServer(MCPServerStreamableHttp):
+    """MCPServerStreamableHttp that connects and disconnects in a task of its own.
+
+    While connected, the MCP client keeps anyio task groups open in the task that called
+    ``connect()``. Closing them from another task cancels that task, and a request that fails
+    inside them (for example the server rejecting the session with HTTP 403) cancels it too.
+    Opening and closing the connection in one dedicated task lets any task close the server,
+    for example a later call that replaces it, without cancelling a turn that is still using it,
+    and turns a failed connection into an ordinary exception for the caller. The server connects
+    only once, so a server that has been closed stays closed.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._connection_task: Optional["asyncio.Task[None]"] = None
+        self._close_requested = asyncio.Event()
+
+    @property
+    def is_open(self) -> bool:
+        """Whether the server is connected and has not been asked to close."""
+        return (
+            self.session is not None
+            and self._connection_task is not None
+            and not self._connection_task.done()
+            and not self._close_requested.is_set()
+        )
+
+    async def connect(self) -> None:
+        if self._connection_task is not None:
+            raise RuntimeError(f"MCP server '{self.name}' can only be connected once")
+        connected: "asyncio.Future[None]" = asyncio.get_running_loop().create_future()
+        self._connection_task = asyncio.create_task(self._run_connection(connected))
+        try:
+            await asyncio.wait({connected})
+        except asyncio.CancelledError:
+            # The connection task closes the server once it is done connecting.
+            self._close_requested.set()
+            connected.add_done_callback(lambda future: future.cancelled() or future.exception())
+            raise
+        connected.result()
+
+    async def _run_connection(self, connected: "asyncio.Future[None]") -> None:
+        try:
+            await super().connect()
+        except BaseException as error:
+            # A rejected session surfaces as cancellation of this task, so catch BaseException.
+            if not connected.done():
+                detail = f": {error}" if isinstance(error, Exception) else ""
+                connected.set_exception(
+                    ConnectionError(f"Failed to connect to MCP server '{self.name}'{detail}")
+                )
+            if not isinstance(error, (Exception, asyncio.CancelledError)):
+                raise
+        else:
+            connected.set_result(None)
+            await self._close_requested.wait()
+        finally:
+            await super().cleanup()
+
+    async def cleanup(self) -> None:
+        self._close_requested.set()
+        connection_task = self._connection_task
+        if connection_task is None or connection_task is asyncio.current_task():
+            return
+        await asyncio.wait({connection_task})
+        if not connection_task.cancelled() and connection_task.exception() is not None:
+            logging.getLogger(__name__).debug(
+                f"MCP server '{self.name}' closed with error: {connection_task.exception()}"
+            )
+
+
+def _is_open(server: MCPServer) -> bool:
+    """Return True if an MCP server is still connected."""
+    is_open = getattr(server, "is_open", None)
+    if isinstance(is_open, bool):
+        return is_open
+    return getattr(server, "session", None) is not None
+
+
 class McpToolRegistrationService:
     """Service for managing MCP tools and servers for an agent"""
 
@@ -72,11 +172,25 @@ class McpToolRegistrationService:
         auth_token: Optional[str] = None,
     ) -> Agent:
         """
-        Add new MCP servers to the agent by creating a new Agent instance.
+        Add the MCP servers discovered for the current turn to the agent.
 
         Note: Due to OpenAI Agents SDK limitations, MCP servers must be set during
-        Agent creation. If new servers are found, this method creates a new Agent
-        instance with all MCP servers (existing + new) properly initialized.
+        Agent creation. Whenever the agent's MCP servers change, this method returns a
+        copy of the agent (made with ``agent.clone``) instead of modifying it.
+
+        Each MCP server carries the current caller's Authorization token in its request
+        headers. A server attached by an earlier call is reused only when it is still connected
+        and its URL and headers (including the token) are identical to this turn's. Every other
+        server attached by an earlier call is closed, including when this method raises, so an
+        agent from an earlier turn can no longer call MCP servers with that turn's token.
+        Servers the caller configured on the agent are kept as-is. A server that fails to
+        connect, for example because it rejects the caller, is skipped.
+
+        Build the agent for each turn from a base agent without MCP servers from this method,
+        use the returned agent only for that turn, and call ``cleanup_all_servers()`` when the
+        turn ends. Use a separate service for each turn, because ``cleanup_all_servers()``
+        closes every server the service connected. Turns that run concurrently must not share
+        an agent.
 
         Args:
             agent: The existing agent to add servers to
@@ -86,28 +200,52 @@ class McpToolRegistrationService:
             auth_token: Authentication token to access the MCP servers.
 
         Returns:
-            New Agent instance with all MCP servers, or original agent if no new servers
+            Copy of the agent with this turn's MCP servers, or the original agent if its MCP
+            servers are already current.
         """
-
-        is_dev = is_development_environment()
-        if (auth_token is None or auth_token.strip() == "") and not is_dev:
-            # Only exchange a token in production; dev mode uses BEARER_TOKEN* env vars instead.
-            scopes = get_mcp_platform_authentication_scope()
-            authToken = await auth.exchange_token(context, scopes, auth_handler_name)
-            auth_token = authToken.token
-
-        options = ToolOptions(orchestrator_name=self._orchestrator_name)
-        # In dev mode, agentic_app_id is not needed for manifest-based discovery.
-        agentic_app_id = "" if is_dev else Utility.resolve_agent_identity(context, auth_token)
-        self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
-        mcp_server_configs = await self.config_service.list_tool_servers(
-            agentic_app_id=agentic_app_id,
-            auth_token=auth_token,
-            options=options,
-            authorization=auth,
-            auth_handler_name=auth_handler_name,
-            turn_context=context,
+        # Get existing MCP servers from the agent
+        existing_mcp_servers = (
+            list(agent.mcp_servers) if hasattr(agent, "mcp_servers") and agent.mcp_servers else []
         )
+
+        # Separate servers the caller configured from servers attached by an earlier call.
+        # The latter carry the token of whichever user or agent identity that call ran for.
+        caller_mcp_servers: List[MCPServer] = []
+        previous_sdk_servers: List[MCPServer] = []
+        previous_sdk_servers_by_url: Dict[str, Tuple[MCPServer, Dict[str, str]]] = {}
+        for server in existing_mcp_servers:
+            sdk_state = _get_sdk_managed_server_state(server)
+            if sdk_state is None:
+                caller_mcp_servers.append(server)
+            else:
+                previous_sdk_servers.append(server)
+                previous_url, previous_headers = sdk_state
+                previous_sdk_servers_by_url.setdefault(previous_url, (server, previous_headers))
+
+        try:
+            is_dev = is_development_environment()
+            if (auth_token is None or auth_token.strip() == "") and not is_dev:
+                # Only exchange a token in production; dev mode uses BEARER_TOKEN* env vars instead.
+                scopes = get_mcp_platform_authentication_scope()
+                authToken = await auth.exchange_token(context, scopes, auth_handler_name)
+                auth_token = authToken.token
+
+            options = ToolOptions(orchestrator_name=self._orchestrator_name)
+            # In dev mode, agentic_app_id is not needed for manifest-based discovery.
+            agentic_app_id = "" if is_dev else Utility.resolve_agent_identity(context, auth_token)
+            self._logger.info(f"Listing MCP tool servers for agent {agentic_app_id}")
+            mcp_server_configs = await self.config_service.list_tool_servers(
+                agentic_app_id=agentic_app_id,
+                auth_token=auth_token,
+                options=options,
+                authorization=auth,
+                auth_handler_name=auth_handler_name,
+                turn_context=context,
+            )
+        except Exception:
+            # Without this turn's servers, none from an earlier call may stay usable.
+            await self._close_replaced_servers(previous_sdk_servers)
+            raise
 
         self._logger.info(f"Loaded {len(mcp_server_configs)} MCP server configurations")
 
@@ -125,127 +263,150 @@ class McpToolRegistrationService:
             )
             mcp_servers_info.append(server_info)
 
-        # Get existing MCP servers from the agent
-        existing_mcp_servers = (
-            list(agent.mcp_servers) if hasattr(agent, "mcp_servers") and agent.mcp_servers else []
-        )
+        # Servers the caller configured take precedence over discovered servers at the same URL.
+        added_server_urls = set()
+        for server in caller_mcp_servers:
+            server_url = self._get_server_url(server)
+            if server_url is not None:
+                added_server_urls.add(server_url)
 
-        # Prepare new MCP servers to add
-        new_mcp_servers = []
+        sdk_mcp_servers: List[MCPServer] = []
         connected_servers = []
 
-        existing_server_urls = []
-        for server in existing_mcp_servers:
-            # Check for URL in params dict (MCPServerStreamableHttp stores URL in params["url"])
-            if (
-                hasattr(server, "params")
-                and isinstance(server.params, dict)
-                and "url" in server.params
-            ):
-                existing_server_urls.append(server.params["url"])
-            elif hasattr(server, "params") and hasattr(server.params, "url"):
-                existing_server_urls.append(server.params.url)
-            elif hasattr(server, "url"):
-                existing_server_urls.append(server.url)
-
         for si in mcp_servers_info:
-            # Check if MCP server already exists
+            if si.url in added_server_urls:
+                continue
 
-            if si.url not in existing_server_urls:
-                try:
-                    # Merge base headers with per-server headers from list_tool_servers.
-                    # si.headers already contains the correct per-audience Authorization token.
-                    base_headers = {
-                        Constants.Headers.USER_AGENT: Utility.get_user_agent_header(
-                            self._orchestrator_name
-                        )
-                    }
-                    server_headers = dict(si.headers) if si.headers else {}
-                    # Fall back to the shared discovery token when no per-server
-                    # Authorization header was attached (e.g. dev mode without
-                    # BEARER_TOKEN* env vars, or legacy V1 callers).
-                    if Constants.Headers.AUTHORIZATION not in server_headers and auth_token:
-                        server_headers[Constants.Headers.AUTHORIZATION] = (
-                            auth_token
-                            if auth_token.lower().startswith(
-                                f"{Constants.Headers.BEARER_PREFIX.lower()} "
-                            )
-                            else f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
-                        )
-                    headers = {
-                        **base_headers,
-                        **server_headers,
-                    }  # per-audience token takes precedence
-
-                    # Create MCPServerStreamableHttpParams with proper configuration
-                    params = MCPServerStreamableHttpParams(url=si.url, headers=headers)
-
-                    # Create MCP server
-                    mcp_server = MCPServerStreamableHttp(params=params, name=si.name)
-
-                    # CRITICAL: Connect the server before adding it to the agent
-                    # This fixes the "Server not initialized. Make sure you call `connect()` first." error
-                    # TODO: When App Manifest scenario lits up for onboarding agent, we need to pull a flag and disconnect if the flag is disabled.
-                    await mcp_server.connect()
-
-                    new_mcp_servers.append(mcp_server)
-                    connected_servers.append(mcp_server)
-
-                    existing_server_urls.append(si.url)
-                    self._logger.info(
-                        f"Successfully connected to MCP server '{si.name}' at {si.url}"
+            try:
+                # Merge base headers with per-server headers from list_tool_servers.
+                # si.headers already contains the correct per-audience Authorization token.
+                base_headers = {
+                    Constants.Headers.USER_AGENT: Utility.get_user_agent_header(
+                        self._orchestrator_name
                     )
+                }
+                server_headers = dict(si.headers) if si.headers else {}
+                # Fall back to the shared discovery token when no per-server
+                # Authorization header was attached (e.g. dev mode without
+                # BEARER_TOKEN* env vars, or legacy V1 callers).
+                if Constants.Headers.AUTHORIZATION not in server_headers and auth_token:
+                    server_headers[Constants.Headers.AUTHORIZATION] = (
+                        auth_token
+                        if auth_token.lower().startswith(
+                            f"{Constants.Headers.BEARER_PREFIX.lower()} "
+                        )
+                        else f"{Constants.Headers.BEARER_PREFIX} {auth_token}"
+                    )
+                headers = {
+                    **base_headers,
+                    **server_headers,
+                }  # per-audience token takes precedence
 
-                except Exception as e:
-                    # Log the error but continue with other servers
-                    self._logger.warning(
-                        f"Failed to connect to MCP server {si.name} at {si.url}: {e}"
+                # Identical headers mean the same token, and so the same identity: keep the
+                # existing connection while it is open. Any other previous server is replaced,
+                # never reused.
+                previous = previous_sdk_servers_by_url.get(si.url)
+                if previous is not None and previous[1] == headers and _is_open(previous[0]):
+                    sdk_mcp_servers.append(previous[0])
+                    added_server_urls.add(si.url)
+                    self._logger.info(
+                        f"Reusing MCP server '{si.name}' at {si.url}; credentials unchanged"
                     )
                     continue
 
-        # If we have new servers, we need to recreate the agent
-        # The OpenAI Agents SDK requires MCP servers to be set during agent creation
-        if new_mcp_servers:
-            try:
-                self._logger.info(f"Recreating agent with {len(new_mcp_servers)} new MCP servers")
-                all_mcp_servers = existing_mcp_servers + new_mcp_servers
+                # Create MCPServerStreamableHttpParams with proper configuration
+                params = MCPServerStreamableHttpParams(url=si.url, headers=headers)
 
-                # Recreate the agent with all MCP servers
-                new_agent = Agent(
-                    name=agent.name,
-                    model=agent.model,
-                    model_settings=agent.model_settings
-                    if hasattr(agent, "model_settings")
-                    else None,
-                    instructions=agent.instructions,
-                    tools=agent.tools,
-                    mcp_servers=all_mcp_servers,
-                )
+                # Create the MCP server. It connects and disconnects in a task of its own, so
+                # it can be closed from any task.
+                mcp_server = _DedicatedTaskMCPServer(params=params, name=si.name)
 
-                # Copy agent attributes to preserve state
-                for attr_name in ["name", "model", "instructions", "tools"]:
-                    if hasattr(agent, attr_name):
-                        setattr(new_agent, attr_name, getattr(agent, attr_name))
+                # CRITICAL: Connect the server before adding it to the agent
+                # This fixes the "Server not initialized. Make sure you call `connect()` first." error
+                # TODO: When App Manifest scenario lits up for onboarding agent, we need to pull a flag and disconnect if the flag is disabled.
+                await mcp_server.connect()
 
-                # Store connected servers for potential cleanup
-                if not hasattr(self, "_connected_servers"):
-                    self._connected_servers = []
-                self._connected_servers.extend(connected_servers)
+                _sdk_managed_servers[mcp_server] = (si.url, dict(headers))
+                sdk_mcp_servers.append(mcp_server)
+                connected_servers.append(mcp_server)
 
-                self._logger.info(
-                    f"Agent recreated successfully with {len(all_mcp_servers)} total MCP servers"
-                )
-                # Return the new agent (caller needs to replace the old one)
-                return new_agent
+                added_server_urls.add(si.url)
+                self._logger.info(f"Successfully connected to MCP server '{si.name}' at {si.url}")
 
             except Exception as e:
-                # Clean up connected servers if agent creation fails
-                self._logger.error(f"Failed to recreate agent with new MCP servers: {e}")
-                await self._cleanup_servers(connected_servers)
-                raise
+                # Log the error but continue with other servers. Never fall back to a server
+                # from an earlier call: it may carry another identity's token.
+                self._logger.warning(f"Failed to connect to MCP server {si.name} at {si.url}: {e}")
+                continue
 
-        self._logger.info("No new MCP servers to add to agent")
-        return agent
+        all_mcp_servers = caller_mcp_servers + sdk_mcp_servers
+        if len(all_mcp_servers) == len(existing_mcp_servers) and {
+            id(server) for server in all_mcp_servers
+        } == {id(server) for server in existing_mcp_servers}:
+            self._logger.info("Agent MCP servers are already current")
+            return agent
+
+        # Close servers from an earlier call that this turn does not reuse, so an agent from an
+        # earlier turn cannot keep calling MCP servers with that turn's token.
+        reused_ids = {id(server) for server in sdk_mcp_servers}
+        await self._close_replaced_servers(
+            [server for server in previous_sdk_servers if id(server) not in reused_ids]
+        )
+
+        # The OpenAI Agents SDK requires MCP servers to be set during agent creation
+        try:
+            self._logger.info(
+                f"Recreating agent with {len(all_mcp_servers)} MCP servers "
+                f"({len(connected_servers)} newly connected)"
+            )
+
+            # clone() keeps every other agent setting (guardrails, handoffs, hooks, and so on)
+            new_agent = agent.clone(mcp_servers=all_mcp_servers)
+
+            # Store connected servers for potential cleanup
+            if not hasattr(self, "_connected_servers"):
+                self._connected_servers = []
+            self._connected_servers.extend(connected_servers)
+
+            self._logger.info(
+                f"Agent recreated successfully with {len(all_mcp_servers)} total MCP servers"
+            )
+            # Return the new agent (caller needs to replace the old one)
+            return new_agent
+
+        except Exception as e:
+            # Clean up connected servers if agent creation fails
+            self._logger.error(f"Failed to recreate agent with new MCP servers: {e}")
+            await self._cleanup_servers(connected_servers)
+            raise
+
+    async def _close_replaced_servers(self, servers: List[MCPServer]) -> None:
+        """Close MCP servers attached by an earlier call that the current turn does not reuse."""
+        if hasattr(self, "_connected_servers"):
+            replaced_ids = {id(server) for server in servers}
+            self._connected_servers = [
+                server for server in self._connected_servers if id(server) not in replaced_ids
+            ]
+        open_servers = [server for server in servers if _is_open(server)]
+        if not open_servers:
+            return
+        self._logger.warning(
+            f"Closing {len(open_servers)} MCP servers attached by an earlier call that this turn "
+            "does not reuse. Build the agent for each turn from a base agent without these "
+            "servers and use the returned agent only for that turn."
+        )
+        await self._cleanup_servers(open_servers)
+
+    @staticmethod
+    def _get_server_url(server: MCPServer) -> Optional[str]:
+        """Return the URL an MCP server connects to, if it exposes one."""
+        params = getattr(server, "params", None)
+        # MCPServerStreamableHttp stores the URL in params["url"]
+        if isinstance(params, dict) and "url" in params:
+            return params["url"]
+        if params is not None and hasattr(params, "url"):
+            return params.url
+        return getattr(server, "url", None)
 
     async def _cleanup_servers(self, servers: List[MCPServerStreamableHttp]) -> None:
         """Clean up connected MCP servers"""
@@ -258,7 +419,11 @@ class McpToolRegistrationService:
                 self._logger.debug(f"Error during server cleanup: {e}")
 
     async def cleanup_all_servers(self) -> None:
-        """Clean up all connected MCP servers"""
+        """Close every MCP server this service connected.
+
+        Use one service per turn: this also closes servers that other turns using the same
+        service are still working with.
+        """
         if hasattr(self, "_connected_servers"):
             await self._cleanup_servers(self._connected_servers)
             self._connected_servers = []

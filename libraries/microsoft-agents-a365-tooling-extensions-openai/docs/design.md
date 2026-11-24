@@ -43,6 +43,37 @@ McpToolRegistrationService.get_function_definitions()
 OpenAI API with function calling
 ```
 
+### Adding MCP servers to an agent
+
+```python
+agent = await service.add_tool_servers_to_agent(
+    agent=base_agent,
+    auth=auth,
+    auth_handler_name="agentic",
+    context=turn_context,
+)
+```
+
+Each MCP server carries the Authorization token of the turn it was connected for. A server that an
+earlier call attached (tracked by object identity, across service instances) is reused only when it
+is still connected and its URL and headers, including the token, are identical to the current
+turn's. Every other server from an earlier call is closed, including when the call fails, so an
+agent from an earlier turn can no longer call MCP servers with that turn's token. Servers you
+configure on the agent yourself are kept as-is, and the returned agent is a `clone()` of the one
+passed in, so its other settings are preserved.
+
+Each server the service creates connects and disconnects in a task of its own. The MCP client keeps
+anyio task groups open while it is connected, and closing them from a different task, or a request
+failing inside them, would otherwise cancel the task that connected. As a result, any task can close
+a server without cancelling a turn that is still using it (that turn's MCP calls fail instead), and
+a server that rejects the connection, for example with HTTP 403, is skipped while the remaining
+servers are still added.
+
+Build the agent for each turn from a base agent without these servers, use the returned agent only
+for that turn, and call `cleanup_all_servers()` when the turn ends. `cleanup_all_servers()` closes
+every server the service connected, so use a separate service for each turn. Turns that run
+concurrently must not share an agent.
+
 ## File Structure
 
 ```
