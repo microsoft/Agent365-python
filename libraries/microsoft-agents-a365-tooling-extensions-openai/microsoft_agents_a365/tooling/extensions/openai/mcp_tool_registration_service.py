@@ -14,7 +14,7 @@ import uuid
 import weakref
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from agents import Agent
 from agents.items import TResponseInputItem
@@ -81,8 +81,8 @@ class _DedicatedTaskMCPServer(MCPServerStreamableHttp):
     only once, so a server that has been closed stays closed.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, params: MCPServerStreamableHttpParams, name: Optional[str] = None) -> None:
+        super().__init__(params=params, name=name)
         self._connection_task: Optional["asyncio.Task[None]"] = None
         self._close_requested = asyncio.Event()
 
