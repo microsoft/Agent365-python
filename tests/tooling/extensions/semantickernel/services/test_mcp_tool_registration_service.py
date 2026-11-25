@@ -580,7 +580,13 @@ class TestPluginsClosedWithTheirKernel:
         monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
         kernels = [Kernel()]
 
-        asyncio.run(run_turn(McpToolRegistrationService(), kernels[0], "user-a-token"))
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(
+                run_turn(McpToolRegistrationService(), kernels[0], "user-a-token")
+            )
+        finally:
+            loop.close()
         kernels.clear()
         gc.collect()
 

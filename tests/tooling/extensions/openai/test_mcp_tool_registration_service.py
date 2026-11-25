@@ -676,7 +676,11 @@ class TestServersClosedWithTheirAgent:
         async def register() -> None:
             agents.append(await run_turn(McpToolRegistrationService(), new_agent(), "user-a-token"))
 
-        asyncio.run(register())
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(register())
+        finally:
+            loop.close()
         agents.clear()
         gc.collect()
 

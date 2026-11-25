@@ -863,7 +863,13 @@ class TestMcpToolsetsClosedWithTheirAgent(AdkTurns):
         monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
         agents = [new_adk_agent()]
 
-        asyncio.run(self.run_turn(McpToolRegistrationService(), agents[0], "user-a-token"))
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(
+                self.run_turn(McpToolRegistrationService(), agents[0], "user-a-token")
+            )
+        finally:
+            loop.close()
         agents.clear()
         gc.collect()
 
