@@ -307,10 +307,10 @@ class McpToolRegistrationService:
 
         Example:
             >>> service = McpToolRegistrationService()
-            >>> agent = await service.add_tool_servers_to_agent(
-            ...     base_agent, auth, "agentic", turn_context
-            ... )
             >>> try:
+            ...     agent = await service.add_tool_servers_to_agent(
+            ...         base_agent, auth, "agentic", turn_context
+            ...     )
             ...     result = await Runner.run(agent, user_message)
             ... finally:
             ...     await service.cleanup_all_servers()

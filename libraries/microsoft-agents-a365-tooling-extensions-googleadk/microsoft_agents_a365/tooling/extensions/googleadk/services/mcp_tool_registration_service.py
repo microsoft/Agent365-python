@@ -200,8 +200,8 @@ class McpToolRegistrationService:
         Example:
             >>> service = McpToolRegistrationService()
             >>> agent = base_agent.clone()
-            >>> await service.add_tool_servers_to_agent(agent, auth, "agentic", turn_context)
             >>> try:
+            ...     await service.add_tool_servers_to_agent(agent, auth, "agentic", turn_context)
             ...     async for event in Runner(agent=agent, ...).run_async(...):
             ...         ...
             ... finally:

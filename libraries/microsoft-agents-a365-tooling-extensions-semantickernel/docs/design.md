@@ -83,8 +83,8 @@ name isn't a valid plugin name, is closed too.
 ```python
 service = McpToolRegistrationService()
 kernel = base_kernel.clone()
-await service.add_tool_servers_to_agent(kernel, auth, "agentic", turn_context)
 try:
+    await service.add_tool_servers_to_agent(kernel, auth, "agentic", turn_context)
     result = await kernel.invoke_prompt(user_message)
 finally:
     await service.cleanup_connections()

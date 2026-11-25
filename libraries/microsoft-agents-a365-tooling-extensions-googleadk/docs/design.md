@@ -62,8 +62,8 @@ agent, for example a `clone()` of a base agent.
 ```python
 service = McpToolRegistrationService()
 agent = base_agent.clone()
-await service.add_tool_servers_to_agent(agent, auth, "agentic", turn_context)
 try:
+    await service.add_tool_servers_to_agent(agent, auth, "agentic", turn_context)
     async for event in Runner(app_name=app_name, agent=agent, session_service=sessions).run_async(
         user_id=user_id, session_id=session_id, new_message=message
     ):
