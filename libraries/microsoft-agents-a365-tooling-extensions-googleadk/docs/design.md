@@ -57,6 +57,26 @@ and does not accumulate open MCP sessions. Tools
 you add to the agent yourself are kept as-is. Because the agent is modified in place, turns that
 run concurrently must each use their own agent, for example a `clone()` of a base agent.
 
+### Closing toolsets when their agent is garbage collected
+
+If `cleanup()` isn't called, the sessions are still bounded by the agents that use them. Each
+toolset is recorded against the agent it was added to, together with the event loop it was added
+on, and a `weakref.finalize` callback on that agent closes the agent's toolsets once it is garbage
+collected. Because garbage collection can run in any thread, the callback only uses
+`loop.call_soon_threadsafe` to close them on that loop with `McpToolset.close()`, in a background
+task, and it does nothing if that loop is already closed. ADK runs each MCP session in a task of its
+own and closes it on the loop it was created on, so closing from that task is safe. A toolset that a
+later call replaces is removed from its agent's record when it is closed. A toolset is only ever
+added to one agent, so it is closed when that agent is collected. Closed toolsets are also dropped
+from the service's tracking. `cleanup()` is still the deterministic way to close them, and closing a
+toolset twice has no effect, so the two paths don't conflict.
+
+The finalizer holds the toolsets, not the agent, so it doesn't keep the agent alive; an `McpToolset`
+doesn't refer to its agent either. `clone()` copies the agent's tool list, so a clone made after
+this call holds the same toolsets without keeping them open, and ADK reconnects a closed toolset
+the next time it is used. Clone the base agent before calling `add_tool_servers_to_agent`, not
+after.
+
 ### add_tool_servers_to_agent Parameters
 
 | Parameter | Type | Description |
