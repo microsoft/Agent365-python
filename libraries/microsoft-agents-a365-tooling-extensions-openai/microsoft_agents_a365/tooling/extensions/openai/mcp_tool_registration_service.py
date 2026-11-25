@@ -183,8 +183,10 @@ class McpToolRegistrationService:
         and its URL and headers (including the token) are identical to this turn's. Every other
         server attached by an earlier call is closed, including when this method raises or is
         cancelled, so an agent from an earlier turn can no longer call MCP servers with that
-        turn's token. Servers the caller configured on the agent are kept as-is. A server that
-        fails to connect, for example because it rejects the caller, is skipped.
+        turn's token. When this method raises or is cancelled, it also removes those servers
+        from the agent passed in (by assigning it a new ``mcp_servers`` list), so that agent can
+        still run without them. Servers the caller configured on the agent are kept as-is. A
+        server that fails to connect, for example because it rejects the caller, is skipped.
 
         Build the agent for each turn from a base agent without MCP servers from this method,
         use the returned agent only for that turn, and call ``cleanup_all_servers()`` when the
@@ -244,7 +246,8 @@ class McpToolRegistrationService:
             )
         except BaseException:
             # Also on cancellation: without this turn's servers, none from an earlier call may
-            # stay usable.
+            # stay usable. Leave the agent usable without them.
+            self._remove_servers(agent, previous_sdk_servers)
             await self._close_replaced_servers(previous_sdk_servers)
             raise
 
@@ -376,7 +379,9 @@ class McpToolRegistrationService:
 
         except BaseException:
             # Also on cancellation: close the servers this call connected and every server an
-            # earlier call attached, so none of them stays open or usable.
+            # earlier call attached, so none of them stays open or usable, and leave the agent
+            # usable without them.
+            self._remove_servers(agent, previous_sdk_servers)
             await self._cleanup_servers(connected_servers)
             await self._close_replaced_servers(previous_sdk_servers)
             raise
@@ -397,6 +402,18 @@ class McpToolRegistrationService:
         self._connected_servers.extend(
             server for server in servers if id(server) not in tracked_ids
         )
+
+    def _remove_servers(self, agent: Agent, servers: List[MCPServer]) -> None:
+        """Remove MCP servers from an agent without changing a list that its clones may share."""
+        if not servers:
+            return
+        removed_ids = {id(server) for server in servers}
+        try:
+            agent.mcp_servers = [
+                server for server in agent.mcp_servers if id(server) not in removed_ids
+            ]
+        except Exception as e:
+            self._logger.debug(f"Could not remove closed MCP servers from the agent: {e}")
 
     async def _close_replaced_servers(self, servers: List[MCPServer]) -> None:
         """Close MCP servers attached by an earlier call that the current turn does not reuse."""

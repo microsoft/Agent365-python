@@ -61,7 +61,9 @@ turn's. Every other server from an earlier call is closed, including when the ca
 cancelled, so an agent from an earlier turn can no longer call MCP servers with that turn's token.
 Servers this call connected are also closed if it fails or is cancelled. Servers you configure on
 the agent yourself are kept as-is, and the returned agent is a `clone()` of the one passed in, so
-its other settings are preserved.
+its other settings are preserved. When the call fails or is cancelled, the servers it closed are
+also removed from the agent passed in, by assigning it a new `mcp_servers` list (clones made with
+`clone()` share the old list, which is left unchanged), so that agent can still run without them.
 
 Each server the service creates connects and disconnects in a task of its own. The MCP client keeps
 anyio task groups open while it is connected, and closing them from a different task, or a request

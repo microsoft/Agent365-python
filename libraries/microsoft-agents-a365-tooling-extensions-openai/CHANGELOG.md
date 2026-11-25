@@ -14,6 +14,9 @@ All notable changes to this package will be documented in this file.
   turn, use the returned agent only for that turn, and call `cleanup_all_servers()` when the turn
   ends. `cleanup_all_servers()` closes the servers on every agent the service returned, including
   servers reused from an earlier call.
+- When `add_tool_servers_to_agent` fails or is cancelled, the servers it closes are also removed
+  from the agent you passed in (it gets a new `mcp_servers` list, so clones that share the old list
+  are unchanged), so that agent can still run without them.
 - MCP servers created by `add_tool_servers_to_agent` now connect and disconnect in a task of their
   own. Closing a server from another task no longer cancels the task that is using it, and a server
   that rejects the connection (for example with HTTP 403) is skipped instead of cancelling the

@@ -12,6 +12,7 @@ import anyio
 import pytest
 from agents import Agent, GuardrailFunctionOutput, InputGuardrail
 from agents.mcp import MCPServerStreamableHttp
+from agents.run_context import RunContextWrapper
 from microsoft_agents_a365.tooling.extensions.openai import McpToolRegistrationService
 from microsoft_agents_a365.tooling.extensions.openai.mcp_tool_registration_service import (
     _DedicatedTaskMCPServer,
@@ -305,7 +306,7 @@ class TestReplacedServerLifecycle:
         with pytest.raises(RuntimeError, match="discovery failed"):
             await run_turn(service, agent_a, "user-b-token")
 
-        assert [server.closed for server in agent_a.mcp_servers] == [True]
+        assert [server.closed for server in harness.created] == [True]
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -323,11 +324,13 @@ class TestReplacedServerLifecycle:
         service = McpToolRegistrationService()
 
         first = await run_turn(service, new_agent(), "user-a-token")
+        # Shares first's server list, so it still holds the server the failed call closes.
+        sibling = first.clone()
         harness.fail_discovery = True
         with pytest.raises(RuntimeError, match="discovery failed"):
             await run_turn(service, first, "user-a-token")
         harness.fail_discovery = False
-        third = await run_turn(service, first, "user-a-token")
+        third = await run_turn(service, sibling, "user-a-token")
 
         assert len(harness.created) == 2
         assert third.mcp_servers == [harness.created[1]]
@@ -343,7 +346,7 @@ class TestReplacedServerLifecycle:
         with pytest.raises(asyncio.CancelledError):
             await run_turn(service, agent_a, "user-b-token")
 
-        assert [server.closed for server in agent_a.mcp_servers] == [True]
+        assert [server.closed for server in harness.created] == [True]
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -361,6 +364,56 @@ class TestReplacedServerLifecycle:
         # The earlier call's server and the server this call connected before it was cancelled.
         assert [server.name for server in harness.created] == ["mail", "mail", "calendar"]
         assert [server.closed for server in harness.created[:2]] == [True, True]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_failed_call_leaves_the_agent_usable_without_its_closed_servers(
+        self, discovery: Harness, transport: FakeTransport
+    ) -> None:
+        service = McpToolRegistrationService()
+        agent = await run_turn(service, new_agent(), "user-a-token")
+
+        discovery.fail_discovery = True
+        with pytest.raises(RuntimeError, match="discovery failed"):
+            await run_turn(service, agent, "user-b-token")
+
+        assert agent.mcp_servers == []
+        assert await agent.get_all_tools(RunContextWrapper(context=None)) == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_cancelled_connection_removes_closed_servers_from_the_agent(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        agent = await run_turn(service, new_agent(), "user-a-token")
+
+        harness.discovered = ["mail", "calendar"]
+        harness.cancel_connect = {"calendar"}
+        with pytest.raises(asyncio.CancelledError):
+            await run_turn(service, agent, "user-b-token")
+
+        assert agent.mcp_servers == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_failed_call_keeps_caller_servers_and_lists_shared_with_clones(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        caller_server = FakeStreamableHttpServer(
+            {"url": server_url("custom"), "headers": {}}, "custom", harness
+        )
+        base = Agent(name="test-agent", instructions="Test.", mcp_servers=[caller_server])
+        first = await run_turn(service, base, "user-a-token")
+        personalized = first.clone(instructions="Personalized for user B.")
+
+        harness.cancel_discovery = True
+        with pytest.raises(asyncio.CancelledError):
+            await run_turn(service, personalized, "user-b-token")
+
+        assert personalized.mcp_servers == [caller_server]
+        assert first.mcp_servers == [caller_server, harness.created[0]]
 
     @pytest.mark.asyncio
     @pytest.mark.unit
