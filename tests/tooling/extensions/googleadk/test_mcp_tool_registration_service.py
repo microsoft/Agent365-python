@@ -3,7 +3,12 @@
 
 """Unit tests for McpToolRegistrationService in Google ADK extension."""
 
+import asyncio
+import gc
+import importlib
 import os
+import sys
+import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -542,3 +547,334 @@ class TestCleanup:
 
             # Assert - list should still be cleared
             assert service._connected_servers == []
+
+
+ADK_MODULE = (
+    "microsoft_agents_a365.tooling.extensions.googleadk.services.mcp_tool_registration_service"
+)
+
+
+def adk_server_url(name: str) -> str:
+    return f"https://mcp.example.com/{name}"
+
+
+def caller_tool() -> str:
+    """A tool the caller configured on the agent."""
+    return "caller tool"
+
+
+class FakeMcpToolset:
+    """Stands in for McpToolset and records the connection parameters it was created with."""
+
+    def __init__(self, connection_params: object, close_delay: float = 0) -> None:
+        self.connection_params = connection_params
+        self.close_delay = close_delay
+        self.closed = False
+        self.close_calls = 0
+        self.closed_in_thread: int | None = None
+
+    async def close(self) -> None:
+        self.close_calls += 1
+        await asyncio.sleep(self.close_delay)
+        self.closed = True
+        self.closed_in_thread = threading.get_ident()
+
+
+class AdkHarness:
+    """Controls MCP discovery and toolset creation for one test."""
+
+    def __init__(self) -> None:
+        self.discovered: list[str] = ["mail"]
+        self.fail_create = False
+        self.fail_discovery = False
+        self.close_delay = 0.0
+
+    async def list_tool_servers(
+        self, agentic_app_id: str, auth_token: str, options: object, **kwargs: object
+    ) -> list[object]:
+        from microsoft_agents_a365.tooling.models import MCPServerConfig
+
+        if self.fail_discovery:
+            raise RuntimeError("discovery failed")
+        # Mirrors list_tool_servers attaching the caller's per-audience token to each server.
+        return [
+            MCPServerConfig(
+                mcp_server_name=name,
+                mcp_server_unique_name=name,
+                url=adk_server_url(name),
+                headers={"Authorization": f"Bearer {auth_token}"},
+            )
+            for name in self.discovered
+        ]
+
+    def create_toolset(self, connection_params: object) -> FakeMcpToolset:
+        if self.fail_create:
+            raise ConnectionError("toolset creation failed")
+        return FakeMcpToolset(connection_params, self.close_delay)
+
+
+class AdkTurns:
+    """Runs add_tool_servers_to_agent with fake MCP discovery and toolsets."""
+
+    @pytest.fixture
+    def harness(self):
+        test_harness = AdkHarness()
+        config_service = MagicMock()
+        config_service.list_tool_servers = AsyncMock(side_effect=test_harness.list_tool_servers)
+        with (
+            patch(f"{ADK_MODULE}.McpToolServerConfigurationService", return_value=config_service),
+            patch(f"{ADK_MODULE}.McpToolset", side_effect=test_harness.create_toolset),
+            patch(f"{ADK_MODULE}.Utility") as utility,
+            patch(f"{ADK_MODULE}.is_development_environment", return_value=False),
+            patch(
+                f"{ADK_MODULE}.get_mcp_platform_authentication_scope",
+                return_value=["https://test.scope/.default"],
+            ),
+        ):
+            utility.resolve_agent_identity.return_value = "agent-123"
+            utility.get_user_agent_header.return_value = "Agent365SDK/test"
+            yield test_harness
+
+    @pytest.fixture
+    def agent(self):
+        from google.adk.agents import Agent
+
+        return Agent(name="test_agent", model="gemini-2.0-flash", tools=[caller_tool])
+
+    @staticmethod
+    async def run_turn(service, agent, token, auth=None):
+        await service.add_tool_servers_to_agent(
+            agent=agent,
+            auth=auth or MagicMock(),
+            auth_handler_name="agentic",
+            context=MagicMock(),
+            auth_token=token,
+        )
+
+    @staticmethod
+    def toolset_authorization(agent) -> dict[str, str]:
+        return {
+            tool.connection_params.url: tool.connection_params.headers["Authorization"]
+            for tool in agent.tools
+            if isinstance(tool, FakeMcpToolset)
+        }
+
+
+class TestMcpToolsetIdentityIsolation(AdkTurns):
+    """A reused agent must only call MCP servers with the current turn's token."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_reused_agent_gets_current_identity_token(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+
+        await self.run_turn(service, agent, "user-a-token")
+        await self.run_turn(service, agent, "user-b-token")
+
+        assert self.toolset_authorization(agent) == {adk_server_url("mail"): "Bearer user-b-token"}
+        assert caller_tool in agent.tools
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_replaced_toolsets_are_closed_and_released(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        await self.run_turn(service, agent, "user-a-token")
+        replaced = [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]
+
+        await self.run_turn(service, agent, "user-b-token")
+        closing_tasks = getattr(importlib.import_module(ADK_MODULE), "_closing_tasks", set())
+        await asyncio.wait_for(asyncio.gather(*closing_tasks), timeout=5)
+
+        assert replaced and all(toolset.closed for toolset in replaced)
+        current = [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]
+        assert service._connected_servers == current
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_cleanup_waits_for_replaced_toolsets_to_close(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        harness.close_delay = 0.05
+        await self.run_turn(service, agent, "user-a-token")
+        replaced = [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]
+        await self.run_turn(service, agent, "user-b-token")
+
+        await service.cleanup()
+
+        toolsets = replaced + [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]
+        assert replaced and all(toolset.closed for toolset in toolsets)
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_toolsets_from_another_service_instance_are_replaced(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        await self.run_turn(McpToolRegistrationService(), agent, "user-a-token")
+        await self.run_turn(McpToolRegistrationService(), agent, "user-b-token")
+
+        assert self.toolset_authorization(agent) == {adk_server_url("mail"): "Bearer user-b-token"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_previous_toolsets_removed_when_token_exchange_fails(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        await self.run_turn(service, agent, "user-a-token")
+
+        failing_auth = MagicMock()
+        failing_auth.exchange_token = AsyncMock(side_effect=RuntimeError("exchange failed"))
+        with pytest.raises(RuntimeError, match="exchange failed"):
+            await self.run_turn(service, agent, None, auth=failing_auth)
+
+        assert self.toolset_authorization(agent) == {}
+        assert agent.tools == [caller_tool]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_previous_toolsets_removed_when_discovery_fails(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        await self.run_turn(service, agent, "user-a-token")
+
+        harness.fail_discovery = True
+        with pytest.raises(RuntimeError, match="discovery failed"):
+            await self.run_turn(service, agent, "user-b-token")
+
+        assert agent.tools == [caller_tool]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_previous_toolsets_removed_when_toolset_creation_fails(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        await self.run_turn(service, agent, "user-a-token")
+
+        harness.fail_create = True
+        await self.run_turn(service, agent, "user-b-token")
+
+        assert self.toolset_authorization(agent) == {}
+        assert agent.tools == [caller_tool]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_toolset_not_rediscovered_is_removed(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+
+        harness.discovered = ["mail", "calendar"]
+        await self.run_turn(service, agent, "user-a-token")
+        harness.discovered = ["mail"]
+        await self.run_turn(service, agent, "user-b-token")
+
+        assert self.toolset_authorization(agent) == {adk_server_url("mail"): "Bearer user-b-token"}
+
+
+def new_adk_agent():
+    from google.adk.agents import Agent
+
+    return Agent(name="test_agent", model="gemini-2.0-flash", tools=[caller_tool])
+
+
+async def collect_garbage() -> None:
+    """Collect garbage, then let the event loop close the toolsets of collected agents."""
+    gc.collect()
+    await asyncio.sleep(0)
+    closing_tasks = set(importlib.import_module(ADK_MODULE)._closing_tasks)
+    if closing_tasks:
+        await asyncio.wait(closing_tasks, timeout=5)
+
+
+class TestMcpToolsetsClosedWithTheirAgent(AdkTurns):
+    """Without cleanup(), toolsets close once the agent they were added to is gone."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_toolsets_are_closed_when_their_agent_is_collected(self, harness):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        agent = new_adk_agent()
+        await self.run_turn(service, agent, "user-a-token")
+        (toolset,) = self.toolsets(agent)
+
+        del agent
+        await collect_garbage()
+
+        assert toolset.closed
+        assert service._connected_servers == []
+        await service.cleanup()
+        assert toolset.close_calls == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_agents_sharing_a_service_keep_their_own_toolsets_open(self, harness):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        agent_a, agent_b = new_adk_agent(), new_adk_agent()
+        await self.run_turn(service, agent_a, "user-a-token")
+        await self.run_turn(service, agent_b, "user-b-token")
+        (toolset_a,) = self.toolsets(agent_a)
+        (toolset_b,) = self.toolsets(agent_b)
+
+        del agent_a
+        await collect_garbage()
+
+        assert toolset_a.closed and not toolset_b.closed
+        assert service._connected_servers == [toolset_b]
+        assert self.toolset_authorization(agent_b) == {
+            adk_server_url("mail"): "Bearer user-b-token"
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_toolset_is_closed_on_its_loop_when_collected_in_another_thread(self, harness):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        agent = new_adk_agent()
+        await self.run_turn(service, agent, "user-a-token")
+        (toolset,) = self.toolsets(agent)
+        # A reference cycle, so only the cycle collector frees the agent, here in another thread.
+        cycle: list[object] = [agent]
+        cycle.append(cycle)
+        del agent, cycle
+
+        await asyncio.to_thread(gc.collect)
+        await collect_garbage()
+
+        assert toolset.closed
+        assert toolset.closed_in_thread == threading.get_ident()
+
+    @pytest.mark.unit
+    def test_agent_collected_after_its_event_loop_closed_is_ignored(self, harness, monkeypatch):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        unraisable: list[object] = []
+        monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
+        agents = [new_adk_agent()]
+
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(
+                self.run_turn(McpToolRegistrationService(), agents[0], "user-a-token")
+            )
+        finally:
+            loop.close()
+        agents.clear()
+        gc.collect()
+
+        assert unraisable == []
+
+    @staticmethod
+    def toolsets(agent) -> list[FakeMcpToolset]:
+        return [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]

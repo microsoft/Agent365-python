@@ -10,10 +10,14 @@ servers to agents.
 """
 
 # Standard library imports
+import asyncio
+import contextlib
+import functools
 import logging
 import os
 import re
 import uuid
+import weakref
 from datetime import datetime, timezone
 from typing import List, Optional, Sequence
 
@@ -21,6 +25,7 @@ from typing import List, Optional, Sequence
 from semantic_kernel import kernel as sk
 from semantic_kernel.connectors.mcp import MCPStreamableHttpPlugin
 from semantic_kernel.contents import AuthorRole, ChatHistory, ChatMessageContent
+from semantic_kernel.functions import KernelPlugin
 
 # Local imports
 from microsoft_agents.hosting.core import Authorization, TurnContext
@@ -35,6 +40,301 @@ from microsoft_agents_a365.tooling.utils.utility import (
     get_mcp_platform_authentication_scope,
     is_development_environment,
 )
+
+logger = logging.getLogger(__name__)
+
+# Kernel plugins created by add_tool_servers_to_agent, keyed by id(). Module-level so plugins
+# added by any service instance are recognized; entries are dropped when the plugin is
+# garbage collected. KernelPlugin is unhashable, hence id() keys plus an identity check.
+_sdk_managed_plugins: "weakref.WeakValueDictionary[int, KernelPlugin]" = (
+    weakref.WeakValueDictionary()
+)
+
+# MCP plugins created by add_tool_servers_to_agent, each mapped to a weak reference to the kernel
+# plugin it was added as (None if that can't be tracked). Kernel.clone() copies KernelPlugin
+# wrappers but shares their functions, so cloned plugins are recognized by the MCP plugin that
+# owns them.
+_AddedAs = Optional["weakref.ref[KernelPlugin]"]
+_sdk_managed_mcp_plugins: "weakref.WeakKeyDictionary[MCPStreamableHttpPlugin, _AddedAs]" = (
+    weakref.WeakKeyDictionary()
+)
+
+# Background tasks that close MCP plugins; kept so they are not garbage collected before they
+# finish.
+_closing_tasks: "set[asyncio.Task[None]]" = set()
+
+# How long cleanup_connections() waits for plugins that later calls replaced to finish closing.
+_CLOSE_TIMEOUT_SECONDS = 30
+
+
+def _is_sdk_mcp_plugin(owner: object) -> bool:
+    """Return True if the object is an MCP plugin created by this service."""
+    try:
+        return owner in _sdk_managed_mcp_plugins
+    except TypeError:
+        # Not hashable or weak-referenceable, so it was not created by this service.
+        return False
+
+
+def _function_owner(function: object) -> object:
+    """Return the object whose method a kernel function calls, if any."""
+    method = getattr(function, "method", None)
+    # MCP tools are partial(mcp_plugin.call_tool, tool_name)
+    if isinstance(method, functools.partial):
+        method = method.func
+    return getattr(method, "__self__", None)
+
+
+def _sdk_mcp_plugins_of(plugin: KernelPlugin) -> List[MCPStreamableHttpPlugin]:
+    """Return the MCP plugins created by this service whose functions the kernel plugin calls."""
+    functions = getattr(plugin, "functions", None)
+    if not isinstance(functions, dict):
+        return []
+    owners = (_function_owner(function) for function in functions.values())
+    return [owner for owner in owners if owner is not None and _is_sdk_mcp_plugin(owner)]
+
+
+def _is_sdk_managed_plugin(plugin: KernelPlugin) -> bool:
+    """Return True if the kernel plugin was added by this service, or cloned from one that was."""
+    return _sdk_managed_plugins.get(id(plugin)) is plugin or bool(_sdk_mcp_plugins_of(plugin))
+
+
+def _mcp_plugins_behind(plugins: Sequence[KernelPlugin]) -> List[MCPStreamableHttpPlugin]:
+    """Return each MCP plugin created by this service that backs one of the kernel plugins."""
+    owners: "dict[int, MCPStreamableHttpPlugin]" = {}
+    for plugin in plugins:
+        found = _sdk_mcp_plugins_of(plugin)
+        if not found:
+            # A server without tools or prompts gives its kernel plugin no functions.
+            found = [
+                owner
+                for owner, added_as in list(_sdk_managed_mcp_plugins.items())
+                if added_as is not None and added_as() is plugin
+            ]
+        for owner in found:
+            owners.setdefault(id(owner), owner)
+    return list(owners.values())
+
+
+def _register_sdk_managed_plugin(
+    kernel_plugin: Optional[KernelPlugin], mcp_plugin: MCPStreamableHttpPlugin
+) -> None:
+    """Record a kernel plugin added by this service and the MCP plugin behind it."""
+    try:
+        added_as: _AddedAs = weakref.ref(kernel_plugin)
+    except TypeError:
+        added_as = None
+    try:
+        _sdk_managed_mcp_plugins[mcp_plugin] = added_as
+    except TypeError:
+        pass
+    try:
+        _sdk_managed_plugins[id(kernel_plugin)] = kernel_plugin
+    except TypeError:
+        # Not weak-referenceable (e.g. None from a custom kernel), so it cannot be tracked.
+        pass
+
+
+async def _close_plugin(plugin: MCPStreamableHttpPlugin) -> None:
+    """Close an MCP plugin, logging instead of raising if that fails."""
+    try:
+        await plugin.close()
+    except Exception as error:
+        logger.debug(f"Error closing MCP plugin '{getattr(plugin, 'name', 'unknown')}': {error}")
+
+
+def _start_closing(plugin: MCPStreamableHttpPlugin) -> "asyncio.Task[None]":
+    """Close an MCP plugin in a task of its own, so a slow or failing close holds up no caller.
+
+    ``MCPPluginBase.close()`` only signals the plugin's own connection task and waits for it, so
+    any task can close a connected plugin.
+    """
+    closing_task = asyncio.ensure_future(_close_plugin(plugin))
+    _closing_tasks.add(closing_task)
+    closing_task.add_done_callback(_closing_tasks.discard)
+    return closing_task
+
+
+def _is_plugin_open(plugin: MCPStreamableHttpPlugin) -> bool:
+    """Return True if an MCP plugin has a session, which ``MCPPluginBase.close()`` clears."""
+    return getattr(plugin, "session", None) is not None
+
+
+class _KernelScope:
+    """The MCP plugins added to one kernel, each with the event loop it connected on.
+
+    They are closed once the kernel is garbage collected.
+    """
+
+    __slots__ = ("kernel_ref", "plugins")
+
+    def __init__(self, kernel_ref: "weakref.ref[sk.Kernel]") -> None:
+        self.kernel_ref = kernel_ref
+        self.plugins: "dict[int, tuple[MCPStreamableHttpPlugin, asyncio.AbstractEventLoop]]" = {}
+
+
+# The MCP plugins that add_tool_servers_to_agent added to each live kernel, keyed by id(kernel)
+# because Kernel is unhashable. An entry is removed when its kernel is garbage collected.
+_kernel_scopes: "dict[int, _KernelScope]" = {}
+
+# Services whose cleanup_connections() closes each MCP plugin. A plugin that is closed because it
+# was replaced, or because its kernel is gone, is removed from them.
+_plugin_trackers: "weakref.WeakKeyDictionary[MCPStreamableHttpPlugin, weakref.WeakSet[object]]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _kernel_scope(kernel: sk.Kernel, create: bool) -> Optional[_KernelScope]:
+    """Return the plugins added to a kernel, creating the record (and its finalizer) if asked."""
+    scope = _kernel_scopes.get(id(kernel))
+    if scope is not None and scope.kernel_ref() is kernel:
+        return scope
+    if not create:
+        return None
+    try:
+        kernel_ref = weakref.ref(kernel)
+    except TypeError:
+        return None
+    scope = _KernelScope(kernel_ref)
+    _kernel_scopes[id(kernel)] = scope
+    # The finalizer must not refer to the kernel itself, or the kernel would never be collected.
+    finalizer = weakref.finalize(kernel, _release_kernel_scope_soon, id(kernel), scope)
+    finalizer.atexit = False
+    return scope
+
+
+def _scope_to_kernel(kernel: sk.Kernel, plugin: MCPStreamableHttpPlugin) -> None:
+    """Close an MCP plugin once the kernel it was added to is garbage collected."""
+    # Kernel.add_plugin() stores the kernel on the plugin (MCPPluginBase.added_to_kernel), and a
+    # connected plugin is kept alive by its own connection task, so the plugin would keep the
+    # kernel alive. A weak proxy lets the plugin still use the kernel, for example for sampling.
+    if getattr(plugin, "kernel", None) is kernel:
+        try:
+            plugin.kernel = weakref.proxy(kernel)
+        except TypeError:
+            return
+    scope = _kernel_scope(kernel, create=True)
+    if scope is not None:
+        scope.plugins[id(plugin)] = (plugin, asyncio.get_running_loop())
+
+
+def _release_kernel_scope_soon(key: int, scope: _KernelScope) -> None:
+    """Close the plugins of a collected kernel on the event loops they connected on.
+
+    This runs wherever garbage collection runs, possibly in another thread, so it only
+    schedules the closes.
+    """
+    if _kernel_scopes.get(key) is scope:
+        _kernel_scopes.pop(key, None)
+    plugins_by_loop: "dict[asyncio.AbstractEventLoop, List[MCPStreamableHttpPlugin]]" = {}
+    for plugin, loop in list(scope.plugins.values()):
+        plugins_by_loop.setdefault(loop, []).append(plugin)
+    scope.plugins.clear()
+    for loop, plugins in plugins_by_loop.items():
+        try:
+            loop.call_soon_threadsafe(_close_released_plugins, plugins)
+        except RuntimeError:
+            # The event loop is closed, and the connections it ran were closed with it.
+            pass
+
+
+def _close_released_plugins(plugins: List[MCPStreamableHttpPlugin]) -> None:
+    """Close MCP plugins whose kernel is gone. Runs on the loop they connected on."""
+    for plugin in plugins:
+        try:
+            _forget_plugin(plugin)
+            if _is_plugin_open(plugin):
+                logger.debug(f"Closing MCP plugin '{plugin.name}', whose kernel is gone")
+                _start_closing(plugin)
+        except Exception as error:
+            logger.debug(f"Error releasing MCP plugin '{getattr(plugin, 'name', '')}': {error}")
+
+
+def _forget_plugin(plugin: MCPStreamableHttpPlugin) -> None:
+    """Stop tracking an MCP plugin in every service whose cleanup_connections() would close it."""
+    trackers = _plugin_trackers.pop(plugin, None)
+    for service in list(trackers or ()):
+        service._forget_plugins([plugin])
+
+
+_warned_connection_task_missing = False
+
+
+def _warn_connection_task_missing(plugin: MCPStreamableHttpPlugin) -> None:
+    """Warn once that an MCP plugin doesn't expose the background task that connects it."""
+    global _warned_connection_task_missing
+    if _warned_connection_task_missing:
+        return
+    _warned_connection_task_missing = True
+    logger.warning(
+        f"MCP plugin '{getattr(plugin, 'name', 'unknown')}' ({type(plugin).__name__}) has no "
+        "_current_task connection task, which this Semantic Kernel version was expected to set. "
+        "A server that fails to connect can keep add_tool_servers_to_agent from returning."
+    )
+
+
+async def _close_after_cancelled_connect(
+    plugin: MCPStreamableHttpPlugin, connect_task: "asyncio.Future[None]"
+) -> None:
+    """Close a plugin whose connection kept running after its connect() was cancelled."""
+    # Let connect() start its background connection task if it has not yet.
+    await asyncio.sleep(0)
+    connection_task = getattr(plugin, "_current_task", None)
+    waiting = {connect_task}
+    if isinstance(connection_task, asyncio.Future):
+        waiting.add(connection_task)
+    await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+    if connect_task.done() and not connect_task.cancelled() and connect_task.exception() is None:
+        # Connected: close() stops the background task, which then closes the connection itself.
+        with contextlib.suppress(Exception):
+            await plugin.close()
+    else:
+        # The connection failed; its background task already closed what it had opened.
+        connect_task.cancel()
+        if isinstance(connection_task, asyncio.Future) and connection_task.done():
+            if not connection_task.cancelled():
+                connection_task.exception()
+
+
+async def _connect_plugin(plugin: MCPStreamableHttpPlugin) -> None:
+    """Connect an MCP plugin, raising instead of waiting forever when the connection fails.
+
+    ``MCPPluginBase.connect()`` opens the connection in a background task and waits for that
+    task to report that it is ready. When the server rejects the session (for example with
+    HTTP 403), the background task can end without reporting, and ``connect()`` never returns.
+    When the transport cannot be created, the task reports ready and then fails, and
+    ``connect()`` returns without a connection. Both raise ``ConnectionError`` here.
+    If this call is cancelled, the background task keeps connecting, so the plugin is closed
+    once it is done. The background task is ``MCPPluginBase._current_task``; if a Semantic
+    Kernel version doesn't set it, a warning is logged and only ``connect()`` is awaited.
+    """
+    connect_task = asyncio.ensure_future(plugin.connect())
+    try:
+        # connect() starts its background task before it first waits.
+        await asyncio.sleep(0)
+        connection_task = getattr(plugin, "_current_task", None)
+        pending = {connect_task}
+        if isinstance(connection_task, asyncio.Future):
+            pending.add(connection_task)
+        elif not connect_task.done():
+            _warn_connection_task_missing(plugin)
+        await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+    except BaseException:
+        closing_task = asyncio.ensure_future(_close_after_cancelled_connect(plugin, connect_task))
+        _closing_tasks.add(closing_task)
+        closing_task.add_done_callback(_closing_tasks.discard)
+        raise
+    if connect_task.done():
+        connect_task.result()
+        if not isinstance(connection_task, asyncio.Future) or not connection_task.done():
+            return
+        # connect() returned, but the background task had already ended: nothing is connected.
+    else:
+        # The background task ended without reporting that it is ready.
+        connect_task.cancel()
+        await asyncio.wait({connect_task})
+    error = None if connection_task.cancelled() else connection_task.exception()
+    raise ConnectionError(f"Failed to connect to MCP server '{plugin.name}'") from error
 
 
 class McpToolRegistrationService:
@@ -64,6 +364,9 @@ class McpToolRegistrationService:
 
         # Store connected plugins to keep them alive
         self._connected_plugins = []
+        # Background closes of plugins that a later call replaced; cleanup_connections() waits
+        # for them.
+        self._pending_closes: "set[asyncio.Task[None]]" = set()
 
         # Enable debug logging if configured
         if os.getenv("MCP_DEBUG_LOGGING", "false").lower() == "true":
@@ -97,6 +400,40 @@ class McpToolRegistrationService:
         """
         Adds the A365 MCP Tool Servers to the specified kernel.
 
+        Each MCP plugin carries the current caller's Authorization token in its request
+        headers. Plugins added by an earlier call, including copies made by ``Kernel.clone()``,
+        are removed from the kernel before anything else happens, and fresh plugins are added
+        for this turn. A kernel that is reused from one turn to the next therefore does not
+        keep a plugin that carries an earlier turn's headers, even when a server is not
+        rediscovered or fails to connect. The MCP connections behind the removed plugins are
+        closed in the background, which also ends them for any ``Kernel.clone()`` copy that
+        still shares those plugins, and ``cleanup_connections()`` waits for those closes to
+        finish. A server that fails to connect, for example because it rejects the caller, is
+        skipped.
+
+        Turns that run at the same time must not share a kernel, or ``Kernel.clone()`` copies
+        of a kernel that this method added plugins to: each call replaces those plugins and
+        closes the ones it replaces, which ends any other turn that is still using them. Give
+        each turn its own kernel, for example a ``clone()`` of a base kernel without these
+        plugins.
+
+        Use a separate service for each turn and call ``cleanup_connections()`` in a
+        ``finally`` block when the turn ends; it closes every plugin the service connected, so
+        on a shared service it would also end other turns. If ``cleanup_connections()`` isn't
+        called, each plugin's connection is closed once the kernel it was added to has been
+        garbage collected. A ``Kernel.clone()`` copy, or any other kernel or plugin that these
+        plugins or their functions are copied into, doesn't keep them open, so don't keep using
+        such a copy after the kernel itself is gone.
+
+        Example:
+            >>> service = McpToolRegistrationService()
+            >>> kernel = base_kernel.clone()
+            >>> try:
+            ...     await service.add_tool_servers_to_agent(kernel, auth, "agentic", turn_context)
+            ...     result = await kernel.invoke_prompt(user_message)
+            ... finally:
+            ...     await service.cleanup_connections()
+
         Args:
             kernel: The Semantic Kernel instance to which the tools will be added.
             auth: Authorization handler for token exchange.
@@ -108,6 +445,27 @@ class McpToolRegistrationService:
             ValueError: If kernel is None or required parameters are invalid.
             Exception: If there's an error connecting to or configuring MCP servers.
         """
+        # Remove plugins added by an earlier call before anything here can fail. They carry the
+        # headers of the turn that created them.
+        if kernel is not None:
+            stale_plugins = {
+                name: plugin
+                for name, plugin in kernel.plugins.items()
+                if _is_sdk_managed_plugin(plugin)
+            }
+            for name in stale_plugins:
+                del kernel.plugins[name]
+            if stale_plugins:
+                self._logger.info(
+                    f"Removed {len(stale_plugins)} MCP plugins added by an earlier call"
+                )
+                self._close_replaced_plugins(
+                    kernel, _mcp_plugins_behind(list(stale_plugins.values()))
+                )
+        # Stop tracking plugins that were closed some other way.
+        self._connected_plugins = [
+            plugin for plugin in self._connected_plugins if _is_plugin_open(plugin)
+        ]
 
         is_dev = is_development_environment()
         if not auth_token and not is_dev:
@@ -168,17 +526,26 @@ class McpToolRegistrationService:
                 )
 
                 # Connect the plugin
-                await plugin.connect()
+                await _connect_plugin(plugin)
 
-                # Add plugin to kernel
-                kernel.add_plugin(plugin, server_name)
+                try:
+                    # Add plugin to kernel
+                    kernel_plugin = kernel.add_plugin(plugin, server_name)
+                except Exception:
+                    # For example a server name that isn't a valid plugin name. The plugin is
+                    # connected but can't be used, so close it instead of leaving it open.
+                    self._close_in_background(plugin)
+                    raise
+                _register_sdk_managed_plugin(kernel_plugin, plugin)
+                # Close it once the kernel is garbage collected, if cleanup_connections() hasn't.
+                _scope_to_kernel(kernel, plugin)
 
                 # Store reference to keep plugin alive throughout application lifecycle.
                 # By storing plugin references in _connected_plugins, we prevent
                 # Python's garbage collector from cleaning up the plugin objects.
                 # The connections remain active throughout the application lifecycle.
                 # Tools can be invoked because their underlying connections stay alive.
-                self._connected_plugins.append(plugin)
+                self._track_plugin(plugin)
 
                 self._logger.info(f"Connected and added MCP plugin for: {server.mcp_server_name}")
 
@@ -186,6 +553,45 @@ class McpToolRegistrationService:
                 self._logger.error(f"Failed to add tools from {server.mcp_server_name}: {str(e)}")
 
         self._logger.info("Successfully configured MCP tool servers for the agent")
+
+    def _close_replaced_plugins(
+        self, kernel: sk.Kernel, plugins: List[MCPStreamableHttpPlugin]
+    ) -> None:
+        """Stop tracking MCP plugins an earlier call added and close them without delaying this turn.
+
+        This also closes them for any ``Kernel.clone()`` copy that shares their functions; those
+        copies carry the earlier turn's headers too.
+        """
+        scope = _kernel_scope(kernel, create=False)
+        for plugin in plugins:
+            if scope is not None:
+                scope.plugins.pop(id(plugin), None)
+            _forget_plugin(plugin)
+        self._forget_plugins(plugins)
+        for plugin in plugins:
+            self._close_in_background(plugin)
+
+    def _close_in_background(self, plugin: MCPStreamableHttpPlugin) -> None:
+        """Close an MCP plugin in a task of its own; cleanup_connections() waits for it."""
+        closing_task = _start_closing(plugin)
+        self._pending_closes.add(closing_task)
+        closing_task.add_done_callback(self._pending_closes.discard)
+
+    def _track_plugin(self, plugin: MCPStreamableHttpPlugin) -> None:
+        """Record a connected MCP plugin, so cleanup_connections() closes it."""
+        self._connected_plugins.append(plugin)
+        try:
+            _plugin_trackers.setdefault(plugin, weakref.WeakSet()).add(self)
+        except TypeError:
+            # Not hashable or weak-referenceable, so it can only be closed by this service.
+            pass
+
+    def _forget_plugins(self, plugins: List[MCPStreamableHttpPlugin]) -> None:
+        """Stop tracking MCP plugins, without changing a list that cleanup may be closing."""
+        forgotten_ids = {id(plugin) for plugin in plugins}
+        self._connected_plugins = [
+            plugin for plugin in self._connected_plugins if id(plugin) not in forgotten_ids
+        ]
 
     # ============================================================================
     # Private Methods - Input Validation & Processing
@@ -566,10 +972,17 @@ class McpToolRegistrationService:
     # ============================================================================
 
     async def cleanup_connections(self) -> None:
-        """Clean up all connected MCP plugins."""
-        self._logger.info(f"Cleaning up {len(self._connected_plugins)} MCP plugin connections")
+        """Close the MCP plugins this service connected.
 
-        for plugin in self._connected_plugins:
+        Also waits for the plugins that later calls replaced to finish closing. Use one service
+        per turn and call this in a ``finally`` block when the turn ends: it also closes
+        plugins that other turns using the same service are still working with. Plugins that
+        are not closed this way are closed once the kernel they were added to is gone.
+        """
+        plugins, self._connected_plugins = self._connected_plugins, []
+        self._logger.info(f"Cleaning up {len(plugins)} MCP plugin connections")
+
+        for plugin in plugins:
             try:
                 if hasattr(plugin, "close"):
                     await plugin.close()
@@ -581,5 +994,13 @@ class McpToolRegistrationService:
             except Exception as e:
                 self._logger.warning(f"Error closing plugin connection: {e}")
 
-        self._connected_plugins.clear()
+        if self._pending_closes:
+            _, still_closing = await asyncio.wait(
+                set(self._pending_closes), timeout=_CLOSE_TIMEOUT_SECONDS
+            )
+            if still_closing:
+                self._logger.warning(
+                    f"{len(still_closing)} replaced MCP plugins did not finish closing within "
+                    f"{_CLOSE_TIMEOUT_SECONDS} seconds"
+                )
         self._logger.info("All MCP plugin connections cleaned up")

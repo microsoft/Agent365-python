@@ -48,6 +48,81 @@ McpToolRegistrationService.get_plugins()
 Semantic Kernel with MCP plugins
 ```
 
+### Reusing a kernel across turns
+
+`add_tool_servers_to_agent` adds one MCP plugin per server, carrying the Authorization token of the
+current turn. On every call it first removes the plugins an earlier call added, including copies
+made by `Kernel.clone()` (tracked by object identity, across service instances). A kernel that is
+reused from one turn to the next does not keep a plugin that carries an earlier turn's headers, even
+when a server is not rediscovered or fails to connect. Plugins you add to the kernel yourself are
+kept as-is. Because the kernel is modified in place, turns that run concurrently must each use their
+own kernel, for example a `clone()` of a base kernel without these plugins.
+
+The `MCPStreamableHttpPlugin` behind each removed plugin is closed in a background task and is no
+longer tracked by the service, so a reused kernel keeps only the current turn's connections open.
+The plugin is found through the functions of the removed kernel plugin (or, for a server without
+tools or prompts, through the kernel plugin it was added as), so plugins that `Kernel.clone()`
+copies share are closed too; they carry the headers of the earlier turn. `MCPPluginBase.close()`
+only signals the plugin's own connection task and waits for it, so it is safe to call from any task.
+`cleanup_connections()` waits for these closes to finish.
+
+`MCPPluginBase.connect()` waits for its background connection task to report that it is ready. When
+a server rejects the session (for example with HTTP 403), that task can end without reporting, so
+the service also watches the task and skips the server instead of waiting forever. When the
+transport can't be created, the task reports ready and then fails, so `connect()` returns without a
+connection; the service skips that server too. If the call is cancelled while a server is still
+connecting, the background task keeps connecting, so the service closes the plugin once that task
+is done. The task is the private `MCPPluginBase._current_task`. Tests on a real
+`MCPStreamableHttpPlugin` fail if a Semantic Kernel version stops setting it, and at run time the
+service logs a warning (once per process) when a plugin that is still connecting doesn't have it.
+A plugin that connects but that `Kernel.add_plugin()` then rejects, for example because the server
+name isn't a valid plugin name, is closed too.
+
+### Per-turn usage
+
+```python
+service = McpToolRegistrationService()
+kernel = base_kernel.clone()
+try:
+    await service.add_tool_servers_to_agent(kernel, auth, "agentic", turn_context)
+    result = await kernel.invoke_prompt(user_message)
+finally:
+    await service.cleanup_connections()
+```
+
+One kernel, or `Kernel.clone()` copies of a kernel that the service added plugins to, must not be
+shared by turns that run at the same time: each call replaces those plugins and closes the ones it
+replaces, which ends any other turn that is still using them. `cleanup_connections()` closes every
+plugin the service connected, so use a separate service for each turn. A long-lived service can
+serve concurrent turns as long as each turn has its own kernel and `cleanup_connections()` isn't
+called while other turns still run; the plugins are then closed when each turn's kernel is garbage
+collected, as described next.
+
+### Closing plugins when their kernel is garbage collected
+
+If `cleanup_connections()` isn't called, the connections are still bounded by the kernels that use
+them. Each plugin is recorded against the kernel it was added to, together with the event loop it
+connected on, and a `weakref.finalize` callback on that kernel closes the kernel's plugins once it
+is garbage collected. Because garbage collection can run in any thread, the callback only uses
+`loop.call_soon_threadsafe` to close each plugin on its own loop, in a background task, and it does
+nothing if that loop is already closed. A plugin that a later call replaces is removed from its
+kernel's record when it is closed, so a reused kernel doesn't accumulate closed plugins. A plugin is
+only ever added to one kernel, so it is closed when that kernel is collected. Closed plugins are also
+dropped from the service's tracking, on each call and when their kernel is collected.
+`cleanup_connections()` is still the deterministic way to close them, and closing a plugin twice
+has no effect, so the two paths don't conflict.
+
+`Kernel.add_plugin()` stores the kernel on the plugin (`MCPPluginBase.added_to_kernel`), and a
+connected plugin is kept alive by its own connection task, so it would keep the kernel alive and
+the kernel would never be collected. The service replaces that reference with a `weakref.proxy` to
+the kernel, so the plugin can still use the kernel while it exists, for example for sampling. A test
+on a real `MCPStreamableHttpPlugin` fails if a Semantic Kernel version keeps the kernel some other
+way.
+
+A `Kernel.clone()` copy shares the plugins' functions but doesn't keep the plugins open, and the
+same goes for any other kernel these plugins or functions are copied into. Don't keep using such a
+copy after the kernel that the service added the plugins to is gone.
+
 ## File Structure
 
 ```
