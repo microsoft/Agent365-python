@@ -58,6 +58,14 @@ when a server is not rediscovered or fails to connect. Plugins you add to the ke
 kept as-is. Because the kernel is modified in place, turns that run concurrently must each use their
 own kernel, for example a `clone()` of a base kernel without these plugins.
 
+The `MCPStreamableHttpPlugin` behind each removed plugin is closed in a background task and is no
+longer tracked by the service, so a reused kernel keeps only the current turn's connections open.
+The plugin is found through the functions of the removed kernel plugin (or, for a server without
+tools or prompts, through the kernel plugin it was added as), so plugins that `Kernel.clone()`
+copies share are closed too; they carry the headers of the earlier turn. `MCPPluginBase.close()`
+only signals the plugin's own connection task and waits for it, so it is safe to call from any task.
+`cleanup_connections()` waits for these closes to finish.
+
 `MCPPluginBase.connect()` waits for its background connection task to report that it is ready. When
 a server rejects the session (for example with HTTP 403), that task can end without reporting, so
 the service also watches the task and skips the server instead of waiting forever. When the

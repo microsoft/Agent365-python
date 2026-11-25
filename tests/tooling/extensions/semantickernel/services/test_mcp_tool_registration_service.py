@@ -4,6 +4,7 @@
 """Tests that add_tool_servers_to_agent never leaves another identity's MCP plugin on a kernel."""
 
 import asyncio
+import importlib
 from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,15 +26,30 @@ class FakeMcpPlugin:
         self.name = name
         self.url = url
         self.headers = headers
+        self.closed = False
+        self.close_calls = 0
         self._harness = harness
 
     async def connect(self) -> None:
         if self._harness.fail_connect:
             raise ConnectionError("connect failed")
 
+    async def close(self) -> None:
+        self.close_calls += 1
+        await asyncio.sleep(self._harness.close_delay)
+        if self._harness.fail_close:
+            raise RuntimeError("close failed")
+        self.closed = True
+
     @kernel_function(name="authorization", description="Returns the Authorization header.")
     def authorization(self) -> str:
         return self.headers["Authorization"]
+
+
+class ToollessFakeMcpPlugin(FakeMcpPlugin):
+    """An MCP plugin for a server without tools or prompts: its kernel plugin has no functions."""
+
+    authorization = None  # type: ignore[assignment]
 
 
 class StalledFakeMcpPlugin(FakeMcpPlugin):
@@ -93,11 +109,14 @@ class Harness:
     def __init__(self) -> None:
         self.discovered: list[str] = ["mail"]
         self.fail_connect = False
+        self.fail_close = False
+        self.close_delay = 0.0
         self.fail_discovery = False
         self.stalled: set[str] = set()
         self.stall_error: type[BaseException] = ConnectionError
         self.stall_reports_ready = False
         self.slow: set[str] = set()
+        self.toolless: set[str] = set()
         self.created: list[FakeMcpPlugin] = []
 
     async def list_tool_servers(
@@ -121,6 +140,8 @@ class Harness:
             plugin: FakeMcpPlugin = StalledFakeMcpPlugin(name, url, headers, self)
         elif name in self.slow:
             plugin = SlowFakeMcpPlugin(name, url, headers, self)
+        elif name in self.toolless:
+            plugin = ToollessFakeMcpPlugin(name, url, headers, self)
         else:
             plugin = FakeMcpPlugin(name, url, headers, self)
         self.created.append(plugin)
@@ -170,6 +191,13 @@ async def authorization_by_plugin(kernel: Kernel) -> dict[str, str]:
             value = await kernel.invoke(plugin_name=name, function_name="authorization")
             result[name] = value.value
     return result
+
+
+async def finish_closing() -> None:
+    """Wait for the MCP plugins the service is closing in the background."""
+    closing_tasks = set(importlib.import_module(MODULE)._closing_tasks)
+    if closing_tasks:
+        await asyncio.wait(closing_tasks, timeout=5)
 
 
 class TestMcpPluginIdentityIsolation:
@@ -330,3 +358,80 @@ class TestMcpPluginIdentityIsolation:
         await asyncio.wait_for(plugin._current_task, timeout=5)
 
         assert plugin.closed
+
+
+class TestReplacedPluginLifecycle:
+    """MCP plugins that a later call replaces are closed and no longer tracked."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_replaced_plugins_are_closed_and_released(self, harness: Harness) -> None:
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+
+        await run_turn(service, kernel, "user-a-token")
+        await run_turn(service, kernel, "user-b-token")
+        await finish_closing()
+
+        replaced, current = harness.created
+        assert replaced.closed and not current.closed
+        assert service._connected_plugins == [current]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_cleanup_waits_for_replaced_plugins_to_close(self, harness: Harness) -> None:
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+        harness.close_delay = 0.05
+        await run_turn(service, kernel, "user-a-token")
+        await run_turn(service, kernel, "user-b-token")
+        replaced, current = harness.created
+        assert service._connected_plugins == [current]
+
+        await service.cleanup_connections()
+
+        assert replaced.closed and current.closed
+        assert [replaced.close_calls, current.close_calls] == [1, 1]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_plugins_shared_with_a_kernel_clone_are_closed_when_replaced(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+        await run_turn(service, kernel, "user-a-token")
+
+        await run_turn(service, kernel.clone(), "user-b-token")
+        await finish_closing()
+
+        assert [plugin.closed for plugin in harness.created] == [True, False]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_plugin_without_functions_is_closed_when_replaced(self, harness: Harness) -> None:
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+        harness.discovered = ["empty"]
+        harness.toolless = {"empty"}
+
+        await run_turn(service, kernel, "user-a-token")
+        await run_turn(service, kernel, "user-b-token")
+        await finish_closing()
+
+        assert list(kernel.plugins) == ["empty"]
+        assert [plugin.closed for plugin in harness.created] == [True, False]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_failing_close_does_not_fail_the_call(self, harness: Harness) -> None:
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+        await run_turn(service, kernel, "user-a-token")
+        harness.fail_close = True
+
+        await run_turn(service, kernel, "user-b-token")
+        await finish_closing()
+
+        assert harness.created[0].close_calls == 1
+        assert await authorization_by_plugin(kernel) == {"mail": "Bearer user-b-token"}

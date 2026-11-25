@@ -10,6 +10,10 @@ All notable changes to this package will be documented in this file.
   earlier call added to the kernel, including copies made by `Kernel.clone()`, before it acquires
   tokens, then adds plugins for the current turn. Plugins you add to the kernel yourself are
   unchanged. Turns that run concurrently must each use their own kernel.
+- The MCP connections behind the plugins that `add_tool_servers_to_agent` removes are now closed in
+  the background, and they're no longer tracked by the service, so a reused kernel no longer keeps
+  one more connection open after every turn. This also closes them for any `Kernel.clone()` copy
+  that still shares those plugins. `cleanup_connections()` waits for these closes to finish.
 - A server that rejects the connection (for example with HTTP 403) no longer keeps
   `add_tool_servers_to_agent` from returning, and a server whose connection can't be opened is no
   longer added without a connection. Such servers are skipped and the remaining servers are added.
