@@ -4,19 +4,25 @@
 """Tests that add_tool_servers_to_agent never leaves another identity's MCP plugin on a kernel."""
 
 import asyncio
+import contextlib
 import importlib
-from collections.abc import Iterator
+import logging
+from collections.abc import AsyncIterator, Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import anyio
 import pytest
+from mcp.client.session import ClientSession
 from microsoft_agents_a365.tooling.extensions.semantickernel import McpToolRegistrationService
 from microsoft_agents_a365.tooling.models import MCPServerConfig
 from semantic_kernel import Kernel
+from semantic_kernel.connectors.mcp import MCPStreamableHttpPlugin
 from semantic_kernel.functions import kernel_function
 
 MODULE = (
     "microsoft_agents_a365.tooling.extensions.semantickernel.services.mcp_tool_registration_service"
 )
+sk_service = importlib.import_module(MODULE)
 
 
 class FakeMcpPlugin:
@@ -50,6 +56,13 @@ class ToollessFakeMcpPlugin(FakeMcpPlugin):
     """An MCP plugin for a server without tools or prompts: its kernel plugin has no functions."""
 
     authorization = None  # type: ignore[assignment]
+
+
+class PendingFakeMcpPlugin(FakeMcpPlugin):
+    """Its connect() is still waiting after its first step, and it has no _current_task."""
+
+    async def connect(self) -> None:
+        await asyncio.sleep(0.01)
 
 
 class StalledFakeMcpPlugin(FakeMcpPlugin):
@@ -117,6 +130,7 @@ class Harness:
         self.stall_reports_ready = False
         self.slow: set[str] = set()
         self.toolless: set[str] = set()
+        self.pending: set[str] = set()
         self.created: list[FakeMcpPlugin] = []
 
     async def list_tool_servers(
@@ -142,6 +156,8 @@ class Harness:
             plugin = SlowFakeMcpPlugin(name, url, headers, self)
         elif name in self.toolless:
             plugin = ToollessFakeMcpPlugin(name, url, headers, self)
+        elif name in self.pending:
+            plugin = PendingFakeMcpPlugin(name, url, headers, self)
         else:
             plugin = FakeMcpPlugin(name, url, headers, self)
         self.created.append(plugin)
@@ -195,7 +211,7 @@ async def authorization_by_plugin(kernel: Kernel) -> dict[str, str]:
 
 async def finish_closing() -> None:
     """Wait for the MCP plugins the service is closing in the background."""
-    closing_tasks = set(importlib.import_module(MODULE)._closing_tasks)
+    closing_tasks = set(sk_service._closing_tasks)
     if closing_tasks:
         await asyncio.wait(closing_tasks, timeout=5)
 
@@ -435,3 +451,69 @@ class TestReplacedPluginLifecycle:
 
         assert harness.created[0].close_calls == 1
         assert await authorization_by_plugin(kernel) == {"mail": "Bearer user-b-token"}
+
+
+@contextlib.asynccontextmanager
+async def in_memory_transport() -> AsyncIterator[tuple[object, object]]:
+    """An MCP transport whose server side never answers."""
+    server_send, client_receive = anyio.create_memory_object_stream(1)
+    client_send, server_receive = anyio.create_memory_object_stream(1)
+    async with server_send, client_receive, client_send, server_receive:
+        yield client_receive, client_send
+
+
+@contextlib.asynccontextmanager
+async def unreachable_transport() -> AsyncIterator[tuple[object, object]]:
+    """An MCP transport that cannot be created."""
+    raise ConnectionRefusedError("connection refused")
+    yield  # pragma: no cover
+
+
+class TestConnectionTaskWatch:
+    """_connect_plugin watches MCPPluginBase._current_task, the task that opens the connection.
+
+    The tests on a real MCPStreamableHttpPlugin fail if a Semantic Kernel version stops setting it.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_real_plugin_rejected_during_initialize_raises(self) -> None:
+        plugin = MCPStreamableHttpPlugin(name="denied", url="http://127.0.0.1:9/mcp")
+        rejected = AsyncMock(side_effect=RuntimeError("HTTP 403 Forbidden"))
+        with (
+            patch.object(
+                MCPStreamableHttpPlugin, "get_mcp_client", lambda self: in_memory_transport()
+            ),
+            patch.object(ClientSession, "initialize", rejected),
+            pytest.raises(ConnectionError, match="denied"),
+        ):
+            # Without the connection task, connect() never returns here.
+            await asyncio.wait_for(sk_service._connect_plugin(plugin), timeout=5)
+
+        assert isinstance(plugin._current_task, asyncio.Task)
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_real_plugin_whose_transport_fails_raises(self) -> None:
+        plugin = MCPStreamableHttpPlugin(name="unreachable", url="http://127.0.0.1:9/mcp")
+        with (
+            patch.object(
+                MCPStreamableHttpPlugin, "get_mcp_client", lambda self: unreachable_transport()
+            ),
+            pytest.raises(ConnectionError, match="unreachable"),
+        ):
+            # Without the connection task, connect() returns as if it had connected.
+            await asyncio.wait_for(sk_service._connect_plugin(plugin), timeout=5)
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_warns_when_a_plugin_has_no_connection_task(
+        self, harness: Harness, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(sk_service, "_warned_connection_task_missing", False)
+        harness.pending = {"mail"}
+
+        with caplog.at_level(logging.WARNING, logger=MODULE):
+            await run_turn(McpToolRegistrationService(), Kernel(), "user-a-token")
+
+        assert "_current_task" in caplog.text

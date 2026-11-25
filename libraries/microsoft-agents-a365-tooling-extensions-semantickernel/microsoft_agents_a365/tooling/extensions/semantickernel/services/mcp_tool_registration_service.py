@@ -155,6 +155,22 @@ def _start_closing(plugin: MCPStreamableHttpPlugin) -> "asyncio.Task[None]":
     return closing_task
 
 
+_warned_connection_task_missing = False
+
+
+def _warn_connection_task_missing(plugin: MCPStreamableHttpPlugin) -> None:
+    """Warn once that an MCP plugin doesn't expose the background task that connects it."""
+    global _warned_connection_task_missing
+    if _warned_connection_task_missing:
+        return
+    _warned_connection_task_missing = True
+    logger.warning(
+        f"MCP plugin '{getattr(plugin, 'name', 'unknown')}' ({type(plugin).__name__}) has no "
+        "_current_task connection task, which this Semantic Kernel version was expected to set. "
+        "A server that fails to connect can keep add_tool_servers_to_agent from returning."
+    )
+
+
 async def _close_after_cancelled_connect(
     plugin: MCPStreamableHttpPlugin, connect_task: "asyncio.Future[None]"
 ) -> None:
@@ -187,7 +203,8 @@ async def _connect_plugin(plugin: MCPStreamableHttpPlugin) -> None:
     When the transport cannot be created, the task reports ready and then fails, and
     ``connect()`` returns without a connection. Both raise ``ConnectionError`` here.
     If this call is cancelled, the background task keeps connecting, so the plugin is closed
-    once it is done.
+    once it is done. The background task is ``MCPPluginBase._current_task``; if a Semantic
+    Kernel version doesn't set it, a warning is logged and only ``connect()`` is awaited.
     """
     connect_task = asyncio.ensure_future(plugin.connect())
     try:
@@ -197,6 +214,8 @@ async def _connect_plugin(plugin: MCPStreamableHttpPlugin) -> None:
         pending = {connect_task}
         if isinstance(connection_task, asyncio.Future):
             pending.add(connection_task)
+        elif not connect_task.done():
+            _warn_connection_task_missing(plugin)
         await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
     except BaseException:
         closing_task = asyncio.ensure_future(_close_after_cancelled_connect(plugin, connect_task))

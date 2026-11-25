@@ -17,6 +17,8 @@ All notable changes to this package will be documented in this file.
 - A server that rejects the connection (for example with HTTP 403) no longer keeps
   `add_tool_servers_to_agent` from returning, and a server whose connection can't be opened is no
   longer added without a connection. Such servers are skipped and the remaining servers are added.
+  This watches the plugin's background connection task (`MCPPluginBase._current_task`), and a
+  warning is logged if a Semantic Kernel version doesn't set it.
 - Cancelling `add_tool_servers_to_agent` while a server is still connecting no longer leaves that
   connection open. The plugin is closed once its connection attempt finishes.
 

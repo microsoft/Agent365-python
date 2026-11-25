@@ -72,7 +72,9 @@ the service also watches the task and skips the server instead of waiting foreve
 transport can't be created, the task reports ready and then fails, so `connect()` returns without a
 connection; the service skips that server too. If the call is cancelled while a server is still
 connecting, the background task keeps connecting, so the service closes the plugin once that task
-is done.
+is done. The task is the private `MCPPluginBase._current_task`. Tests on a real
+`MCPStreamableHttpPlugin` fail if a Semantic Kernel version stops setting it, and at run time the
+service logs a warning (once per process) when a plugin that is still connecting doesn't have it.
 
 ## File Structure
 
