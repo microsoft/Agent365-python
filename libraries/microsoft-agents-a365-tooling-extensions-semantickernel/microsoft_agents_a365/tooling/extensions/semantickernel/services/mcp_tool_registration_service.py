@@ -398,8 +398,15 @@ class McpToolRegistrationService:
                 # Connect the plugin
                 await _connect_plugin(plugin)
 
-                # Add plugin to kernel
-                _register_sdk_managed_plugin(kernel.add_plugin(plugin, server_name), plugin)
+                try:
+                    # Add plugin to kernel
+                    kernel_plugin = kernel.add_plugin(plugin, server_name)
+                except Exception:
+                    # For example a server name that isn't a valid plugin name. The plugin is
+                    # connected but can't be used, so close it instead of leaving it open.
+                    self._close_in_background(plugin)
+                    raise
+                _register_sdk_managed_plugin(kernel_plugin, plugin)
 
                 # Store reference to keep plugin alive throughout application lifecycle.
                 # By storing plugin references in _connected_plugins, we prevent
@@ -426,9 +433,13 @@ class McpToolRegistrationService:
             plugin for plugin in self._connected_plugins if id(plugin) not in replaced_ids
         ]
         for plugin in plugins:
-            closing_task = _start_closing(plugin)
-            self._pending_closes.add(closing_task)
-            closing_task.add_done_callback(self._pending_closes.discard)
+            self._close_in_background(plugin)
+
+    def _close_in_background(self, plugin: MCPStreamableHttpPlugin) -> None:
+        """Close an MCP plugin in a task of its own; cleanup_connections() waits for it."""
+        closing_task = _start_closing(plugin)
+        self._pending_closes.add(closing_task)
+        closing_task.add_done_callback(self._pending_closes.discard)
 
     # ============================================================================
     # Private Methods - Input Validation & Processing

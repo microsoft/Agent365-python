@@ -21,6 +21,8 @@ All notable changes to this package will be documented in this file.
   warning is logged if a Semantic Kernel version doesn't set it.
 - Cancelling `add_tool_servers_to_agent` while a server is still connecting no longer leaves that
   connection open. The plugin is closed once its connection attempt finishes.
+- A server that connects but can't be added to the kernel, for example because its name isn't a
+  valid plugin name (such as `mail-tools`), is now closed instead of being left open and untracked.
 
 ## [2.0.0] - 2026-10-20
 

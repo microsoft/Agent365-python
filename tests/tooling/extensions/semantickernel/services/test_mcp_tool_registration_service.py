@@ -452,6 +452,24 @@ class TestReplacedPluginLifecycle:
         assert harness.created[0].close_calls == 1
         assert await authorization_by_plugin(kernel) == {"mail": "Bearer user-b-token"}
 
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_plugin_that_cannot_be_added_to_the_kernel_is_closed(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+        # Not a valid kernel plugin name, so Kernel.add_plugin() rejects it after it connected.
+        harness.discovered = ["mail-tools", "calendar"]
+
+        await run_turn(service, kernel, "user-a-token")
+        await finish_closing()
+
+        rejected, added = harness.created
+        assert rejected.closed and not added.closed
+        assert list(kernel.plugins) == ["calendar"]
+        assert service._connected_plugins == [added]
+
 
 @contextlib.asynccontextmanager
 async def in_memory_transport() -> AsyncIterator[tuple[object, object]]:
