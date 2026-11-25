@@ -5,8 +5,12 @@
 
 import asyncio
 import contextlib
+import gc
 import importlib
 import logging
+import sys
+import threading
+import weakref
 from collections.abc import AsyncIterator, Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -34,11 +38,15 @@ class FakeMcpPlugin:
         self.headers = headers
         self.closed = False
         self.close_calls = 0
+        self.closed_in_thread: int | None = None
+        # Like MCPPluginBase, set once connected and cleared by close().
+        self.session: object | None = None
         self._harness = harness
 
     async def connect(self) -> None:
         if self._harness.fail_connect:
             raise ConnectionError("connect failed")
+        self.session = object()
 
     async def close(self) -> None:
         self.close_calls += 1
@@ -46,6 +54,8 @@ class FakeMcpPlugin:
         if self._harness.fail_close:
             raise RuntimeError("close failed")
         self.closed = True
+        self.closed_in_thread = threading.get_ident()
+        self.session = None
 
     @kernel_function(name="authorization", description="Returns the Authorization header.")
     def authorization(self) -> str:
@@ -63,6 +73,7 @@ class PendingFakeMcpPlugin(FakeMcpPlugin):
 
     async def connect(self) -> None:
         await asyncio.sleep(0.01)
+        await super().connect()
 
 
 class StalledFakeMcpPlugin(FakeMcpPlugin):
@@ -94,6 +105,7 @@ class SlowFakeMcpPlugin(FakeMcpPlugin):
 
         async def connection() -> None:
             await asyncio.sleep(0.05)
+            self.session = object()
             ready.set()
             self._stop_event = asyncio.Event()
             await self._stop_event.wait()
@@ -106,6 +118,7 @@ class SlowFakeMcpPlugin(FakeMcpPlugin):
         if self._stop_event is not None:
             self._stop_event.set()
         await self._current_task
+        self.session = None
 
 
 class CallerMathPlugin:
@@ -214,6 +227,13 @@ async def finish_closing() -> None:
     closing_tasks = set(sk_service._closing_tasks)
     if closing_tasks:
         await asyncio.wait(closing_tasks, timeout=5)
+
+
+async def collect_garbage() -> None:
+    """Collect garbage, then let the event loop close the plugins of collected kernels."""
+    gc.collect()
+    await asyncio.sleep(0)
+    await finish_closing()
 
 
 class TestMcpPluginIdentityIsolation:
@@ -418,7 +438,8 @@ class TestReplacedPluginLifecycle:
         kernel = Kernel()
         await run_turn(service, kernel, "user-a-token")
 
-        await run_turn(service, kernel.clone(), "user-b-token")
+        cloned = kernel.clone()
+        await run_turn(service, cloned, "user-b-token")
         await finish_closing()
 
         assert [plugin.closed for plugin in harness.created] == [True, False]
@@ -469,6 +490,101 @@ class TestReplacedPluginLifecycle:
         assert rejected.closed and not added.closed
         assert list(kernel.plugins) == ["calendar"]
         assert service._connected_plugins == [added]
+
+
+class TestPluginsClosedWithTheirKernel:
+    """Without cleanup_connections(), plugins close once the kernel they were added to is gone."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_plugins_are_closed_when_their_kernel_is_collected(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+        await run_turn(service, kernel, "user-a-token")
+        (plugin,) = harness.created
+
+        del kernel
+        await collect_garbage()
+
+        assert plugin.closed
+        assert service._connected_plugins == []
+        await service.cleanup_connections()
+        assert plugin.close_calls == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_kernels_sharing_a_service_keep_their_own_plugins_open(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        kernel_a, kernel_b = Kernel(), Kernel()
+        await run_turn(service, kernel_a, "user-a-token")
+        await run_turn(service, kernel_b, "user-b-token")
+        plugin_a, plugin_b = harness.created
+
+        del kernel_a
+        await collect_garbage()
+
+        assert plugin_a.closed and not plugin_b.closed
+        assert service._connected_plugins == [plugin_b]
+        assert await authorization_by_plugin(kernel_b) == {"mail": "Bearer user-b-token"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_plugin_is_closed_on_its_loop_when_collected_in_another_thread(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+        await run_turn(service, kernel, "user-a-token")
+        (plugin,) = harness.created
+        # A reference cycle, so only the cycle collector frees the kernel, here in another thread.
+        cycle: list[object] = [kernel]
+        cycle.append(cycle)
+        del kernel, cycle
+
+        await asyncio.to_thread(gc.collect)
+        await collect_garbage()
+
+        assert plugin.closed
+        assert plugin.closed_in_thread == threading.get_ident()
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_real_plugin_does_not_keep_its_kernel_alive(self, harness: Harness) -> None:
+        # Kernel.add_plugin() stores the kernel on a real MCPStreamableHttpPlugin.
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+        with (
+            patch(f"{MODULE}.MCPStreamableHttpPlugin", MCPStreamableHttpPlugin),
+            patch(f"{MODULE}._connect_plugin", AsyncMock()),
+        ):
+            await run_turn(service, kernel, "user-a-token")
+        assert list(kernel.plugins) == ["mail"]
+        kernel_ref = weakref.ref(kernel)
+
+        del kernel
+        gc.collect()
+
+        assert kernel_ref() is None
+        assert len(service._connected_plugins) == 1
+        await collect_garbage()
+
+    @pytest.mark.unit
+    def test_kernel_collected_after_its_event_loop_closed_is_ignored(
+        self, harness: Harness, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        unraisable: list[object] = []
+        monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
+        kernels = [Kernel()]
+
+        asyncio.run(run_turn(McpToolRegistrationService(), kernels[0], "user-a-token"))
+        kernels.clear()
+        gc.collect()
+
+        assert unraisable == []
 
 
 @contextlib.asynccontextmanager

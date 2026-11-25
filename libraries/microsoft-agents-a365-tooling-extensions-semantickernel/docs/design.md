@@ -75,6 +75,33 @@ connecting, the background task keeps connecting, so the service closes the plug
 is done. The task is the private `MCPPluginBase._current_task`. Tests on a real
 `MCPStreamableHttpPlugin` fail if a Semantic Kernel version stops setting it, and at run time the
 service logs a warning (once per process) when a plugin that is still connecting doesn't have it.
+A plugin that connects but that `Kernel.add_plugin()` then rejects, for example because the server
+name isn't a valid plugin name, is closed too.
+
+### Closing plugins when their kernel is garbage collected
+
+If `cleanup_connections()` isn't called, the connections are still bounded by the kernels that use
+them. Each plugin is recorded against the kernel it was added to, together with the event loop it
+connected on, and a `weakref.finalize` callback on that kernel closes the kernel's plugins once it
+is garbage collected. Because garbage collection can run in any thread, the callback only uses
+`loop.call_soon_threadsafe` to close each plugin on its own loop, in a background task, and it does
+nothing if that loop is already closed. A plugin that a later call replaces is removed from its
+kernel's record when it is closed, so a reused kernel doesn't accumulate closed plugins. A plugin is
+only ever added to one kernel, so it is closed when that kernel is collected. Closed plugins are also
+dropped from the service's tracking, on each call and when their kernel is collected.
+`cleanup_connections()` is still the deterministic way to close them, and closing a plugin twice
+has no effect, so the two paths don't conflict.
+
+`Kernel.add_plugin()` stores the kernel on the plugin (`MCPPluginBase.added_to_kernel`), and a
+connected plugin is kept alive by its own connection task, so it would keep the kernel alive and
+the kernel would never be collected. The service replaces that reference with a `weakref.proxy` to
+the kernel, so the plugin can still use the kernel while it exists, for example for sampling. A test
+on a real `MCPStreamableHttpPlugin` fails if a Semantic Kernel version keeps the kernel some other
+way.
+
+A `Kernel.clone()` copy shares the plugins' functions but doesn't keep the plugins open, and the
+same goes for any other kernel these plugins or functions are copied into. Don't keep using such a
+copy after the kernel that the service added the plugins to is gone.
 
 ## File Structure
 

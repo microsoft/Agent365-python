@@ -23,6 +23,10 @@ All notable changes to this package will be documented in this file.
   connection open. The plugin is closed once its connection attempt finishes.
 - A server that connects but can't be added to the kernel, for example because its name isn't a
   valid plugin name (such as `mail-tools`), is now closed instead of being left open and untracked.
+- MCP plugins that `add_tool_servers_to_agent` adds are now closed once the kernel they were added to
+  has been garbage collected, even if `cleanup_connections()` isn't called. A long-lived service
+  that gives every turn a new kernel, for example a `Kernel.clone()`, no longer keeps one more
+  connection open after each turn. The service also stops tracking plugins once they're closed.
 
 ## [2.0.0] - 2026-10-20
 
