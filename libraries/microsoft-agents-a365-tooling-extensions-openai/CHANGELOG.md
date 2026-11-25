@@ -9,9 +9,11 @@ All notable changes to this package will be documented in this file.
 - `McpToolRegistrationService.add_tool_servers_to_agent` reuses an MCP server that an earlier call
   attached only when the server is still connected and its URL and request headers match the
   current turn's. Every other server from an earlier call is replaced or dropped, and closed, also
-  when the call fails. Servers you configure on the agent yourself are unchanged. Build the agent
-  for each turn, use the returned agent only for that turn, and call `cleanup_all_servers()` when
-  the turn ends.
+  when the call fails or is cancelled. Servers the call connected are closed too if it fails or is
+  cancelled. Servers you configure on the agent yourself are unchanged. Build the agent for each
+  turn, use the returned agent only for that turn, and call `cleanup_all_servers()` when the turn
+  ends. `cleanup_all_servers()` closes the servers on every agent the service returned, including
+  servers reused from an earlier call.
 - MCP servers created by `add_tool_servers_to_agent` now connect and disconnect in a task of their
   own. Closing a server from another task no longer cancels the task that is using it, and a server
   that rejects the connection (for example with HTTP 403) is skipped instead of cancelling the

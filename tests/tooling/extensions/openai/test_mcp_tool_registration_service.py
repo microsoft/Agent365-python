@@ -36,6 +36,8 @@ class FakeStreamableHttpServer:
         self._harness = harness
 
     async def connect(self) -> None:
+        if self.name in self._harness.cancel_connect:
+            raise asyncio.CancelledError()
         if self._harness.fail_connect:
             raise ConnectionError("connect failed")
         self.session = object()
@@ -52,11 +54,15 @@ class Harness:
         self.discovered: list[str] = ["mail"]
         self.fail_connect = False
         self.fail_discovery = False
+        self.cancel_discovery = False
+        self.cancel_connect: set[str] = set()
         self.created: list[FakeStreamableHttpServer] = []
 
     async def list_tool_servers(
         self, agentic_app_id: str, auth_token: str, options: object, **kwargs: object
     ) -> list[MCPServerConfig]:
+        if self.cancel_discovery:
+            raise asyncio.CancelledError()
         if self.fail_discovery:
             raise RuntimeError("discovery failed")
         # Mirrors list_tool_servers attaching the caller's per-audience token to each server.
@@ -85,6 +91,7 @@ class FakeTransport:
 
     def __init__(self) -> None:
         self.rejected_urls: set[str] = set()
+        self.slow_urls: set[str] = set()
 
     async def connect(self, server: MCPServerStreamableHttp) -> None:
         task_group = anyio.create_task_group()
@@ -95,6 +102,8 @@ class FakeTransport:
             task_group.start_soon(self._reject)
             # Waits for the initialize response; the failed request cancels this task.
             await anyio.sleep(10)
+        if server.params["url"] in self.slow_urls:
+            await anyio.sleep(0.05)
         server.session = MagicMock()
 
     async def cleanup(self, server: MCPServerStreamableHttp) -> None:
@@ -324,6 +333,49 @@ class TestReplacedServerLifecycle:
         assert third.mcp_servers == [harness.created[1]]
         assert third.mcp_servers[0].session is not None
 
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_cancelled_discovery_closes_previous_servers(self, harness: Harness) -> None:
+        service = McpToolRegistrationService()
+
+        agent_a = await run_turn(service, new_agent(), "user-a-token")
+        harness.cancel_discovery = True
+        with pytest.raises(asyncio.CancelledError):
+            await run_turn(service, agent_a, "user-b-token")
+
+        assert [server.closed for server in agent_a.mcp_servers] == [True]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_cancelled_connection_closes_servers_from_this_and_earlier_calls(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+
+        agent_a = await run_turn(service, new_agent(), "user-a-token")
+        harness.discovered = ["mail", "calendar"]
+        harness.cancel_connect = {"calendar"}
+        with pytest.raises(asyncio.CancelledError):
+            await run_turn(service, agent_a, "user-b-token")
+
+        # The earlier call's server and the server this call connected before it was cancelled.
+        assert [server.name for server in harness.created] == ["mail", "mail", "calendar"]
+        assert [server.closed for server in harness.created[:2]] == [True, True]
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_reused_server_is_closed_by_the_service_that_returned_the_agent(
+        self, harness: Harness
+    ) -> None:
+        first = await run_turn(McpToolRegistrationService(), new_agent(), "user-a-token")
+        second_service = McpToolRegistrationService()
+        second = await run_turn(second_service, first, "user-a-token")
+
+        await second_service.cleanup_all_servers()
+
+        assert second is first
+        assert [server.closed for server in second.mcp_servers] == [True]
+
 
 class TestDedicatedConnectionTask:
     """SDK-created MCP servers connect and disconnect in a task of their own."""
@@ -366,6 +418,24 @@ class TestDedicatedConnectionTask:
         with pytest.raises(ConnectionError, match="mail"):
             await server.connect()
         await asyncio.sleep(0)
+
+        assert server.cleaned_up_in is server.connected_in
+        assert not server.is_open
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_cancelled_connect_closes_the_server_when_it_finishes_connecting(
+        self, transport: FakeTransport
+    ) -> None:
+        transport.slow_urls.add(server_url("mail"))
+        server = _DedicatedTaskMCPServer(params={"url": server_url("mail")}, name="mail")
+
+        connecting = asyncio.ensure_future(server.connect())
+        await asyncio.sleep(0)
+        connecting.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await connecting
+        await asyncio.wait_for(server._connection_task, timeout=5)
 
         assert server.cleaned_up_in is server.connected_in
         assert not server.is_open

@@ -57,10 +57,11 @@ agent = await service.add_tool_servers_to_agent(
 Each MCP server carries the Authorization token of the turn it was connected for. A server that an
 earlier call attached (tracked by object identity, across service instances) is reused only when it
 is still connected and its URL and headers, including the token, are identical to the current
-turn's. Every other server from an earlier call is closed, including when the call fails, so an
-agent from an earlier turn can no longer call MCP servers with that turn's token. Servers you
-configure on the agent yourself are kept as-is, and the returned agent is a `clone()` of the one
-passed in, so its other settings are preserved.
+turn's. Every other server from an earlier call is closed, including when the call fails or is
+cancelled, so an agent from an earlier turn can no longer call MCP servers with that turn's token.
+Servers this call connected are also closed if it fails or is cancelled. Servers you configure on
+the agent yourself are kept as-is, and the returned agent is a `clone()` of the one passed in, so
+its other settings are preserved.
 
 Each server the service creates connects and disconnects in a task of its own. The MCP client keeps
 anyio task groups open while it is connected, and closing them from a different task, or a request
@@ -71,8 +72,8 @@ servers are still added.
 
 Build the agent for each turn from a base agent without these servers, use the returned agent only
 for that turn, and call `cleanup_all_servers()` when the turn ends. `cleanup_all_servers()` closes
-every server the service connected, so use a separate service for each turn. Turns that run
-concurrently must not share an agent.
+the servers on every agent the service returned, so use a separate service for each turn. Turns
+that run concurrently must not share an agent.
 
 ## File Structure
 
