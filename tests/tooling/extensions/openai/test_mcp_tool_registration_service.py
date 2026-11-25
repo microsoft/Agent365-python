@@ -5,6 +5,9 @@
 
 import asyncio
 import contextlib
+import gc
+import importlib
+import sys
 from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -20,6 +23,7 @@ from microsoft_agents_a365.tooling.extensions.openai.mcp_tool_registration_servi
 from microsoft_agents_a365.tooling.models import MCPServerConfig
 
 MODULE = "microsoft_agents_a365.tooling.extensions.openai.mcp_tool_registration_service"
+openai_service = importlib.import_module(MODULE)
 
 
 def server_url(name: str) -> str:
@@ -33,6 +37,7 @@ class FakeStreamableHttpServer:
         self.params = params
         self.name = name
         self.closed = False
+        self.cleanup_calls = 0
         self.session: object | None = None
         self._harness = harness
 
@@ -44,6 +49,7 @@ class FakeStreamableHttpServer:
         self.session = object()
 
     async def cleanup(self) -> None:
+        self.cleanup_calls += 1
         self.closed = True
         self.session = None
 
@@ -176,6 +182,15 @@ def authorization_by_server(agent: Agent) -> dict[str, str]:
 
 def new_agent() -> Agent:
     return Agent(name="test-agent", instructions="You are a test agent.")
+
+
+async def collect_garbage() -> None:
+    """Collect garbage, then let the event loop close the servers that no agent holds any more."""
+    gc.collect()
+    await asyncio.sleep(0)
+    closing_tasks = set(openai_service._closing_tasks)
+    if closing_tasks:
+        await asyncio.wait(closing_tasks, timeout=5)
 
 
 class TestMcpServerIdentityIsolation:
@@ -549,4 +564,120 @@ class TestAgentSettingsPreserved:
         reordered = first.clone(mcp_servers=list(reversed(first.mcp_servers)))
         second = await run_turn(service, reordered, "user-a-token")
 
-        assert second is reordered
+        # No server is connected again. The agent gets a list that keeps them open while it's used.
+        assert len(harness.created) == 1
+        assert {id(server) for server in second.mcp_servers} == {
+            id(server) for server in reordered.mcp_servers
+        }
+        assert all(not server.closed for server in second.mcp_servers)
+
+
+class TestServersClosedWithTheirAgent:
+    """Without cleanup_all_servers(), servers close once no agent that holds them is alive."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_servers_are_closed_when_the_returned_agent_is_collected(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        agent = await run_turn(service, new_agent(), "user-a-token")
+        (server,) = harness.created
+
+        del agent
+        await collect_garbage()
+
+        assert server.closed
+        assert service._connected_servers == []
+        await service.cleanup_all_servers()
+        assert server.cleanup_calls == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_servers_stay_open_while_a_clone_of_the_agent_is_alive(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        agent = await run_turn(service, new_agent(), "user-a-token")
+        personalized = agent.clone(instructions="Personalized for user A.")
+        (server,) = harness.created
+
+        del agent
+        await collect_garbage()
+        assert not server.closed
+
+        del personalized
+        await collect_garbage()
+        assert server.closed
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_reused_server_stays_open_while_any_agent_holding_it_is_alive(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        first = await run_turn(service, new_agent(), "user-a-token")
+        harness.discovered = ["mail", "calendar"]
+        second = await run_turn(service, first, "user-a-token")
+        mail, calendar = harness.created
+        assert second.mcp_servers == [mail, calendar]
+
+        del first
+        await collect_garbage()
+        assert not mail.closed
+
+        del second
+        await collect_garbage()
+        assert mail.closed and calendar.closed
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_turns_sharing_a_service_keep_their_own_servers_open(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        agent_a = await run_turn(service, new_agent(), "user-a-token")
+        agent_b = await run_turn(service, new_agent(), "user-b-token")
+        server_a, server_b = harness.created
+
+        del agent_a
+        await collect_garbage()
+
+        assert server_a.closed and not server_b.closed
+        assert service._connected_servers == [server_b]
+        assert authorization_by_server(agent_b) == {"mail": "Bearer user-b-token"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_server_is_closed_on_its_loop_when_collected_in_another_thread(
+        self, discovery: Harness, transport: FakeTransport
+    ) -> None:
+        service = McpToolRegistrationService()
+        agent = await run_turn(service, new_agent(), "user-a-token")
+        (server,) = agent.mcp_servers
+        # A reference cycle, so only the cycle collector frees the agent, here in another thread.
+        agent.cycle = agent
+        del agent
+
+        await asyncio.to_thread(gc.collect)
+        await collect_garbage()
+
+        assert not server.is_open
+        assert server.cleaned_up_in is server.connected_in
+
+    @pytest.mark.unit
+    def test_agent_collected_after_its_event_loop_closed_is_ignored(
+        self, harness: Harness, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        unraisable: list[object] = []
+        monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
+        agents: list[Agent] = []
+
+        async def register() -> None:
+            agents.append(await run_turn(McpToolRegistrationService(), new_agent(), "user-a-token"))
+
+        asyncio.run(register())
+        agents.clear()
+        gc.collect()
+
+        assert unraisable == []

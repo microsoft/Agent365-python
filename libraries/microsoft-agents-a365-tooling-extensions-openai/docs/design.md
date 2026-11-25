@@ -77,6 +77,27 @@ for that turn, and call `cleanup_all_servers()` when the turn ends. `cleanup_all
 the servers on every agent the service returned, so use a separate service for each turn. Turns
 that run concurrently must not share an agent.
 
+#### Closing servers when their agent is garbage collected
+
+If `cleanup_all_servers()` isn't called, the connections are still bounded by the agents that use
+them. The returned agent gets its `mcp_servers` as a list type of the service's own, which supports
+weak references; `clone()` shares that list unless it is given new `mcp_servers`, so the list lives
+as long as the agent or any of its clones. Each SDK-created server is counted once for every such
+live list that holds it (a server that a later call reuses is in two lists). When a list is
+garbage collected, a `weakref.finalize` callback, which holds the servers but not the list, uses
+`loop.call_soon_threadsafe` to release them on the event loop they connected on, because garbage
+collection can run in any thread. On that loop, every server whose count drops to zero and that is
+still open is closed in a background task, and every service stops tracking it. The callback does
+nothing if that loop is already closed. Closed servers are also dropped from the service's tracking
+on each call, so a long-lived service doesn't keep growing lists of closed servers.
+`cleanup_all_servers()` is still the deterministic way to close them, and closing a server twice
+has no effect, so the two paths don't conflict.
+
+This relies on the list the service created. An agent that holds these servers in a list of its own,
+for example `agent.clone(mcp_servers=[*agent.mcp_servers, other])`, doesn't keep them open once the
+agent the service returned is gone. If such an agent is passed back to `add_tool_servers_to_agent`,
+it returns a clone that holds the servers in a list of the service's again.
+
 ## File Structure
 
 ```

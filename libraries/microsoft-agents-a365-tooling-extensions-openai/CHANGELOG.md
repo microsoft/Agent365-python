@@ -17,6 +17,11 @@ All notable changes to this package will be documented in this file.
 - When `add_tool_servers_to_agent` fails or is cancelled, the servers it closes are also removed
   from the agent you passed in (it gets a new `mcp_servers` list, so clones that share the old list
   are unchanged), so that agent can still run without them.
+- MCP servers that `add_tool_servers_to_agent` connects are now closed once the agent it returned
+  and every `clone()` of that agent have been garbage collected, even if `cleanup_all_servers()`
+  isn't called. A long-lived service that builds a new agent for every turn no longer keeps one
+  more connection open after each turn. A server that a later call reuses stays open while any
+  agent that holds it is alive. The service also stops tracking servers once they're closed.
 - MCP servers created by `add_tool_servers_to_agent` now connect and disconnect in a task of their
   own. Closing a server from another task no longer cancels the task that is using it, and a server
   that rejects the connection (for example with HTTP 403) is skipped instead of cancelling the

@@ -38,6 +38,8 @@ from microsoft_agents_a365.tooling.utils.utility import (
     is_development_environment,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class MCPServerInfo:
@@ -84,6 +86,7 @@ class _DedicatedTaskMCPServer(MCPServerStreamableHttp):
     def __init__(self, params: MCPServerStreamableHttpParams, name: Optional[str] = None) -> None:
         super().__init__(params=params, name=name)
         self._connection_task: Optional["asyncio.Task[None]"] = None
+        self._connection_loop: Optional[asyncio.AbstractEventLoop] = None
         self._close_requested = asyncio.Event()
 
     @property
@@ -99,7 +102,8 @@ class _DedicatedTaskMCPServer(MCPServerStreamableHttp):
     async def connect(self) -> None:
         if self._connection_task is not None:
             raise RuntimeError(f"MCP server '{self.name}' can only be connected once")
-        connected: "asyncio.Future[None]" = asyncio.get_running_loop().create_future()
+        self._connection_loop = asyncio.get_running_loop()
+        connected: "asyncio.Future[None]" = self._connection_loop.create_future()
         self._connection_task = asyncio.create_task(self._run_connection(connected))
         try:
             await asyncio.wait({connected})
@@ -148,6 +152,104 @@ def _is_open(server: MCPServer) -> bool:
     return getattr(server, "session", None) is not None
 
 
+class _AgentMcpServers(list):
+    """The ``mcp_servers`` list of an agent that ``add_tool_servers_to_agent`` returned.
+
+    ``Agent.clone()`` shares this list unless it is given new ``mcp_servers``, so the list lives
+    as long as the agent or any of its clones. An SDK-created server is closed once no such list
+    holds it any more, so its connection doesn't stay open after the agents using it are gone.
+    """
+
+    __slots__ = ("__weakref__",)
+
+
+# How many live _AgentMcpServers lists hold each SDK-created server. A server that a later call
+# reuses is held by the lists of both agents.
+_server_list_counts: "weakref.WeakKeyDictionary[MCPServer, int]" = weakref.WeakKeyDictionary()
+
+# Services whose cleanup_all_servers() closes each SDK-created server. A server that is closed
+# because it was replaced, or because no agent holds it any more, is removed from them.
+_server_trackers: "weakref.WeakKeyDictionary[MCPServer, weakref.WeakSet[object]]" = (
+    weakref.WeakKeyDictionary()
+)
+
+# Background tasks closing servers that no agent holds any more; kept so they are not garbage
+# collected before they finish.
+_closing_tasks: "set[asyncio.Task[None]]" = set()
+
+
+def _hold_servers(server_list: _AgentMcpServers) -> None:
+    """Count the SDK-created servers in an agent's list, and release them when it's collected."""
+    servers = {
+        id(server): server
+        for server in server_list
+        if _get_sdk_managed_server_state(server) is not None
+    }
+    if not servers:
+        return
+    for server in servers.values():
+        _server_list_counts[server] = _server_list_counts.get(server, 0) + 1
+    # The finalizer must not refer to the list itself, or the list would never be collected.
+    finalizer = weakref.finalize(
+        server_list, _release_servers_soon, tuple(servers.values()), asyncio.get_running_loop()
+    )
+    finalizer.atexit = False
+
+
+def _release_servers_soon(
+    servers: Tuple[MCPServer, ...], fallback_loop: asyncio.AbstractEventLoop
+) -> None:
+    """Release the servers of a collected list on the event loops they connected on.
+
+    This runs wherever garbage collection runs, possibly in another thread, so it only
+    schedules the release.
+    """
+    servers_by_loop: "dict[asyncio.AbstractEventLoop, List[MCPServer]]" = {}
+    for server in servers:
+        loop = getattr(server, "_connection_loop", None) or fallback_loop
+        servers_by_loop.setdefault(loop, []).append(server)
+    for loop, loop_servers in servers_by_loop.items():
+        try:
+            loop.call_soon_threadsafe(_release_servers, loop_servers)
+        except RuntimeError:
+            # The event loop is closed, and the connections it ran were closed with it.
+            pass
+
+
+def _release_servers(servers: List[MCPServer]) -> None:
+    """Close each server that no live agent list holds any more. Runs on the server's loop."""
+    for server in servers:
+        try:
+            count = _server_list_counts.get(server, 0) - 1
+            if count > 0:
+                _server_list_counts[server] = count
+                continue
+            _server_list_counts.pop(server, None)
+            _forget_server(server)
+            if _is_open(server):
+                logger.debug(f"Closing MCP server '{server.name}', which no agent uses any more")
+                closing_task = asyncio.get_running_loop().create_task(_close_server(server))
+                _closing_tasks.add(closing_task)
+                closing_task.add_done_callback(_closing_tasks.discard)
+        except Exception as error:
+            logger.debug(f"Error releasing MCP server '{server.name}': {error}")
+
+
+async def _close_server(server: MCPServer) -> None:
+    """Close an MCP server, logging instead of raising if that fails."""
+    try:
+        await server.cleanup()
+    except Exception as error:
+        logger.debug(f"Error closing MCP server '{server.name}': {error}")
+
+
+def _forget_server(server: MCPServer) -> None:
+    """Stop tracking a server in every service whose cleanup_all_servers() would close it."""
+    trackers = _server_trackers.pop(server, None)
+    for service in list(trackers or ()):
+        service._forget_servers([server])
+
+
 class McpToolRegistrationService:
     """Service for managing MCP tools and servers for an agent"""
 
@@ -192,7 +294,11 @@ class McpToolRegistrationService:
         use the returned agent only for that turn, and call ``cleanup_all_servers()`` when the
         turn ends. Use a separate service for each turn, because ``cleanup_all_servers()``
         closes the servers on every agent the service returned. Turns that run concurrently
-        must not share an agent.
+        must not share an agent. If ``cleanup_all_servers()`` isn't called, each server this
+        method connected is closed once the returned agent and all of its ``clone()`` copies
+        have been garbage collected. This relies on the list that this method gives the agent
+        as ``mcp_servers``, which ``clone()`` shares: an agent that holds these servers in a
+        list of its own, for example ``agent.clone(mcp_servers=[...])``, doesn't keep them open.
 
         Args:
             agent: The existing agent to add servers to
@@ -202,8 +308,8 @@ class McpToolRegistrationService:
             auth_token: Authentication token to access the MCP servers.
 
         Returns:
-            Copy of the agent with this turn's MCP servers, or the original agent if its MCP
-            servers are already current.
+            Copy of the agent with this turn's MCP servers, or the agent passed in if it already
+            holds exactly this turn's servers in a list that this method returned.
         """
         # Get existing MCP servers from the agent
         existing_mcp_servers = (
@@ -351,9 +457,13 @@ class McpToolRegistrationService:
                     continue
 
             all_mcp_servers = caller_mcp_servers + sdk_mcp_servers
-            if len(all_mcp_servers) == len(existing_mcp_servers) and {
-                id(server) for server in all_mcp_servers
-            } == {id(server) for server in existing_mcp_servers}:
+            if (
+                len(all_mcp_servers) == len(existing_mcp_servers)
+                and {id(server) for server in all_mcp_servers}
+                == {id(server) for server in existing_mcp_servers}
+                # SDK servers stay open only while a list this service returned holds them.
+                and (not sdk_mcp_servers or isinstance(agent.mcp_servers, _AgentMcpServers))
+            ):
                 self._logger.info("Agent MCP servers are already current")
                 self._track_servers(reused_servers)
                 return agent
@@ -372,7 +482,11 @@ class McpToolRegistrationService:
             )
             try:
                 # clone() keeps every other agent setting (guardrails, handoffs, hooks, and so on)
-                new_agent = agent.clone(mcp_servers=all_mcp_servers)
+                server_list = _AgentMcpServers(all_mcp_servers)
+                new_agent = agent.clone(mcp_servers=server_list)
+                # Close the servers once neither the new agent nor any of its clones is in use.
+                if new_agent.mcp_servers is server_list:
+                    _hold_servers(server_list)
             except Exception as e:
                 self._logger.error(f"Failed to recreate agent with new MCP servers: {e}")
                 raise
@@ -395,13 +509,32 @@ class McpToolRegistrationService:
         return new_agent
 
     def _track_servers(self, servers: List[MCPServer]) -> None:
-        """Record MCP servers on an agent this service returned, so cleanup_all_servers() closes them."""
+        """Record MCP servers on an agent this service returned, so cleanup_all_servers() closes them.
+
+        Servers that are no longer open are dropped, so a long-lived service doesn't keep them.
+        """
         if not hasattr(self, "_connected_servers"):
             self._connected_servers = []
+        self._connected_servers = [server for server in self._connected_servers if _is_open(server)]
         tracked_ids = {id(server) for server in self._connected_servers}
-        self._connected_servers.extend(
-            server for server in servers if id(server) not in tracked_ids
-        )
+        for server in servers:
+            if id(server) not in tracked_ids:
+                tracked_ids.add(id(server))
+                self._connected_servers.append(server)
+            try:
+                _server_trackers.setdefault(server, weakref.WeakSet()).add(self)
+            except TypeError:
+                # Not hashable or weak-referenceable, so it was not created by this service.
+                pass
+
+    def _forget_servers(self, servers: List[MCPServer]) -> None:
+        """Stop tracking MCP servers, without changing a list that cleanup may be closing."""
+        if not hasattr(self, "_connected_servers"):
+            return
+        forgotten_ids = {id(server) for server in servers}
+        self._connected_servers = [
+            server for server in self._connected_servers if id(server) not in forgotten_ids
+        ]
 
     def _remove_servers(self, agent: Agent, servers: List[MCPServer]) -> None:
         """Remove MCP servers from an agent without changing a list that its clones may share."""
@@ -417,11 +550,9 @@ class McpToolRegistrationService:
 
     async def _close_replaced_servers(self, servers: List[MCPServer]) -> None:
         """Close MCP servers attached by an earlier call that the current turn does not reuse."""
-        if hasattr(self, "_connected_servers"):
-            replaced_ids = {id(server) for server in servers}
-            self._connected_servers = [
-                server for server in self._connected_servers if id(server) not in replaced_ids
-            ]
+        self._forget_servers(servers)
+        for server in servers:
+            _forget_server(server)
         open_servers = [server for server in servers if _is_open(server)]
         if not open_servers:
             return
@@ -460,8 +591,8 @@ class McpToolRegistrationService:
         service are still working with.
         """
         if hasattr(self, "_connected_servers"):
-            await self._cleanup_servers(self._connected_servers)
-            self._connected_servers = []
+            servers, self._connected_servers = self._connected_servers, []
+            await self._cleanup_servers(servers)
 
     # --------------------------------------------------------------------------
     # SEND CHAT HISTORY - OpenAI-specific implementations
