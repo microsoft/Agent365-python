@@ -9,6 +9,7 @@ capabilities for Google ADK-based agents.
 """
 
 # Standard library imports
+import asyncio
 import logging
 import weakref
 from typing import List, Optional
@@ -34,6 +35,10 @@ from microsoft_agents_a365.tooling.utils.utility import (
 # any service instance are recognized; entries are dropped when the toolset is garbage
 # collected.
 _sdk_managed_toolsets: "weakref.WeakSet[McpToolset]" = weakref.WeakSet()
+
+# Background tasks that close toolsets replaced by a later call; kept so they are not garbage
+# collected before they finish.
+_closing_tasks: "set[asyncio.Task[None]]" = set()
 
 
 def _is_sdk_managed_toolset(tool: object) -> bool:
@@ -83,11 +88,12 @@ class McpToolRegistrationService:
 
         Each MCP toolset carries the current caller's Authorization token in its request
         headers. Toolsets attached by an earlier call are removed from the agent before
-        anything else happens, and fresh toolsets are created for this turn. An agent that is
-        reused from one turn to the next therefore does not keep an earlier user's or agent
-        identity's token, even if this call fails. Tools the caller configured on the agent
-        are kept as-is. Because the agent is modified in place, turns that run concurrently
-        must each use their own agent, for example a ``clone()`` of a base agent.
+        anything else happens and closed in the background, and fresh toolsets are created for
+        this turn. An agent that is reused from one turn to the next therefore does not keep an
+        earlier user's or agent identity's token, even if this call fails. Tools the caller
+        configured on the agent are kept as-is. Because the agent is modified in place, turns
+        that run concurrently must each use their own agent, for example a ``clone()`` of a
+        base agent.
 
         Args:
             agent: The existing agent to add servers to.
@@ -109,6 +115,9 @@ class McpToolRegistrationService:
             self._logger.info(
                 f"Removed {len(previous_tools) - len(caller_tools)} MCP toolsets "
                 "attached by an earlier call"
+            )
+            self._close_replaced_toolsets(
+                [tool for tool in previous_tools if _is_sdk_managed_toolset(tool)]
             )
 
         is_dev = is_development_environment()
@@ -216,6 +225,23 @@ class McpToolRegistrationService:
             )
         else:
             self._logger.info("No new MCP servers to add to agent")
+
+    def _close_replaced_toolsets(self, toolsets: List[McpToolset]) -> None:
+        """Release toolsets an earlier call attached, closing them without delaying this turn."""
+        replaced_ids = {id(toolset) for toolset in toolsets}
+        self._connected_servers = [
+            toolset for toolset in self._connected_servers if id(toolset) not in replaced_ids
+        ]
+        closing_task = asyncio.ensure_future(self._close_toolsets(toolsets))
+        _closing_tasks.add(closing_task)
+        closing_task.add_done_callback(_closing_tasks.discard)
+
+    async def _close_toolsets(self, toolsets: List[McpToolset]) -> None:
+        for toolset in toolsets:
+            try:
+                await toolset.close()
+            except Exception as close_ex:
+                self._logger.debug(f"Error closing a replaced MCP toolset: {close_ex}")
 
     async def cleanup(self):
         """Clean up any resources used by the service."""

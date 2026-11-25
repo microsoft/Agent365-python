@@ -3,6 +3,8 @@
 
 """Unit tests for McpToolRegistrationService in Google ADK extension."""
 
+import asyncio
+import importlib
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -563,9 +565,10 @@ class FakeMcpToolset:
 
     def __init__(self, connection_params: object) -> None:
         self.connection_params = connection_params
+        self.closed = False
 
     async def close(self) -> None:
-        pass
+        self.closed = True
 
 
 class AdkHarness:
@@ -658,6 +661,23 @@ class TestMcpToolsetIdentityIsolation:
 
         assert self.toolset_authorization(agent) == {adk_server_url("mail"): "Bearer user-b-token"}
         assert caller_tool in agent.tools
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_replaced_toolsets_are_closed_and_released(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        await self.run_turn(service, agent, "user-a-token")
+        replaced = [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]
+
+        await self.run_turn(service, agent, "user-b-token")
+        closing_tasks = getattr(importlib.import_module(ADK_MODULE), "_closing_tasks", set())
+        await asyncio.wait_for(asyncio.gather(*closing_tasks), timeout=5)
+
+        assert replaced and all(toolset.closed for toolset in replaced)
+        current = [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]
+        assert service._connected_servers == current
 
     @pytest.mark.asyncio
     @pytest.mark.unit
