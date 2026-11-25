@@ -37,13 +37,16 @@ class FakeMcpPlugin:
 
 
 class StalledFakeMcpPlugin(FakeMcpPlugin):
-    """Mimics MCPPluginBase.connect() when the server rejects the session: the background
-    connection task ends without reporting that it is ready."""
+    """Mimics MCPPluginBase.connect() when the connection fails: the background connection task
+    ends without reporting that it is ready, or, as when the transport cannot be created, reports
+    ready and then fails, so connect() returns without a connection."""
 
     async def connect(self) -> None:
         ready = asyncio.Event()
 
         async def connection() -> None:
+            if self._harness.stall_reports_ready:
+                ready.set()
             raise self._harness.stall_error("connection failed")
 
         self._current_task = asyncio.create_task(connection())
@@ -93,6 +96,7 @@ class Harness:
         self.fail_discovery = False
         self.stalled: set[str] = set()
         self.stall_error: type[BaseException] = ConnectionError
+        self.stall_reports_ready = False
         self.slow: set[str] = set()
         self.created: list[FakeMcpPlugin] = []
 
@@ -289,6 +293,21 @@ class TestMcpPluginIdentityIsolation:
         harness.discovered = ["denied", "mail"]
         harness.stalled = {"denied"}
         harness.stall_error = stall_error
+
+        await asyncio.wait_for(run_turn(service, kernel, "user-b-token"), timeout=5)
+
+        assert await authorization_by_plugin(kernel) == {"mail": "Bearer user-b-token"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_server_whose_connection_fails_after_reporting_ready_is_skipped(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        kernel = Kernel()
+        harness.discovered = ["denied", "mail"]
+        harness.stalled = {"denied"}
+        harness.stall_reports_ready = True
 
         await asyncio.wait_for(run_turn(service, kernel, "user-b-token"), timeout=5)
 

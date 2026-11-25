@@ -129,6 +129,8 @@ async def _connect_plugin(plugin: MCPStreamableHttpPlugin) -> None:
     ``MCPPluginBase.connect()`` opens the connection in a background task and waits for that
     task to report that it is ready. When the server rejects the session (for example with
     HTTP 403), the background task can end without reporting, and ``connect()`` never returns.
+    When the transport cannot be created, the task reports ready and then fails, and
+    ``connect()`` returns without a connection. Both raise ``ConnectionError`` here.
     If this call is cancelled, the background task keeps connecting, so the plugin is closed
     once it is done.
     """
@@ -146,13 +148,17 @@ async def _connect_plugin(plugin: MCPStreamableHttpPlugin) -> None:
         _closing_tasks.add(closing_task)
         closing_task.add_done_callback(_closing_tasks.discard)
         raise
-    if not connect_task.done():
-        # The background task ended without reporting: the connection failed.
+    if connect_task.done():
+        connect_task.result()
+        if not isinstance(connection_task, asyncio.Future) or not connection_task.done():
+            return
+        # connect() returned, but the background task had already ended: nothing is connected.
+    else:
+        # The background task ended without reporting that it is ready.
         connect_task.cancel()
         await asyncio.wait({connect_task})
-        error = None if connection_task.cancelled() else connection_task.exception()
-        raise ConnectionError(f"Failed to connect to MCP server '{plugin.name}'") from error
-    connect_task.result()
+    error = None if connection_task.cancelled() else connection_task.exception()
+    raise ConnectionError(f"Failed to connect to MCP server '{plugin.name}'") from error
 
 
 class McpToolRegistrationService:

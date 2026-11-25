@@ -60,9 +60,11 @@ own kernel, for example a `clone()` of a base kernel without these plugins.
 
 `MCPPluginBase.connect()` waits for its background connection task to report that it is ready. When
 a server rejects the session (for example with HTTP 403), that task can end without reporting, so
-the service also watches the task and skips the server instead of waiting forever. If the call is
-cancelled while a server is still connecting, the background task keeps connecting, so the service
-closes the plugin once that task is done.
+the service also watches the task and skips the server instead of waiting forever. When the
+transport can't be created, the task reports ready and then fails, so `connect()` returns without a
+connection; the service skips that server too. If the call is cancelled while a server is still
+connecting, the background task keeps connecting, so the service closes the plugin once that task
+is done.
 
 ## File Structure
 
