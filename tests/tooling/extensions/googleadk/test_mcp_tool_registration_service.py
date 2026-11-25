@@ -563,11 +563,13 @@ def caller_tool() -> str:
 class FakeMcpToolset:
     """Stands in for McpToolset and records the connection parameters it was created with."""
 
-    def __init__(self, connection_params: object) -> None:
+    def __init__(self, connection_params: object, close_delay: float = 0) -> None:
         self.connection_params = connection_params
+        self.close_delay = close_delay
         self.closed = False
 
     async def close(self) -> None:
+        await asyncio.sleep(self.close_delay)
         self.closed = True
 
 
@@ -578,6 +580,7 @@ class AdkHarness:
         self.discovered: list[str] = ["mail"]
         self.fail_create = False
         self.fail_discovery = False
+        self.close_delay = 0.0
 
     async def list_tool_servers(
         self, agentic_app_id: str, auth_token: str, options: object, **kwargs: object
@@ -600,7 +603,7 @@ class AdkHarness:
     def create_toolset(self, connection_params: object) -> FakeMcpToolset:
         if self.fail_create:
             raise ConnectionError("toolset creation failed")
-        return FakeMcpToolset(connection_params)
+        return FakeMcpToolset(connection_params, self.close_delay)
 
 
 class TestMcpToolsetIdentityIsolation:
@@ -678,6 +681,22 @@ class TestMcpToolsetIdentityIsolation:
         assert replaced and all(toolset.closed for toolset in replaced)
         current = [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]
         assert service._connected_servers == current
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_cleanup_waits_for_replaced_toolsets_to_close(self, harness, agent):
+        from microsoft_agents_a365.tooling.extensions.googleadk import McpToolRegistrationService
+
+        service = McpToolRegistrationService()
+        harness.close_delay = 0.05
+        await self.run_turn(service, agent, "user-a-token")
+        replaced = [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]
+        await self.run_turn(service, agent, "user-b-token")
+
+        await service.cleanup()
+
+        toolsets = replaced + [tool for tool in agent.tools if isinstance(tool, FakeMcpToolset)]
+        assert replaced and all(toolset.closed for toolset in toolsets)
 
     @pytest.mark.asyncio
     @pytest.mark.unit

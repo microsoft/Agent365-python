@@ -72,6 +72,8 @@ class McpToolRegistrationService:
             logger=self._logger
         )
         self._connected_servers: List[McpToolset] = []
+        # Background closes of toolsets replaced by a later call; cleanup() waits for them.
+        self._pending_closes: "set[asyncio.Task[None]]" = set()
 
     async def add_tool_servers_to_agent(
         self,
@@ -233,8 +235,9 @@ class McpToolRegistrationService:
             toolset for toolset in self._connected_servers if id(toolset) not in replaced_ids
         ]
         closing_task = asyncio.ensure_future(self._close_toolsets(toolsets))
-        _closing_tasks.add(closing_task)
-        closing_task.add_done_callback(_closing_tasks.discard)
+        for tasks in (_closing_tasks, self._pending_closes):
+            tasks.add(closing_task)
+            closing_task.add_done_callback(tasks.discard)
 
     async def _close_toolsets(self, toolsets: List[McpToolset]) -> None:
         for toolset in toolsets:
@@ -253,5 +256,8 @@ class McpToolRegistrationService:
                 except Exception as cleanup_ex:
                     self._logger.debug(f"Error during cleanup: {cleanup_ex}")
             self._connected_servers.clear()
+            # Also wait for the toolsets that later calls replaced to finish closing.
+            if self._pending_closes:
+                await asyncio.wait(set(self._pending_closes))
         except Exception as ex:
             self._logger.debug(f"Error during service cleanup: {ex}")
