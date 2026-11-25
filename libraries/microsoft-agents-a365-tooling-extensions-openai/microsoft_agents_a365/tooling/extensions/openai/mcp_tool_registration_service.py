@@ -290,15 +290,30 @@ class McpToolRegistrationService:
         still run without them. Servers the caller configured on the agent are kept as-is. A
         server that fails to connect, for example because it rejects the caller, is skipped.
 
+        Turns that run at the same time must not share an agent that this method returned, or
+        clones of it: each call closes the servers it replaces, which ends any other turn that
+        is still using them.
+
         Build the agent for each turn from a base agent without MCP servers from this method,
-        use the returned agent only for that turn, and call ``cleanup_all_servers()`` when the
-        turn ends. Use a separate service for each turn, because ``cleanup_all_servers()``
-        closes the servers on every agent the service returned. Turns that run concurrently
-        must not share an agent. If ``cleanup_all_servers()`` isn't called, each server this
-        method connected is closed once the returned agent and all of its ``clone()`` copies
-        have been garbage collected. This relies on the list that this method gives the agent
-        as ``mcp_servers``, which ``clone()`` shares: an agent that holds these servers in a
-        list of its own, for example ``agent.clone(mcp_servers=[...])``, doesn't keep them open.
+        and use the returned agent only for that turn. Use a separate service for each turn and
+        call ``cleanup_all_servers()`` in a ``finally`` block when the turn ends;
+        ``cleanup_all_servers()`` closes the servers on every agent the service returned, so on
+        a shared service it would also end other turns. If ``cleanup_all_servers()`` isn't
+        called, each server this method connected is closed once the returned agent and all of
+        its ``clone()`` copies have been garbage collected. That relies on the list this method
+        gives the agent as ``mcp_servers``, which ``clone()`` shares, so don't copy these
+        servers into a list of your own, for example with ``agent.clone(mcp_servers=[...])``:
+        an agent that holds them that way doesn't keep them open.
+
+        Example:
+            >>> service = McpToolRegistrationService()
+            >>> agent = await service.add_tool_servers_to_agent(
+            ...     base_agent, auth, "agentic", turn_context
+            ... )
+            >>> try:
+            ...     result = await Runner.run(agent, user_message)
+            ... finally:
+            ...     await service.cleanup_all_servers()
 
         Args:
             agent: The existing agent to add servers to
@@ -317,7 +332,7 @@ class McpToolRegistrationService:
         )
 
         # Separate servers the caller configured from servers attached by an earlier call.
-        # The latter carry the token of whichever user or agent identity that call ran for.
+        # The latter carry the headers of the turn that created them.
         caller_mcp_servers: List[MCPServer] = []
         previous_sdk_servers: List[MCPServer] = []
         previous_sdk_servers_by_url: Dict[str, Tuple[MCPServer, Dict[str, str]]] = {}
@@ -414,9 +429,8 @@ class McpToolRegistrationService:
                         **server_headers,
                     }  # per-audience token takes precedence
 
-                    # Identical headers mean the same token, and so the same identity: keep the
-                    # existing connection while it is open. Any other previous server is
-                    # replaced, never reused.
+                    # Identical headers mean the same token: keep the existing connection while it
+                    # is open. Any other previous server is replaced, never reused.
                     previous = previous_sdk_servers_by_url.get(si.url)
                     if previous is not None and previous[1] == headers and _is_open(previous[0]):
                         sdk_mcp_servers.append(previous[0])
@@ -450,7 +464,7 @@ class McpToolRegistrationService:
 
                 except Exception as e:
                     # Log the error but continue with other servers. Never fall back to a server
-                    # from an earlier call: it may carry another identity's token.
+                    # from an earlier call: it carries the headers of the turn that created it.
                     self._logger.warning(
                         f"Failed to connect to MCP server {si.name} at {si.url}: {e}"
                     )
@@ -587,8 +601,9 @@ class McpToolRegistrationService:
     async def cleanup_all_servers(self) -> None:
         """Close the MCP servers on every agent this service returned.
 
-        Use one service per turn: this also closes servers that other turns using the same
-        service are still working with.
+        Use one service per turn and call this in a ``finally`` block when the turn ends: it
+        also closes servers that other turns using the same service are still working with.
+        Servers that are not closed this way are closed once no agent holds them any more.
         """
         if hasattr(self, "_connected_servers"):
             servers, self._connected_servers = self._connected_servers, []

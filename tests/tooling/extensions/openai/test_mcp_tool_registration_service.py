@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Tests that add_tool_servers_to_agent never reuses another identity's MCP server token."""
+"""Tests for how add_tool_servers_to_agent replaces, reuses and closes MCP servers."""
 
 import asyncio
 import contextlib

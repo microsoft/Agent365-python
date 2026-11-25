@@ -9,7 +9,10 @@ All notable changes to this package will be documented in this file.
 - `McpToolRegistrationService.add_tool_servers_to_agent` now removes the MCP plugins that an
   earlier call added to the kernel, including copies made by `Kernel.clone()`, before it acquires
   tokens, then adds plugins for the current turn. Plugins you add to the kernel yourself are
-  unchanged. Turns that run concurrently must each use their own kernel.
+  unchanged. Because each call closes the plugins it replaces, turns that run at the same time must
+  not share a kernel, or `Kernel.clone()` copies of one; give each turn its own kernel. Use a
+  separate service for each turn and call `cleanup_connections()` in a `finally` block when the
+  turn ends.
 - The MCP connections behind the plugins that `add_tool_servers_to_agent` removes are now closed in
   the background, and they're no longer tracked by the service, so a reused kernel no longer keeps
   one more connection open after every turn. This also closes them for any `Kernel.clone()` copy
@@ -26,7 +29,9 @@ All notable changes to this package will be documented in this file.
 - MCP plugins that `add_tool_servers_to_agent` adds are now closed once the kernel they were added to
   has been garbage collected, even if `cleanup_connections()` isn't called. A long-lived service
   that gives every turn a new kernel, for example a `Kernel.clone()`, no longer keeps one more
-  connection open after each turn. The service also stops tracking plugins once they're closed.
+  connection open after each turn. The service also stops tracking plugins once they're closed. A
+  `Kernel.clone()` copy of that kernel, or any other kernel that the plugins are copied into,
+  doesn't keep them open.
 
 ## [2.0.0] - 2026-10-20
 

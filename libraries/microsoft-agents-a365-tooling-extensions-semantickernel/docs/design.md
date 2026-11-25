@@ -53,7 +53,7 @@ Semantic Kernel with MCP plugins
 `add_tool_servers_to_agent` adds one MCP plugin per server, carrying the Authorization token of the
 current turn. On every call it first removes the plugins an earlier call added, including copies
 made by `Kernel.clone()` (tracked by object identity, across service instances). A kernel that is
-reused from one turn to the next does not keep an earlier user's or agent identity's plugin, even
+reused from one turn to the next does not keep a plugin that carries an earlier turn's headers, even
 when a server is not rediscovered or fails to connect. Plugins you add to the kernel yourself are
 kept as-is. Because the kernel is modified in place, turns that run concurrently must each use their
 own kernel, for example a `clone()` of a base kernel without these plugins.
@@ -77,6 +77,26 @@ is done. The task is the private `MCPPluginBase._current_task`. Tests on a real
 service logs a warning (once per process) when a plugin that is still connecting doesn't have it.
 A plugin that connects but that `Kernel.add_plugin()` then rejects, for example because the server
 name isn't a valid plugin name, is closed too.
+
+### Per-turn usage
+
+```python
+service = McpToolRegistrationService()
+kernel = base_kernel.clone()
+await service.add_tool_servers_to_agent(kernel, auth, "agentic", turn_context)
+try:
+    result = await kernel.invoke_prompt(user_message)
+finally:
+    await service.cleanup_connections()
+```
+
+One kernel, or `Kernel.clone()` copies of a kernel that the service added plugins to, must not be
+shared by turns that run at the same time: each call replaces those plugins and closes the ones it
+replaces, which ends any other turn that is still using them. `cleanup_connections()` closes every
+plugin the service connected, so use a separate service for each turn. A long-lived service can
+serve concurrent turns as long as each turn has its own kernel and `cleanup_connections()` isn't
+called while other turns still run; the plugins are then closed when each turn's kernel is garbage
+collected, as described next.
 
 ### Closing plugins when their kernel is garbage collected
 

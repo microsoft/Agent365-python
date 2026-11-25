@@ -77,6 +77,23 @@ for that turn, and call `cleanup_all_servers()` when the turn ends. `cleanup_all
 the servers on every agent the service returned, so use a separate service for each turn. Turns
 that run concurrently must not share an agent.
 
+#### Per-turn usage
+
+```python
+service = McpToolRegistrationService()
+agent = await service.add_tool_servers_to_agent(base_agent, auth, "agentic", turn_context)
+try:
+    result = await Runner.run(agent, user_message)
+finally:
+    await service.cleanup_all_servers()
+```
+
+An agent that `add_tool_servers_to_agent` returned, or clones of it, must not be shared by turns
+that run at the same time: each call closes the servers it replaces, which ends any other turn that
+is still using them. A long-lived service can serve concurrent turns as long as each turn has its
+own agent and the service's `cleanup_all_servers()` isn't called while other turns still run; in
+that case the servers are closed when each turn's agent is garbage collected, as described next.
+
 #### Closing servers when their agent is garbage collected
 
 If `cleanup_all_servers()` isn't called, the connections are still bounded by the agents that use

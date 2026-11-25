@@ -404,17 +404,35 @@ class McpToolRegistrationService:
         headers. Plugins added by an earlier call, including copies made by ``Kernel.clone()``,
         are removed from the kernel before anything else happens, and fresh plugins are added
         for this turn. A kernel that is reused from one turn to the next therefore does not
-        keep an earlier user's or agent identity's plugin, even when a server is not
+        keep a plugin that carries an earlier turn's headers, even when a server is not
         rediscovered or fails to connect. The MCP connections behind the removed plugins are
         closed in the background, which also ends them for any ``Kernel.clone()`` copy that
         still shares those plugins, and ``cleanup_connections()`` waits for those closes to
         finish. A server that fails to connect, for example because it rejects the caller, is
-        skipped. Because the kernel is modified in place, turns that run concurrently must each
-        use their own kernel, for example a ``clone()`` of a base kernel without these plugins.
-        If ``cleanup_connections()`` isn't called, each plugin's connection is closed once the
-        kernel it was added to has been garbage collected. A ``Kernel.clone()`` copy, or any
-        other kernel these plugins or their functions are copied into, doesn't keep them open,
-        so don't keep using such a copy after the kernel itself is gone.
+        skipped.
+
+        Turns that run at the same time must not share a kernel, or ``Kernel.clone()`` copies
+        of a kernel that this method added plugins to: each call replaces those plugins and
+        closes the ones it replaces, which ends any other turn that is still using them. Give
+        each turn its own kernel, for example a ``clone()`` of a base kernel without these
+        plugins.
+
+        Use a separate service for each turn and call ``cleanup_connections()`` in a
+        ``finally`` block when the turn ends; it closes every plugin the service connected, so
+        on a shared service it would also end other turns. If ``cleanup_connections()`` isn't
+        called, each plugin's connection is closed once the kernel it was added to has been
+        garbage collected. A ``Kernel.clone()`` copy, or any other kernel or plugin that these
+        plugins or their functions are copied into, doesn't keep them open, so don't keep using
+        such a copy after the kernel itself is gone.
+
+        Example:
+            >>> service = McpToolRegistrationService()
+            >>> kernel = base_kernel.clone()
+            >>> await service.add_tool_servers_to_agent(kernel, auth, "agentic", turn_context)
+            >>> try:
+            ...     result = await kernel.invoke_prompt(user_message)
+            ... finally:
+            ...     await service.cleanup_connections()
 
         Args:
             kernel: The Semantic Kernel instance to which the tools will be added.
@@ -428,7 +446,7 @@ class McpToolRegistrationService:
             Exception: If there's an error connecting to or configuring MCP servers.
         """
         # Remove plugins added by an earlier call before anything here can fail. They carry the
-        # token of whichever user or agent identity that call ran for.
+        # headers of the turn that created them.
         if kernel is not None:
             stale_plugins = {
                 name: plugin
@@ -956,7 +974,10 @@ class McpToolRegistrationService:
     async def cleanup_connections(self) -> None:
         """Close the MCP plugins this service connected.
 
-        Also waits for the plugins that later calls replaced to finish closing.
+        Also waits for the plugins that later calls replaced to finish closing. Use one service
+        per turn and call this in a ``finally`` block when the turn ends: it also closes
+        plugins that other turns using the same service are still working with. Plugins that
+        are not closed this way are closed once the kernel they were added to is gone.
         """
         plugins, self._connected_plugins = self._connected_plugins, []
         self._logger.info(f"Cleaning up {len(plugins)} MCP plugin connections")

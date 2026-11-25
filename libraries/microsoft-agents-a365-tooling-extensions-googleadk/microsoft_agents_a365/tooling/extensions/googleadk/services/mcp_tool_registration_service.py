@@ -181,14 +181,31 @@ class McpToolRegistrationService:
         Each MCP toolset carries the current caller's Authorization token in its request
         headers. Toolsets attached by an earlier call are removed from the agent before
         anything else happens and closed in the background, and fresh toolsets are created for
-        this turn. An agent that is reused from one turn to the next therefore does not keep an
-        earlier user's or agent identity's token, even if this call fails. Tools the caller
-        configured on the agent are kept as-is. Because the agent is modified in place, turns
-        that run concurrently must each use their own agent, for example a ``clone()`` of a
-        base agent. If ``cleanup()`` isn't called, the toolsets are closed once the agent they
-        were added to has been garbage collected. An agent that these toolsets are copied into,
-        for example by ``clone()`` after this call, doesn't keep them open, so clone the base
-        agent before calling this method rather than after.
+        this turn. An agent that is reused from one turn to the next therefore does not keep
+        toolsets that carry an earlier turn's headers, even if this call fails. Tools the
+        caller configured on the agent are kept as-is.
+
+        Turns that run at the same time must not share an agent: each call replaces the agent's
+        toolsets and closes the ones it replaces, which ends any other turn that is still using
+        them. Give each turn its own agent, for example a ``clone()`` of a base agent without
+        these toolsets.
+
+        Use a separate service for each turn and call ``cleanup()`` in a ``finally`` block when
+        the turn ends; it closes every toolset the service created, so on a shared service it
+        would also end other turns. If ``cleanup()`` isn't called, the toolsets are closed once
+        the agent they were added to has been garbage collected. An agent that these toolsets
+        are copied into, for example by ``clone()`` after this call, doesn't keep them open, so
+        clone the base agent before calling this method rather than after.
+
+        Example:
+            >>> service = McpToolRegistrationService()
+            >>> agent = base_agent.clone()
+            >>> await service.add_tool_servers_to_agent(agent, auth, "agentic", turn_context)
+            >>> try:
+            ...     async for event in Runner(agent=agent, ...).run_async(...):
+            ...         ...
+            ... finally:
+            ...     await service.cleanup()
 
         Args:
             agent: The existing agent to add servers to.
@@ -202,7 +219,7 @@ class McpToolRegistrationService:
             None
         """
         # Remove toolsets attached by an earlier call before anything here can fail. They carry
-        # the token of whichever user or agent identity that call ran for.
+        # the headers of the turn that created them.
         previous_tools = list(agent.tools) if agent.tools else []
         caller_tools = [tool for tool in previous_tools if not _is_sdk_managed_toolset(tool)]
         if len(caller_tools) != len(previous_tools):
@@ -357,7 +374,14 @@ class McpToolRegistrationService:
         ]
 
     async def cleanup(self):
-        """Clean up any resources used by the service."""
+        """Close the MCP toolsets this service created.
+
+        Also waits for the toolsets that later calls replaced to finish closing. Use one
+        service per turn and call this in a ``finally`` block when the turn ends: it also
+        closes toolsets that other turns using the same service are still working with.
+        Toolsets that are not closed this way are closed once the agent they were added to is
+        gone.
+        """
         try:
             toolsets, self._connected_servers = self._connected_servers, []
             for toolset in toolsets:

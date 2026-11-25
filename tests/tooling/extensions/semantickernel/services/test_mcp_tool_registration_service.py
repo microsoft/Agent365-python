@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Tests that add_tool_servers_to_agent never leaves another identity's MCP plugin on a kernel."""
+"""Tests for how add_tool_servers_to_agent replaces and closes the MCP plugins on a kernel."""
 
 import asyncio
 import contextlib
