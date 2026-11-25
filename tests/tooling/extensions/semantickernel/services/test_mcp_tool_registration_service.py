@@ -50,6 +50,32 @@ class StalledFakeMcpPlugin(FakeMcpPlugin):
         await ready.wait()
 
 
+class SlowFakeMcpPlugin(FakeMcpPlugin):
+    """Mimics MCPPluginBase: connect() waits for a background task that connects, reports ready,
+    then holds the connection until close() sets its stop event."""
+
+    closed = False
+
+    async def connect(self) -> None:
+        ready = asyncio.Event()
+        self._stop_event: asyncio.Event | None = None
+
+        async def connection() -> None:
+            await asyncio.sleep(0.05)
+            ready.set()
+            self._stop_event = asyncio.Event()
+            await self._stop_event.wait()
+            self.closed = True
+
+        self._current_task = asyncio.create_task(connection())
+        await ready.wait()
+
+    async def close(self) -> None:
+        if self._stop_event is not None:
+            self._stop_event.set()
+        await self._current_task
+
+
 class CallerMathPlugin:
     """A plugin the caller added to the kernel."""
 
@@ -67,6 +93,8 @@ class Harness:
         self.fail_discovery = False
         self.stalled: set[str] = set()
         self.stall_error: type[BaseException] = ConnectionError
+        self.slow: set[str] = set()
+        self.created: list[FakeMcpPlugin] = []
 
     async def list_tool_servers(
         self, agentic_app_id: str, auth_token: str, options: object, **kwargs: object
@@ -86,8 +114,13 @@ class Harness:
 
     def create_plugin(self, name: str, url: str, headers: dict[str, str]) -> FakeMcpPlugin:
         if name in self.stalled:
-            return StalledFakeMcpPlugin(name, url, headers, self)
-        return FakeMcpPlugin(name, url, headers, self)
+            plugin: FakeMcpPlugin = StalledFakeMcpPlugin(name, url, headers, self)
+        elif name in self.slow:
+            plugin = SlowFakeMcpPlugin(name, url, headers, self)
+        else:
+            plugin = FakeMcpPlugin(name, url, headers, self)
+        self.created.append(plugin)
+        return plugin
 
 
 @pytest.fixture
@@ -260,3 +293,21 @@ class TestMcpPluginIdentityIsolation:
         await asyncio.wait_for(run_turn(service, kernel, "user-b-token"), timeout=5)
 
         assert await authorization_by_plugin(kernel) == {"mail": "Bearer user-b-token"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_cancelled_registration_closes_a_plugin_that_is_still_connecting(
+        self, harness: Harness
+    ) -> None:
+        service = McpToolRegistrationService()
+        harness.slow = {"mail"}
+
+        turn = asyncio.ensure_future(run_turn(service, Kernel(), "user-b-token"))
+        await asyncio.sleep(0.01)
+        turn.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await turn
+        plugin = harness.created[0]
+        await asyncio.wait_for(plugin._current_task, timeout=5)
+
+        assert plugin.closed

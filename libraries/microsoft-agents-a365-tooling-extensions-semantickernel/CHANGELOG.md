@@ -13,6 +13,8 @@ All notable changes to this package will be documented in this file.
 - A server that rejects the connection (for example with HTTP 403) no longer keeps
   `add_tool_servers_to_agent` from returning. The server is skipped and the remaining servers are
   added.
+- Cancelling `add_tool_servers_to_agent` while a server is still connecting no longer leaves that
+  connection open. The plugin is closed once its connection attempt finishes.
 
 ## [2.0.0] - 2026-10-20
 

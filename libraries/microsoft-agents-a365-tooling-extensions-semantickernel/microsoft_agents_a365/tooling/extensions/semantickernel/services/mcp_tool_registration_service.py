@@ -11,6 +11,7 @@ servers to agents.
 
 # Standard library imports
 import asyncio
+import contextlib
 import functools
 import logging
 import os
@@ -94,12 +95,42 @@ def _register_sdk_managed_plugin(
         pass
 
 
+# Background tasks that close plugins whose connect() was cancelled; kept so they are not
+# garbage collected before they finish.
+_closing_tasks: "set[asyncio.Task[None]]" = set()
+
+
+async def _close_after_cancelled_connect(
+    plugin: MCPStreamableHttpPlugin, connect_task: "asyncio.Future[None]"
+) -> None:
+    """Close a plugin whose connection kept running after its connect() was cancelled."""
+    # Let connect() start its background connection task if it has not yet.
+    await asyncio.sleep(0)
+    connection_task = getattr(plugin, "_current_task", None)
+    waiting = {connect_task}
+    if isinstance(connection_task, asyncio.Future):
+        waiting.add(connection_task)
+    await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+    if connect_task.done() and not connect_task.cancelled() and connect_task.exception() is None:
+        # Connected: close() stops the background task, which then closes the connection itself.
+        with contextlib.suppress(Exception):
+            await plugin.close()
+    else:
+        # The connection failed; its background task already closed what it had opened.
+        connect_task.cancel()
+        if isinstance(connection_task, asyncio.Future) and connection_task.done():
+            if not connection_task.cancelled():
+                connection_task.exception()
+
+
 async def _connect_plugin(plugin: MCPStreamableHttpPlugin) -> None:
     """Connect an MCP plugin, raising instead of waiting forever when the connection fails.
 
     ``MCPPluginBase.connect()`` opens the connection in a background task and waits for that
     task to report that it is ready. When the server rejects the session (for example with
     HTTP 403), the background task can end without reporting, and ``connect()`` never returns.
+    If this call is cancelled, the background task keeps connecting, so the plugin is closed
+    once it is done.
     """
     connect_task = asyncio.ensure_future(plugin.connect())
     try:
@@ -111,7 +142,9 @@ async def _connect_plugin(plugin: MCPStreamableHttpPlugin) -> None:
             pending.add(connection_task)
         await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
     except BaseException:
-        connect_task.cancel()
+        closing_task = asyncio.ensure_future(_close_after_cancelled_connect(plugin, connect_task))
+        _closing_tasks.add(closing_task)
+        closing_task.add_done_callback(_closing_tasks.discard)
         raise
     if not connect_task.done():
         # The background task ended without reporting: the connection failed.
